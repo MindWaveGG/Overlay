@@ -148,7 +148,7 @@
             const bitsPercentage = bitsCurrent / bitsGoal;
 
             // Draw camera circle with transparency
-            drawCameraCircle(centerX, centerY, cameraRadius +20, 1); // 0.5 is the transparency level
+            drawCameraCircle(centerX, centerY, cameraRadius +20, .1); // 0.5 is the transparency level
 
             drawDonut(centerX, centerY, baseRadius, donutWidth, percentage, 'red');
             drawDonut(centerX, centerY, baseRadius + (donutWidth + donutSpacing), donutWidth, followerPercentage, 'red');
