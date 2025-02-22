@@ -1,170 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta http-equiv="refresh" content="5">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OBS Donut Bar Graphs</title>
-    <style>
-        canvas {
-            background-color: transparent;
-        }
-    </style>
+    <title>Goal Tracker</title>
 </head>
 <body>
-    <canvas id="myCanvas"></canvas>
+    <h1>Goal Tracker</h1>
+
+    <button onclick="getGoal('Follower Goal')">Get Follower Goal</button>
+    <p id="followerGoal">Waiting for data...</p>
+
+    <button onclick="getGoal('Subscription Goal')">Get Subscription Goal</button>
+    <p id="subscriptionGoal">Waiting for data...</p>
+
+    <button onclick="getGoal('Bits Goal')">Get Bits Goal</button>
+    <p id="bitsGoal">Waiting for data...</p>
+
+    <button onclick="getGoal('Donation Goal')">Get Donation Goal</button>
+    <p id="donationGoal">Waiting for data...</p>
+
     <script>
-        const targetDate = new Date("2026-02-01T23:59:59").getTime();
-        
-        let followerCurrent = 394;
-        let followerGoal = 450;
-        let subCurrent = 3;
-        let subGoal = 20;
-        let donationCurrent = 150;
-        let donationGoal = 500;
-        let bitsCurrent = 0;
-        let bitsGoal = 1000;
+        const scriptURL = "YOUR_DEPLOYED_SCRIPT_URL"; // Replace with your actual Apps Script URL
 
-        function getTimeRemaining() {
-            const now = new Date().getTime();
-            const timeLeft = targetDate - now;
+        function getGoal(goalType) {
+            const url = `${scriptURL}?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+            console.log("Fetching:", url); // Debug: Check the URL being called
 
-            return {
-                countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
-                countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-                countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
-                countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
-                percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
-            };
+            fetch(url)
+                .then(response => response.text()) // Read response as text first
+                .then(text => {
+                    console.log("Raw response:", text); // Debug: Log raw response
+                    return JSON.parse(text); // Convert to JSON
+                })
+                .then(data => {
+                    console.log("Parsed JSON:", data); // Debug: Log parsed JSON
+
+                    if (data.goalValue !== undefined && data.currentCount !== undefined) {
+                        const displayText = `${goalType}: ${data.currentCount || 0} / ${data.goalValue}`;
+                        const elementId = goalType.replace(/\s+/g, "").toLowerCase() + "Goal"; // Make ID match
+                        document.getElementById(elementId).innerText = displayText;
+                    } else {
+                        console.warn("Invalid data structure:", data);
+                        document.getElementById(elementId).innerText = "Error fetching goal";
+                    }
+                })
+                .catch(error => {
+                    console.error("Error fetching goal:", error);
+                    document.getElementById(goalType.replace(/\s+/g, "").toLowerCase() + "Goal").innerText = "Error fetching goal";
+                });
         }
-
-        const canvas = document.getElementById('myCanvas');
-        const ctx = canvas.getContext('2d');
-
-        const canvasSize = 2200;
-        canvas.width = canvasSize;
-        canvas.height = canvasSize;
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-
-        const donutWidth = 40;
-        const donutSpacing = 15;
-        const cameraRadius = 670;
-        const baseRadius = cameraRadius + donutSpacing + donutWidth;
-
-        // Load the image
-        const cameraImage = new Image();
-        cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png'; // Replace with your image URL or path
-
-        cameraImage.onload = function() {
-            drawAll();
-        };
-
-        function drawCameraCircle(x, y, radius, transparency) {
-            ctx.save(); // Save the current state of the canvas
-            ctx.globalAlpha = transparency; // Set transparency (0 is fully transparent, 1 is fully opaque)
-
-            // Draw the image centered at (x, y) with the given radius
-            const imageSize = radius * 2;
-            ctx.drawImage(cameraImage, x - radius, y - radius, imageSize, imageSize);
-
-            ctx.restore(); // Restore the canvas to its original state
-        }
-
-        function drawDonut(x, y, radius, width, percentage, color) {
-            const endAngle = Math.PI * 2 * percentage;
-
-            if (percentage > 0) {
-                ctx.beginPath();
-                ctx.arc(x, y, radius, -Math.PI / 2, endAngle - Math.PI / 2);
-                ctx.lineWidth = width;
-                ctx.strokeStyle = color;
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle - Math.PI / 2);
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = '#222';
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.arc(x, y, radius - width / 2, -Math.PI / 2, endAngle - Math.PI / 2);
-                ctx.lineWidth = 5;
-                ctx.strokeStyle = '#222';
-                ctx.stroke();
-            }
-        }
-
-        function drawLabelWithLine(label, x, y, radius, labelIndex, totalLabels, textColor, lineColor, borderColor) {
-            const padding = 10;
-            const fontSize = 80;
-            ctx.font = `bold ${fontSize}px Arial`;
-            ctx.fillStyle = textColor; // Font color passed as a parameter
-
-            const textWidth = ctx.measureText(label).width;
-            const labelWidth = textWidth + padding * 2;
-            const labelHeight = fontSize + padding * 2;
-
-            // Reverse label order: last label at the top, first at the bottom
-            const reversedIndex = totalLabels - labelIndex - 1;
-            const labelX = 100;
-            const labelY = 100 + reversedIndex * (labelHeight + 10);
-
-            // Using degree-based angle calculation: -90 + labelIndex * 3 degrees
-            const angle = (-90 + labelIndex * 3) * (Math.PI / 180);
-            const startX = x + radius * Math.cos(angle);
-            const startY = y + radius * Math.sin(angle);
-
-            // Draw line with specified line color
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
-            ctx.strokeStyle = lineColor;
-            ctx.lineWidth = 5;
-            ctx.stroke();
-
-            // Draw label background and border with specified border color
-            ctx.fillStyle = borderColor; // Background color for label
-            ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
-            ctx.strokeStyle = borderColor;
-            ctx.lineWidth = 5;
-            ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
-
-            // Draw the text itself with the specified text color
-            ctx.fillStyle = textColor; // Text color
-            ctx.textAlign = "left";
-            ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
-        }
-
-        function drawAll() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
-            const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
-
-            const followerPercentage = followerCurrent / followerGoal;
-            const subPercentage = subCurrent / subGoal;
-            const donationPercentage = donationCurrent / donationGoal;
-            const bitsPercentage = bitsCurrent / bitsGoal;
-
-            // Draw camera circle with transparency
-            drawCameraCircle(centerX, centerY, cameraRadius +20, .1); // 0.5 is the transparency level
-
-            drawDonut(centerX, centerY, baseRadius, donutWidth, percentage, 'red');
-            drawDonut(centerX, centerY, baseRadius + (donutWidth + donutSpacing), donutWidth, followerPercentage, 'red');
-            drawDonut(centerX, centerY, baseRadius + 2 * (donutWidth + donutSpacing), donutWidth, subPercentage, 'red');
-            drawDonut(centerX, centerY, baseRadius + 3 * (donutWidth + donutSpacing), donutWidth, donationPercentage, 'red');
-            drawDonut(centerX, centerY, baseRadius + 4 * (donutWidth + donutSpacing), donutWidth, bitsPercentage, 'red');
-
-            drawLabelWithLine(countdownText, centerX, centerY, baseRadius, 0, 5, 'red', 'black', 'black');
-            drawLabelWithLine(`Followers: ${followerCurrent}/${followerGoal}`, centerX, centerY, baseRadius + (donutWidth + donutSpacing), 1, 5, 'red', 'black', 'black');
-            drawLabelWithLine(`Subs: ${subCurrent}/${subGoal}`, centerX, centerY, baseRadius + 2 * (donutWidth + donutSpacing), 2, 5, 'red', 'black', 'black');
-            drawLabelWithLine(`Donations: $${donationCurrent}/$${donationGoal}`, centerX, centerY, baseRadius + 3 * (donutWidth + donutSpacing), 3, 5, 'red', 'black', 'black');
-            drawLabelWithLine(`Bits: ${bitsCurrent}/${bitsGoal}`, centerX, centerY, baseRadius + 4 * (donutWidth + donutSpacing), 4, 5, 'red', 'black', 'black');
-
-            requestAnimationFrame(drawAll);
-        }
-
     </script>
 </body>
 </html>
