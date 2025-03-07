@@ -58,7 +58,7 @@
 		ctx.restore();
 		
 		ctx.beginPath();
-		ctx.arc(x - radius, y - radius, radius * 2, radius * 2, false);
+		ctx.arc(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
 		ctx.fillStyle = 'green';
 		ctx.fill();
 		ctx.lineWidth = 5;
