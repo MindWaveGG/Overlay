@@ -54,6 +54,7 @@
         function drawCameraCircle(x, y, radius, transparency) {
             ctx.save();
             ctx.globalAlpha = transparency;
+		ctx.strokeStyle = 'red';
             ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
             ctx.restore();
         }
