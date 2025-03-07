@@ -54,11 +54,15 @@
         function drawCameraCircle(x, y, radius, transparency) {
             ctx.save();
             ctx.globalAlpha = transparency;
-	    ctx.strokeStyle = 'red';
-            ctx.lindWidth = 5;
             ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
-	    ctx.stroke();
             ctx.restore();
+
+	    ctx.fillStyle = '#00000000';
+	    //ctx.globalAlpha = .5;
+            ctx.fillCircle(x - radius, y - radius, radius * 2, radius * 2);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 5;
+            ctx.strokeCircle(x - radius, y - radius, radius * 2, radius * 2);
         }
 
         function drawDonut(x, y, radius, width, percentage, color) {
