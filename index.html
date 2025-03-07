@@ -57,13 +57,11 @@
             ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
 		ctx.restore();
 		
-		ctx.beginPath();
-		ctx.arc(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
-		ctx.fillStyle = 'green';
-		ctx.fill();
-		ctx.lineWidth = 5;
-		ctx.strokeStyle = '#003300';
-		ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'red';
+    ctx.stroke();
 		
         }
 
