@@ -101,10 +101,6 @@
             const startX = x + radius * Math.cos(angle);
             const startY = y + radius * Math.sin(angle);
 
-            ctx.fillStyle = textColor;
-            ctx.textAlign = "left";
-            ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
-
             ctx.fillStyle = borderColor;
             ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
             ctx.strokeStyle = borderColor;
@@ -117,6 +113,10 @@
             ctx.strokeStyle = lineColor;
             ctx.lineWidth = 5;
             ctx.stroke();
+
+            ctx.fillStyle = textColor;
+            ctx.textAlign = "left";
+            ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
         }
 
         function drawAll() {
