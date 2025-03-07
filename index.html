@@ -83,7 +83,7 @@
             }
         }
 
-        function drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabels, textColor, lineColor, borderColor) {
+        function drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabels, textColor, lineColor, fillColor, borderColor) {
             const padding = 10;
             const fontSize = 60;
             ctx.font = `bold ${fontSize}px Arial`;
@@ -100,21 +100,21 @@
             const angle = (-Math.PI / 2) + (Math.PI * 2 * percentage);
             const startX = x + radius * Math.cos(angle);
             const startY = y + radius * Math.sin(angle);
-
-            ctx.fillStyle = borderColor;
+		// Label Fill and Border
+            ctx.fillStyle = fillColor;
             ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
             ctx.strokeStyle = borderColor;
             ctx.lineWidth = 5;
             ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
 	    ctx.stroke();
-		
+		// Pointers
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
             ctx.strokeStyle = lineColor;
             ctx.lineWidth = 5;
             ctx.stroke();
-
+		// Text
             ctx.fillStyle = textColor;
             ctx.textAlign = "left";
             ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
@@ -140,7 +140,7 @@
 
             data.forEach((item, index) => {
                 drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
-                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'white', 'red', 'black');
+                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'white', 'red', 'black', 'blue');
             });
 
             requestAnimationFrame(drawAll);
