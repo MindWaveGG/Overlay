@@ -109,7 +109,8 @@
             ctx.lineWidth = 5;
             ctx.stroke();
 
-            ctx.fillStyle = '0000007f';
+            ctx.fillStyle = '000000';
+	    ctx.globalAlpha = 0.5;
             ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
             ctx.strokeStyle = borderColor;
             ctx.lineWidth = 15;
