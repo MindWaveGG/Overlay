@@ -58,7 +58,7 @@
             ctx.restore();
         }
 
-        function drawDonut(x, y, radius, width, percentage, color, borderColor, lineColor) {
+        function drawDonut(x, y, radius, width, percentage, color, borderColor) {
             const endAngle = Math.PI * 2 * percentage - Math.PI / 2;
             if (percentage > 0) {
                 ctx.beginPath();
@@ -70,14 +70,12 @@
                 ctx.beginPath();
                 ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle);
                 ctx.lineWidth = 5;
-		ctx.lineColor = lineColor;
                 ctx.strokeStyle = borderColor;
                 ctx.stroke();
 
                 ctx.beginPath();
                 ctx.arc(x, y, radius - width / 2, -Math.PI / 2, endAngle);
                 ctx.lineWidth = 5;
-		ctx.lineColor = lineColor;
                 ctx.strokeStyle = borderColor;
                 ctx.stroke();
             }
@@ -139,7 +137,7 @@
             data.sort((a, b) => b.percentage - a.percentage);
 
             data.forEach((item, index) => {
-                drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color, iten.borderColor, lineColor: 'purple');
+                drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, color: item.color, borderColor: iten.borderColor);
                 drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'white', 'red', 'black', 'blue');
             });
 
