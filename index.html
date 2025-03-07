@@ -66,7 +66,7 @@ function drawCameraCircle(x, y, radius, transparency) {
     // Draw the border
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 8;
     ctx.strokeStyle = 'red';
     ctx.stroke();
 }
@@ -137,7 +137,7 @@ function drawCameraCircle(x, y, radius, transparency) {
         function drawAll() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            drawCameraCircle(centerX, centerY, cameraRadius + 20, .3);
+            drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
 
             const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
