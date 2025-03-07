@@ -101,12 +101,9 @@
             const startX = x + radius * Math.cos(angle);
             const startY = y + radius * Math.sin(angle);
 
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
-            ctx.strokeStyle = lineColor;
-            ctx.lineWidth = 5;
-            ctx.stroke();
+            ctx.fillStyle = textColor;
+            ctx.textAlign = "left";
+            ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
 
             ctx.fillStyle = borderColor;
             ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
@@ -114,9 +111,12 @@
             ctx.lineWidth = 15;
             ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
 
-            ctx.fillStyle = textColor;
-            ctx.textAlign = "left";
-            ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 5;
+            ctx.stroke();
         }
 
         function drawAll() {
