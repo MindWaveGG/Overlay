@@ -137,7 +137,7 @@ function drawCameraCircle(x, y, radius, transparency) {
         function drawAll() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            drawCameraCircle(centerX, centerY, cameraRadius + 20, 1);
+            drawCameraCircle(centerX, centerY, cameraRadius + 20, .3);
 
             const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
