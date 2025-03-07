@@ -55,15 +55,14 @@
             ctx.save();
             ctx.globalAlpha = transparency;
             ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
-            ctx.restore();
-
-	    ctx.fillStyle = '#00000000';
-	    //ctx.globalAlpha = .5;
-            ctx.fillCircle(x - radius, y - radius, radius * 2, radius * 2);
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 5;
-            ctx.strokeCircle(x - radius, y - radius, radius * 2, radius * 2);
+		ctx.beginPath();
+		ctx.arc(x - radius, y - radius, radius * 2, radius * 2, false);
+		ctx.fillStyle = 'green';
+		ctx.fill();
+		ctx.lineWidth = 5;
+		ctx.strokeStyle = '#003300';
 		ctx.stroke();
+            ctx.restore();
 		
         }
 
