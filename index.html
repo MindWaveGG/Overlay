@@ -64,7 +64,21 @@
                 ctx.beginPath();
                 ctx.arc(x, y, radius, -Math.PI / 2, endAngle);
                 ctx.lineWidth = width;
-                ctx.strokeStyle = 'black';
+                ctx.strokeStyle = color;
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle - Math.PI / 2);
+                ctx.lineWidth = 5;
+				ctx.lineColor = lineColor;
+                ctx.strokeStyle = '#222';
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(x, y, radius - width / 2, -Math.PI / 2, endAngle - Math.PI / 2);
+                ctx.lineWidth = 5;
+				ctx.lineColor = lineColor;
+                ctx.strokeStyle = '#222';
                 ctx.stroke();
             }
         }
