@@ -51,19 +51,25 @@
         const cameraImage = new Image();
         cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
 
-        function drawCameraCircle(x, y, radius, transparency) {
-            ctx.save();
-            ctx.globalAlpha = transparency;
-            ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
-		ctx.restore();
-		
+function drawCameraCircle(x, y, radius, transparency) {
+    ctx.save();
+    ctx.globalAlpha = transparency;
+
+    // Draw the image as a circular clip
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
+
+    ctx.restore(); // Restore state to avoid clipping affecting stroke
+
+    // Draw the border
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.lineWidth = 5;
     ctx.strokeStyle = 'red';
     ctx.stroke();
-		
-        }
+}
 
         function drawDonut(x, y, radius, width, percentage, color) {
             const endAngle = Math.PI * 2 * percentage - Math.PI / 2;
