@@ -114,18 +114,18 @@
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
             let data = [
-                { label: countdownText, percentage: percentage, color: 'white' },
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'white' },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'white' },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'white' },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'white' }
+                { label: countdownText, percentage: percentage, color: 'red' },
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'red' },
+                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'red' },
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'red' },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'red' }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
 
             data.forEach((item, index) => {
                 drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
-                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'red', 'black', 'black');
+                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'white', 'black', 'black');
             });
 
             requestAnimationFrame(drawAll);
