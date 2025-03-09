@@ -1,40 +1,100 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta http-equiv="refresh" content="5">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OBS Donut Bar Graphs</title>
+    <title>Timer and Goal Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
     <style>
-        canvas {
-            background-color: transparent;
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .chart-container {
+            width: 300px;
+            height: 300px;
+            margin: 20px;
+        }
+        .stats {
+            text-align: center;
+            margin-top: 10px;
+        }
+        #countdownTimer {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+        #timerStats {
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+        #targetDateDisplay {
+            font-size: 1.2em;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <canvas id="myCanvas"></canvas>
+<canvas id="myCanvas"></canvas>
+    <h1>Timer and Goal Tracker</h1>
+    <div id="errorMessage" style="color: red;"></div>
+
+    <!-- Timer Section -->
+    <div id="countdownTimer"></div>
+    <div id="timerStats"></div>
+    <div id="targetDateDisplay"></div>
+
+    <div class="container">
+        <!-- Timer Chart -->
+        <div class="chart-container">
+            <canvas id="timerChart"></canvas>
+        </div>
+
+        <!-- Goal Charts -->
+        <div class="chart-container">
+            <canvas id="followerChart"></canvas>
+            <div id="followerStats" class="stats"></div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="subscriptionChart"></canvas>
+            <div id="subscriptionStats" class="stats"></div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="bitsChart"></canvas>
+            <div id="bitsStats" class="stats"></div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="donationChart"></canvas>
+            <div id="donationStats" class="stats"></div>
+        </div>
+    </div>
+	
     <script>
-        const targetDate = new Date("2026-02-01T23:59:59").getTime();
+        let initiationComplete = false;
+        let targetDate = 0;
+        let startTime;
+        let endTime;
+        let timerChart = null; // Initialize as null, not empty object
+        const goalCharts = {};
 
-        let followerCurrent = 394, followerGoal = 850;
-        let subCurrent = 3, subGoal = 20;
-        let donationCurrent = 150, donationGoal = 500;
-        let bitsCurrent = 80, bitsGoal = 1000;
+        let followerCurrent = 0, followerGoal = 0;
+        let subCurrent = 0, subGoal = 0;
+        let donationCurrent = 0, donationGoal = 0;
+        let bitsCurrent = 0, bitsGoal = 0;
 
-        function getTimeRemaining() {
-            const now = new Date().getTime();
-            const timeLeft = targetDate - now;
-
-            return {
-                countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
-                countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-                countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
-                countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
-                percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
-            };
-        }
-
-        const canvas = document.getElementById('myCanvas');
+ const canvas = document.getElementById('myCanvas');
         const ctx = canvas.getContext('2d');
 
         const canvasSize = 2200;
@@ -51,6 +111,271 @@
         const cameraImage = new Image();
         cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
 
+        // Function to fetch data from a URL
+        async function fetchData(url) {
+            try {
+                console.log(`Fetching data from: ${url}`);  // Debug log
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("Network error");
+                const data = await response.json();
+                console.log(`Fetched data:`, data);  // Debug log
+                return data;
+            } catch (error) {
+                console.error("Fetch error:", error);
+                document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
+                return null;
+            }
+        }
+
+        // Load initial data including the timer and goal data
+        async function loadInitialData() {
+            console.log("Loading initial data...");  // Debug log
+            const timerData = await fetchData("https://script.google.com/macros/s/AKfycbzJDxrQ9z0OGIH_xpb1ni7-C8-6bgPnlQUKCpiU5QPdohcxgCF9KskiV6BOlLWOG0O_/exec?action=getTimer&timerName=Timer");
+
+            if (timerData) {
+                console.log("Timer data loaded:", timerData);  // Debug log
+                startTime = new Date(timerData.startTime);
+                endTime = new Date(timerData.endTime);
+				targetDate = new Date(timerData.endTime);
+                document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
+                updateTimerChart();
+                updateCountdown();
+            }
+
+            // Fetch goal data for each goal type
+            await fetchAllGoalData();
+            initiationComplete = true;
+        }
+
+        // Update countdown timer
+        function updateCountdown() {
+            const countdownElement = document.getElementById("countdownTimer");
+            const now = new Date();
+            const timeRemaining = endTime - now;
+            const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+            countdownElement.textContent = `Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+
+            if (timeRemaining <= 0) {
+                countdownElement.textContent = "Time's up!";
+            }
+        }
+
+        // Calculate timer progress and update chart
+        function updateTimerChart() {
+            const now = new Date();
+            const elapsedTime = now - startTime;
+            const totalTime = endTime - startTime;
+            const progressPercentage = Math.min(100, (elapsedTime / totalTime) * 100);
+            console.log("Timer progress: ", progressPercentage);  // Debug log
+
+            const ctx = document.getElementById("timerChart")?.getContext('2d');
+            
+            if (!ctx) {
+                console.error("Chart context for Overall Timer not found.");
+                return; // This is okay: it stops the function if context is not found.
+            }
+
+            // If the timerChart does not exist, initialize it
+            if (!timerChart) {
+                timerChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ["Progress", "Remaining"],
+                        datasets: [{
+                            data: [progressPercentage, 100 - progressPercentage],
+                            backgroundColor: ["#4caf50", "#ddd"]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            datalabels: {
+                                color: 'white',
+                                font: {
+                                    weight: 'bold',
+                                    size: 14
+                                },
+                                formatter: function(value, context) {
+                                    if (context.dataset.data[0] === value) {
+                                        return `${Math.round(progressPercentage)}%`;
+                                    } else {
+                                        return '';
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            } else {
+                timerChart.data.datasets[0].data = [progressPercentage, 100 - progressPercentage];
+                timerChart.update();
+            }
+
+            document.getElementById("timerStats").textContent = `Timer Progress: ${Math.round(progressPercentage)}%`;
+        }
+
+        // Fetch all goal data
+        async function fetchAllGoalData() {
+            console.log("Fetching goal data...");  // Debug log
+            const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
+            await Promise.all(goalTypes.map(fetchGoalData));
+        }
+
+        // Fetch data for a specific goal
+        async function fetchGoalData(goalType) {
+            const url = `https://script.google.com/macros/s/AKfycbzJDxrQ9z0OGIH_xpb1ni7-C8-6bgPnlQUKCpiU5QPdohcxgCF9KskiV6BOlLWOG0O_/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+            console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
+            
+            const goalData = await fetchData(url);
+            
+            if (goalData) {
+                console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
+                const current = goalData.CurrentCount;
+                const goal = goalData.goalValue;
+                if (current !== undefined && goal !== undefined) {
+                    updateGoalChart(goalType, current, goal);
+                    updateGoalStats(goalType, current, goal);
+                } else {
+                    console.error(`Missing CurrentCount or goalValue for ${goalType}`);
+                }
+            } else {
+                console.error(`Failed to fetch goal data for ${goalType}`);
+            }
+        }
+
+
+
+
+        function updateGoalChart(goalType, current, goal) {
+            const goalToChartId = {
+                "Follower Goal": "followerChart",
+                "Subscription Goal": "subscriptionChart",
+                "Bits Goal": "bitsChart",
+                "Donation Goal": "donationChart"
+            };
+
+            const chartId = goalToChartId[goalType];
+            const ctx = document.getElementById(chartId)?.getContext('2d');
+            
+            if (!ctx) {
+                console.error(`Chart context for ${goalType} not found.`);
+                return;
+            }
+
+            // Calculate the progress and remaining values
+            const progress = Math.min(100, (current / goal) * 100); // Ensure it's a percentage
+            const remaining = 100 - progress; // Remaining percentage
+
+            // Check if the chart already exists
+            if (!goalCharts[goalType]) {
+                goalCharts[goalType] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ["Progress", "Remaining"],
+                        datasets: [{
+                            data: [progress, remaining],
+                            backgroundColor: ["#4caf50", "#ddd"]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            datalabels: {
+                                color: 'white',
+                                font: {
+                                    weight: 'bold',
+                                    size: 14
+                                },
+                                formatter: function(value, context) {
+                                    const currentData = context.chart.data.datasets[0].data;
+                                    const total = currentData[0] + currentData[1];
+                                    const currentPercent = Math.round((currentData[0] / total) * 100);
+
+                                    // Ensure correct label for progress and remaining sections
+                                    if (context.dataset.data[0] === value) {
+                                        return `${currentPercent}%`;  // Show progress percentage
+                                    } else {
+                                        const remainingPercent = 100 - currentPercent;
+                                        return `${remainingPercent}%`;  // Show remaining percentage
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            } else {
+                // Update existing chart
+                goalCharts[goalType].data.datasets[0].data = [progress, remaining];
+                goalCharts[goalType].update();
+            }
+			
+			if(goalType === "Follower Goal") {
+			followerCurrent = current;
+			followerGoal = goal;
+			};
+			
+			if(goalType === "Subscription Goal") {
+			subCurrent = current;
+			subGoal = goal;
+			};
+			
+			if(goalType === "Bits Goal") {
+			bitsCurrent = current;
+			bitsGoal = goal;
+			};
+			
+			if(goalType === "Donation Goal") {
+			donationCurrent = current;
+			donationGoal = goal;
+			}
+			
+        }
+
+        // Update the statistics for each goal
+function updateGoalStats(goalType, current, goal) {
+    const goalToStatsId = {
+        "Follower Goal": "followerStats",
+        "Subscription Goal": "subscriptionStats",
+        "Bits Goal": "bitsStats",
+        "Donation Goal": "donationStats"
+    };
+
+    const statsId = goalToStatsId[goalType];
+
+    let currentFormatted = current;
+    let goalFormatted = goal;
+
+    // Only format the Donation Goal as currency
+    if (goalType === "Donation Goal") {
+        currentFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(current);
+        goalFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(goal);
+    }
+
+    document.getElementById(statsId).textContent = `${goalType}: ${currentFormatted} / ${goalFormatted}`;
+}
+
+
+        function getTimeRemaining() {
+            const now = new Date().getTime();
+            const timeLeft = targetDate - now;
+
+            return {
+                countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
+                countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+                countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
+                countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
+                percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
+            };
+        }
+		
+		
 function drawCameraCircle(x, y, radius, transparency) {
     ctx.save();
     ctx.globalAlpha = transparency;
@@ -160,9 +485,76 @@ function drawCameraCircle(x, y, radius, transparency) {
             requestAnimationFrame(drawAll);
         }
 
+
+
+        // Initialize data loading
+        loadInitialData();
+
+        // Periodically refresh data every 5 seconds
+        function refreshDataPeriodically() {
+            setInterval(async function() {
+                console.log("Refreshing data..."); // Debug log
+
+                // Re-fetch timer data
+                const timerData = await fetchData("https://script.google.com/macros/s/AKfycbzJDxrQ9z0OGIH_xpb1ni7-C8-6bgPnlQUKCpiU5QPdohcxgCF9KskiV6BOlLWOG0O_/exec?action=getTimer&timerName=Timer");
+                
+                if (timerData) {
+                    startTime = new Date(timerData.startTime);
+                    endTime = new Date(timerData.endTime);
+                    document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
+                    updateTimerChart();
+                    updateCountdown();
+                }
+
+                // Re-fetch goal data for each goal type
+                await fetchAllGoalData();
+                
+                // After fetching the goal data, force the chart labels to refresh
+                for (const goalType of ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"]) {
+                    if (goalCharts[goalType]) {
+                        const currentData = goalCharts[goalType].data.datasets[0].data;
+                        const progress = currentData[0]; // Current progress
+                        const remaining = currentData[1]; // Remaining goal value
+
+                        // Calculate the progress and remaining percentages
+                        const total = progress + remaining;
+                        const progressPercentage = Math.round((progress / total) * 100);
+                        const remainingPercentage = 100 - progressPercentage;
+
+                        // Update the chart with the new data
+                        goalCharts[goalType].data.datasets[0].data = [progressPercentage, remainingPercentage];
+
+                        // Update the chart
+                        goalCharts[goalType].update();
+
+                        // Force the datalabels plugin to recalculate the labels
+                        goalCharts[goalType].options.plugins.datalabels.formatter = function(value, context) {
+                            const currentData = context.chart.data.datasets[0].data;
+                            const total = currentData[0] + currentData[1];
+                            const currentPercent = Math.round((currentData[0] / total) * 100);
+                            
+                            // Ensure correct label for progress and remaining sections
+                            if (context.dataset.data[0] === value) {
+                                return `${currentPercent}%`;  // Show progress percentage
+                            } else {
+                                const remainingPercent = 100 - currentPercent;
+                                return `${remainingPercent}%`;  // Show remaining percentage
+                            }
+                        };
+
+                        // Re-update the chart with the new data labels
+                        goalCharts[goalType].update();
+                    }
+                }
+                
+            }, 5000); // Set the interval to 5 seconds (5000ms) for testing, adjust as needed
+        }
+
         cameraImage.onload = function() {
             drawAll();
         };
+
+        refreshDataPeriodically();
     </script>
 </body>
 </html>
