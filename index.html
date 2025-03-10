@@ -444,14 +444,14 @@ function drawCameraCircle(x, y, radius, transparency) {
             ctx.moveTo(startX, startY);
             ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
             ctx.strokeStyle = lineColor;
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 10;
             ctx.stroke();
 
             ctx.fillStyle = '#0000007F';
 	    //ctx.globalAlpha = .5;
             ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
             ctx.strokeStyle = borderColor;
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 10;
             ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
 
             ctx.fillStyle = textColor;
