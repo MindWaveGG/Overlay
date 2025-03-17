@@ -236,12 +236,12 @@
             if (goalData) {
                 console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
                 const current = goalData.CurrentCount;
-                const goal = goalData.goalValue;
+                const goal = goalData.value;
                 if (current !== undefined && goal !== undefined) {
                     updateGoalChart(goalType, current, goal);
                     updateGoalStats(goalType, current, goal);
                 } else {
-                    console.error(`Missing CurrentCount or goalValue for ${goalType}`);
+                    console.error(`Missing CurrentCount or value for ${goalType}`);
                 }
             } else {
                 console.error(`Failed to fetch goal data for ${goalType}`);
