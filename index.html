@@ -222,7 +222,7 @@
         // Fetch all goal data
         async function fetchAllGoalData() {
             console.log("Fetching goal data...");  // Debug log
-            const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
+            const goalTypes = ["Follower+Goal", "Subscription+Goal", "Bits+Goal", "Donation+Goal"];
             await Promise.all(goalTypes.map(fetchGoalData));
         }
 
