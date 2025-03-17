@@ -199,8 +199,8 @@
                                     weight: 'bold',
                                     size: 14
                                 },
-                                formatter: function(goalValue, context) {
-                                    if (context.dataset.data[0] === goalValue) {
+                                formatter: function(value, context) {
+                                    if (context.dataset.data[0] === value) {
                                         return `${Math.round(progressPercentage)}%`;
                                     } else {
                                         return '';
@@ -222,7 +222,7 @@
         // Fetch all goal data
         async function fetchAllGoalData() {
             console.log("Fetching goal data...");  // Debug log
-            const goalTypes = ["Follower+Goal", "Subscription+Goal", "Bits+Goal", "Donation+Goal"];
+            const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
             await Promise.all(goalTypes.map(fetchGoalData));
         }
 
@@ -292,13 +292,13 @@
                                     weight: 'bold',
                                     size: 14
                                 },
-                                formatter: function(goalValue, context) {
+                                formatter: function(value, context) {
                                     const currentData = context.chart.data.datasets[0].data;
                                     const total = currentData[0] + currentData[1];
                                     const currentPercent = Math.round((currentData[0] / total) * 100);
 
                                     // Ensure correct label for progress and remaining sections
-                                    if (context.dataset.data[0] === goalValue) {
+                                    if (context.dataset.data[0] === value) {
                                         return `${currentPercent}%`;  // Show progress percentage
                                     } else {
                                         const remainingPercent = 100 - currentPercent;
@@ -534,7 +534,7 @@ function drawCameraCircle(x, y, radius, transparency) {
                             const currentPercent = Math.round((currentData[0] / total) * 100);
                             
                             // Ensure correct label for progress and remaining sections
-                            if (context.dataset.data[0] === goalValue) {
+                            if (context.dataset.data[0] === value) {
                                 return `${currentPercent}%`;  // Show progress percentage
                             } else {
                                 const remainingPercent = 100 - currentPercent;
