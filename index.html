@@ -68,7 +68,7 @@ async function fetchAllGoalData() {
 }
 
 async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/...&goalType=${encodeURIComponent(goalType)}`;
+    const url = `https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec&action=getGoal&goalType=${encodeURIComponent(goalType)}`;
     const goalData = await fetchData(url, goalType);
 
     if (!goalData) return;
@@ -136,6 +136,7 @@ async function fetchGoalData(goalType) {
     }
 
     function drawAll() {
+        console.log("drawAll is running!");
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
@@ -170,8 +171,10 @@ function setupCanvas() {
     cameraImage.onload = () => {
         loadInitialData(); // ✅ Start loading data
     };
-
-    cameraImage.src = 'your-image-url.png'; // Replace with actual image URL
+if (!canvas || !ctx) {
+    console.error("Canvas or context not found!");
+}
+    cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png'; // Replace with actual image URL
 }
 
 window.onload = setupCanvas;
