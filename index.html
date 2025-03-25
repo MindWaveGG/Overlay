@@ -220,10 +220,11 @@ unction drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabe
 
             requestAnimationFrame(drawAll);
         }
+        
+loadInitialData(); // ✅ Start loading data
 
         
 cameraImage.onload = function() {
-loadInitialData(); // ✅ Start loading data
     drawAll();
 }
 
