@@ -103,64 +103,113 @@ async function fetchGoalData(goalType) {
         return { countdownDays: days, countdownHours: hours, countdownMinutes: minutes, countdownSeconds: seconds, percentage };
     }
 
-    function drawCameraCircle(x, y, radius, opacity) {
-        ctx.globalAlpha = opacity;
-        ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
-        ctx.globalAlpha = 1.0;
-    }
+function drawCameraCircle(x, y, radius, transparency) {
+    ctx.save();
+    ctx.globalAlpha = transparency;
 
-    function drawDonut(x, y, radius, width, percentage, color) {
-        if (isNaN(percentage) || percentage < 0) percentage = 0;
+    // Draw the image as a circular clip
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
 
+    ctx.restore(); // Restore state to avoid clipping affecting stroke
+
+    // Draw the border
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = 'red';
+    ctx.stroke();
+}
+
+function drawDonut(x, y, radius, width, percentage, color) {
+    const endAngle = Math.PI * 2 * percentage - Math.PI / 2;
+    if (percentage > 0) {
         ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2 * percentage, false);
+        ctx.arc(x, y, radius, -Math.PI / 2, endAngle);
         ctx.lineWidth = width;
         ctx.strokeStyle = color;
         ctx.stroke();
-    }
-
-    function drawLabelWithLine(label, x, y, radius, percentage, index, totalItems, lineColor, textColor) {
-        let angle = Math.PI * 2 * percentage;
-        let labelX = x + Math.cos(angle) * (radius + 20);
-        let labelY = y + Math.sin(angle) * (radius + 20);
 
         ctx.beginPath();
-        ctx.moveTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
-        ctx.lineTo(labelX, labelY);
-        ctx.strokeStyle = lineColor;
+        ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = 'black';
         ctx.stroke();
 
-        ctx.font = "12px Arial";
-        ctx.fillStyle = textColor;
-        ctx.fillText(label, labelX + 5, labelY);
+        ctx.beginPath();
+        ctx.arc(x, y, radius - width / 2, -Math.PI / 2, endAngle);
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = 'black';
+        ctx.stroke();
     }
+}
+
+function drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabels, textColor, lineColor, borderColor) {
+    const padding = 10;
+    const fontSize = 24;
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.fillStyle = textColor;
+
+    const textWidth = ctx.measureText(label).width;
+    const labelWidth = textWidth + padding * 2;
+    const labelHeight = fontSize + padding * 2;
+
+    const reversedIndex = totalLabels - labelIndex - 1;
+    const labelX = canvas.width - labelWidth - 50;
+    const labelY = 50 + reversedIndex * (labelHeight + 10);
+
+    const angle = (-Math.PI / 2) + (Math.PI * 2 * percentage);
+    const startX = x + radius * Math.cos(angle);
+    const startY = y + radius * Math.sin(angle);
+
+    // Draw the connecting line
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(labelX, labelY + labelHeight / 2);
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Draw label background
+    ctx.fillStyle = '#000000AA';
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
+
+    // Draw label text
+    ctx.fillStyle = textColor;
+    ctx.textAlign = "left";
+    ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
+}
 
     function drawAll() {
-        console.log("drawAll is running!");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
 
-        const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
-        const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
+    const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
+    const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
-        let data = [
-            { label: countdownText, percentage: percentage, color: 'red' },
-            { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / Math.max(followerGoal, 1), color: 'red' },
-            { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / Math.max(subGoal, 1), color: 'red' },
-            { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / Math.max(donationGoal, 1), color: 'red' },
-            { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / Math.max(bitsGoal, 1), color: 'red' }
-        ];
+    let data = [
+        { label: countdownText, percentage: percentage, color: 'red' },
+        { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'red' },
+        { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'red' },
+        { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'red' },
+        { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'red' }
+    ];
 
-        data.sort((a, b) => b.percentage - a.percentage);
+    data.sort((a, b) => b.percentage - a.percentage);
 
-        data.forEach((item, index) => {
-            drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
-            drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'black', 'black');
-        });
+    data.forEach((item, index) => {
+        drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
+        drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'white', 'red', 'white');
+    });
 
-        requestAnimationFrame(drawAll);
-    }
+    requestAnimationFrame(drawAll);
+}
 
 function setupCanvas() {
     canvas = document.getElementById("goalCanvas");
