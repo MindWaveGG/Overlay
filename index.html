@@ -130,7 +130,7 @@
         // Load initial data including the timer and goal data
         async function loadInitialData() {
             console.log("Loading initial data...");  // Debug log
-            const timerData = await fetchData("https://script.google.com/macros/s/AKfycbzJDxrQ9z0OGIH_xpb1ni7-C8-6bgPnlQUKCpiU5QPdohcxgCF9KskiV6BOlLWOG0O_/exec?action=getTimer&timerName=Timer");
+            const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
 
             if (timerData) {
                 console.log("Timer data loaded:", timerData);  // Debug log
@@ -228,7 +228,7 @@
 
         // Fetch data for a specific goal
         async function fetchGoalData(goalType) {
-            const url = `https://script.google.com/macros/s/AKfycbzJDxrQ9z0OGIH_xpb1ni7-C8-6bgPnlQUKCpiU5QPdohcxgCF9KskiV6BOlLWOG0O_/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+            const url = `https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
             console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
             
             const goalData = await fetchData(url);
@@ -497,7 +497,7 @@ function drawCameraCircle(x, y, radius, transparency) {
                 console.log("Refreshing data..."); // Debug log
 
                 // Re-fetch timer data
-                const timerData = await fetchData("https://script.google.com/macros/s/AKfycbzJDxrQ9z0OGIH_xpb1ni7-C8-6bgPnlQUKCpiU5QPdohcxgCF9KskiV6BOlLWOG0O_/exec?action=getTimer&timerName=Timer");
+                const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
                 
                 if (timerData) {
                     startTime = new Date(timerData.startTime);
