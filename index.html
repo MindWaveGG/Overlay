@@ -8,12 +8,12 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 </head>
 <body>
-    <canvas id="goalCanvas"></canvas>
-    <p id="countdownTimer"></p>
-    <p id="targetDateDisplay"></p>
-    <p id="errorMessage" style="color:red;"></p>
-    <script>
-        let canvas, ctx;
+   <canvas id="goalCanvas" width="600" height="600"></canvas>
+<p id="targetDateDisplay"></p>
+<p id="errorMessage" style="color:red;"></p>
+
+<script>
+    let canvas, ctx;
     let centerX, centerY, cameraRadius = 100;
     let baseRadius = 120, donutWidth = 20, donutSpacing = 10;
     let targetDate = new Date();
@@ -21,10 +21,11 @@
     let subCurrent = 0, subGoal = 20;
     let bitsCurrent = 0, bitsGoal = 1000;
     let donationCurrent = 0, donationGoal = 100;
-    
+    let cameraImage = new Image();
+    cameraImage.src = 'your-image-url.png'; // Replace with actual image URL
+
     async function fetchData(url, fallbackType = null) {
         try {
-            console.log(`Fetching data from: ${url}`);
             const response = await fetch(url);
             if (!response.ok) throw new Error("Network error");
             return await response.json();
@@ -36,7 +37,6 @@
     }
 
     function getRevertData(type) {
-        console.warn(`Using fallback data for: ${type}`);
         const fallbackData = {
             timer: { startTime: new Date().toISOString(), endTime: new Date(Date.now() + 3600000).toISOString() },
             "Follower Goal": { CurrentValue: 50, goalValue: 100 },
@@ -48,13 +48,8 @@
     }
 
     async function loadInitialData() {
-        console.log("Loading initial data...");
         let timerData = await fetchData("https://script.google.com/macros/s/...", "timer");
-
-        if (!timerData) {
-            console.warn("Failed to fetch timer data.");
-            return;
-        }
+        if (!timerData) return;
 
         targetDate = new Date(timerData.endTime);
         document.getElementById("targetDateDisplay").textContent = `Target Date: ${targetDate.toDateString()} ${targetDate.toLocaleTimeString()}`;
@@ -92,6 +87,38 @@
         return { countdownDays: days, countdownHours: hours, countdownMinutes: minutes, countdownSeconds: seconds, percentage };
     }
 
+    function drawCameraCircle(x, y, radius, opacity) {
+        ctx.globalAlpha = opacity;
+        ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
+        ctx.globalAlpha = 1.0;
+    }
+
+    function drawDonut(x, y, radius, width, percentage, color) {
+        if (isNaN(percentage) || percentage < 0) percentage = 0;
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2 * percentage, false);
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+
+    function drawLabelWithLine(label, x, y, radius, percentage, index, totalItems, lineColor, textColor) {
+        let angle = Math.PI * 2 * percentage;
+        let labelX = x + Math.cos(angle) * (radius + 20);
+        let labelY = y + Math.sin(angle) * (radius + 20);
+
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+        ctx.lineTo(labelX, labelY);
+        ctx.strokeStyle = lineColor;
+        ctx.stroke();
+
+        ctx.font = "12px Arial";
+        ctx.fillStyle = textColor;
+        ctx.fillText(label, labelX + 5, labelY);
+    }
+
     function drawAll() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -102,17 +129,17 @@
 
         let data = [
             { label: countdownText, percentage: percentage, color: 'red' },
-            { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'red' },
-            { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'red' },
-            { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'red' },
-            { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'red' }
+            { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / Math.max(followerGoal, 1), color: 'red' },
+            { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / Math.max(subGoal, 1), color: 'red' },
+            { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / Math.max(donationGoal, 1), color: 'red' },
+            { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / Math.max(bitsGoal, 1), color: 'red' }
         ];
 
         data.sort((a, b) => b.percentage - a.percentage);
 
         data.forEach((item, index) => {
             drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
-            drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'red', 'black', 'black');
+            drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'black', 'black');
         });
 
         requestAnimationFrame(drawAll);
@@ -120,19 +147,17 @@
 
     function setupCanvas() {
         canvas = document.getElementById("goalCanvas");
-        if (!canvas) {
-            console.error("Canvas element not found!");
-            return;
-        }
         ctx = canvas.getContext("2d");
         centerX = canvas.width / 2;
         centerY = canvas.height / 2;
 
-        loadInitialData();
-        requestAnimationFrame(drawAll);
+        cameraImage.onload = () => {
+            loadInitialData();
+            requestAnimationFrame(drawAll);
+        };
     }
 
     window.onload = setupCanvas;
-    </script>
+</script>
 </body>
 </html>
