@@ -13,7 +13,7 @@
 <p id="errorMessage" style="color:red;"></p>
 
 <script>
-    const canvas = document.getElementById('canvas');
+    const canvas = document.getElementById('goalCanvas');
     const ctx = canvas.getContext('2d');
     const canvasSize = 2200;
     canvas.width = canvasSize;
@@ -196,7 +196,7 @@ unction drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabe
         }
 
     function drawAll() {function drawAll() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, .width, canvas.height);
 
             drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
 
