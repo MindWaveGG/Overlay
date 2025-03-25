@@ -8,33 +8,19 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 </head>
 <body>
-    <canvas id="myCanvas"></canvas>
     <p id="countdownTimer"></p>
     <p id="targetDateDisplay"></p>
     <p id="errorMessage" style="color:red;"></p>
     <script>
-        let initiationComplete = false;
-        let targetDate = 0, startTime, endTime;
-        let timerChart = null;
-        const goalCharts = {};
-        let followerCurrent = 0, followerGoal = 0;
-        let subCurrent = 0, subGoal = 0;
-        let donationCurrent = 0, donationGoal = 0;
-        let bitsCurrent = 0, bitsGoal = 0;
-
-        const canvas = document.getElementById('myCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 2200;
-        canvas.height = 2200;
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const cameraRadius = 670;
-
-        const cameraImage = new Image();
-        cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
-
-        cameraImage.onload = () => drawAll(); // Ensure the image is loaded before drawing
-
+        let canvas, ctx;
+    let centerX, centerY, cameraRadius = 100;
+    let baseRadius = 120, donutWidth = 20, donutSpacing = 10;
+    let targetDate = new Date();
+    let followerCurrent = 0, followerGoal = 100;
+    let subCurrent = 0, subGoal = 20;
+    let bitsCurrent = 0, bitsGoal = 1000;
+    let donationCurrent = 0, donationGoal = 100;
+    
     async function fetchData(url, fallbackType = null) {
         try {
             console.log(`Fetching data from: ${url}`);
@@ -51,10 +37,7 @@
     function getRevertData(type) {
         console.warn(`Using fallback data for: ${type}`);
         const fallbackData = {
-            timer: {
-                startTime: new Date().toISOString(),
-                endTime: new Date(Date.now() + 3600000).toISOString(), // 1 hour later
-            },
+            timer: { startTime: new Date().toISOString(), endTime: new Date(Date.now() + 3600000).toISOString() },
             "Follower Goal": { CurrentValue: 50, goalValue: 100 },
             "Subscription Goal": { CurrentValue: 10, goalValue: 20 },
             "Bits Goal": { CurrentValue: 500, goalValue: 1000 },
@@ -62,8 +45,8 @@
         };
         return fallbackData[type] || null;
     }
-        
-      async function loadInitialData() {
+
+    async function loadInitialData() {
         console.log("Loading initial data...");
         let timerData = await fetchData("https://script.google.com/macros/s/...", "timer");
 
@@ -72,61 +55,11 @@
             return;
         }
 
-        startTime = new Date(timerData.startTime);
-        endTime = new Date(timerData.endTime);
-        targetDate = endTime;
+        targetDate = new Date(timerData.endTime);
+        document.getElementById("targetDateDisplay").textContent = `Target Date: ${targetDate.toDateString()} ${targetDate.toLocaleTimeString()}`;
 
-        const targetDateElement = document.getElementById("targetDateDisplay");
-        if (targetDateElement) targetDateElement.textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-
-        updateTimerChart();
-        updateCountdown();
         await fetchAllGoalData();
-        initiationComplete = true;
     }
-
-
-        function updateCountdown() {
-            const countdownElement = document.getElementById("countdownTimer");
-            if (!countdownElement) return;
-
-            const now = new Date();
-            const timeRemaining = endTime - now;
-            if (timeRemaining <= 0) {
-                countdownElement.textContent = "Time's up!";
-                return;
-            }
-
-            const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
-            countdownElement.textContent = `Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`;
-        }
-
-        function updateTimerChart() {
-            const now = new Date();
-            const elapsedTime = now - startTime;
-            const totalTime = endTime - startTime;
-            const progressPercentage = Math.min(100, (elapsedTime / totalTime) * 100);
-
-            const ctx = document.getElementById("timerChart")?.getContext('2d');
-            if (!ctx) return;
-
-            if (!timerChart) {
-                timerChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ["Progress", "Remaining"],
-                        datasets: [{ data: [progressPercentage, 100 - progressPercentage], backgroundColor: ["#4caf50", "#ddd"] }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
-            } else {
-                timerChart.data.datasets[0].data = [progressPercentage, 100 - progressPercentage];
-                timerChart.update();
-            }
-        }
 
     async function fetchAllGoalData() {
         const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
@@ -137,45 +70,68 @@
         const url = `https://script.google.com/macros/s/...&goalType=${encodeURIComponent(goalType)}`;
         const goalData = await fetchData(url, goalType);
         if (!goalData) return;
-        
-        updateGoalChart(goalType, goalData.CurrentValue, goalData.goalValue);
+
+        if (goalType === "Follower Goal") { followerCurrent = goalData.CurrentValue; followerGoal = goalData.goalValue; }
+        else if (goalType === "Subscription Goal") { subCurrent = goalData.CurrentValue; subGoal = goalData.goalValue; }
+        else if (goalType === "Bits Goal") { bitsCurrent = goalData.CurrentValue; bitsGoal = goalData.goalValue; }
+        else if (goalType === "Donation Goal") { donationCurrent = goalData.CurrentValue; donationGoal = goalData.goalValue; }
     }
 
-        function updateGoalChart(goalType, current, goal) {
-            const chartId = {
-                "Follower Goal": "followerChart",
-                "Subscription Goal": "subscriptionChart",
-                "Bits Goal": "bitsChart",
-                "Donation Goal": "donationChart"
-            }[goalType];
+    function getTimeRemaining() {
+        let now = new Date();
+        let timeDiff = targetDate - now;
+        if (timeDiff < 0) timeDiff = 0;
 
-            const ctx = document.getElementById(chartId)?.getContext('2d');
-            if (!ctx) return;
+        let days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+        let hours = Math.floor((timeDiff / (1000 * 60 * 60)) % 24);
+        let minutes = Math.floor((timeDiff / (1000 * 60)) % 60);
+        let seconds = Math.floor((timeDiff / 1000) % 60);
+        let percentage = 1 - timeDiff / (targetDate - new Date(targetDate - 3600000 * 24));
 
-            const progress = Math.min(100, (current / goal) * 100);
-            if (!goalCharts[goalType]) {
-                goalCharts[goalType] = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: { labels: ["Progress", "Remaining"], datasets: [{ data: [progress, 100 - progress], backgroundColor: ["#4caf50", "#ddd"] }] },
-                    options: { responsive: true, maintainAspectRatio: false }
-                });
-            } else {
-                goalCharts[goalType].data.datasets[0].data = [progress, 100 - progress];
-                goalCharts[goalType].update();
-            }
+        return { countdownDays: days, countdownHours: hours, countdownMinutes: minutes, countdownSeconds: seconds, percentage };
+    }
+
+    function drawAll() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
+
+        const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
+        const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
+
+        let data = [
+            { label: countdownText, percentage: percentage, color: 'red' },
+            { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'red' },
+            { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'red' },
+            { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'red' },
+            { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'red' }
+        ];
+
+        data.sort((a, b) => b.percentage - a.percentage);
+
+        data.forEach((item, index) => {
+            drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
+            drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'red', 'black', 'black');
+        });
+
+        requestAnimationFrame(drawAll);
+    }
+
+    function setupCanvas() {
+        canvas = document.getElementById("goalCanvas");
+        if (!canvas) {
+            console.error("Canvas element not found!");
+            return;
         }
-
-        function drawAll() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(cameraImage, centerX - cameraRadius, centerY - cameraRadius, cameraRadius * 2, cameraRadius * 2);
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 8;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, cameraRadius, 0, Math.PI * 2);
-            ctx.stroke();
-        }
+        ctx = canvas.getContext("2d");
+        centerX = canvas.width / 2;
+        centerY = canvas.height / 2;
 
         loadInitialData();
+        requestAnimationFrame(drawAll);
+    }
+
+    window.onload = setupCanvas;
     </script>
 </body>
 </html>
