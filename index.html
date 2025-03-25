@@ -13,17 +13,25 @@
 <p id="errorMessage" style="color:red;"></p>
 
 <script>
-    let canvas, ctx;
-    let centerX, centerY, cameraRadius = 100;
-    let baseRadius = 120, donutWidth = 20, donutSpacing = 10;
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const canvasSize = 2200;
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const donutWidth = 40;
+    const donutSpacing = 15;
+    const cameraRadius = 670;
+    const baseRadius = cameraRadius + donutSpacing + donutWidth;
     let targetDate = new Date();
     let followerCurrent = 0, followerGoal = 100;
     let subCurrent = 0, subGoal = 20;
     let bitsCurrent = 0, bitsGoal = 1000;
     let donationCurrent = 0, donationGoal = 100;
-    let cameraImage = new Image();
-    cameraImage.src = 'your-image-url.png'; // Replace with actual image URL
-
+    const cameraImage = new Image();
+    cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
+    
     async function fetchData(url, fallbackType = null) {
     try {
         const response = await fetch(url);
