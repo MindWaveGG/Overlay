@@ -57,7 +57,7 @@ function getRevertData(type) {
 
 // ✅ Ensure drawAll() starts even if Google Script fails
 async function loadInitialData() {
-    let timerData = await fetchData("https://script.google.com/macros/s/...", "timer");
+    let timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
     if (!timerData) return;
 
     targetDate = new Date(timerData.endTime);
