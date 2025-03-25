@@ -25,53 +25,69 @@
     cameraImage.src = 'your-image-url.png'; // Replace with actual image URL
 
     async function fetchData(url, fallbackType = null) {
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error("Network error");
-            return await response.json();
-        } catch (error) {
-            console.error("Fetch error:", error);
-            document.getElementById("errorMessage").textContent = "Failed to load data. Using fallback values.";
-            return getRevertData(fallbackType);
-        }
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Network error");
+        return await response.json();
+    } catch (error) {
+        console.error("Fetch error:", error);
+        document.getElementById("errorMessage").textContent = "Failed to load data. Using fallback values.";
+        return getRevertData(fallbackType);
     }
+}
 
-    function getRevertData(type) {
-        const fallbackData = {
-            timer: { startTime: new Date().toISOString(), endTime: new Date(Date.now() + 3600000).toISOString() },
-            "Follower Goal": { CurrentValue: 50, goalValue: 100 },
-            "Subscription Goal": { CurrentValue: 10, goalValue: 20 },
-            "Bits Goal": { CurrentValue: 500, goalValue: 1000 },
-            "Donation Goal": { CurrentValue: 20, goalValue: 100 },
-        };
-        return fallbackData[type] || null;
+function getRevertData(type) {
+    const fallbackData = {
+        timer: { startTime: new Date().toISOString(), endTime: new Date(Date.now() + 3600000).toISOString() },
+        "Follower Goal": { CurrentValue: 50, goalValue: 100 },
+        "Subscription Goal": { CurrentValue: 10, goalValue: 20 },
+        "Bits Goal": { CurrentValue: 500, goalValue: 1000 },
+        "Donation Goal": { CurrentValue: 20, goalValue: 100 },
+    };
+    return fallbackData[type] || null;
+}
+
+// ✅ Ensure drawAll() starts even if Google Script fails
+async function loadInitialData() {
+    let timerData = await fetchData("https://script.google.com/macros/s/...", "timer");
+    if (!timerData) return;
+
+    targetDate = new Date(timerData.endTime);
+    document.getElementById("targetDateDisplay").textContent = `Target Date: ${targetDate.toDateString()} ${targetDate.toLocaleTimeString()}`;
+
+    await fetchAllGoalData();
+}
+
+// ✅ Ensure drawAll() starts after data is loaded
+async function fetchAllGoalData() {
+    const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
+    await Promise.all(goalTypes.map(goalType => fetchGoalData(goalType)));
+    
+    // Draw only after all data is set
+    requestAnimationFrame(drawAll);
+}
+
+async function fetchGoalData(goalType) {
+    const url = `https://script.google.com/macros/s/...&goalType=${encodeURIComponent(goalType)}`;
+    const goalData = await fetchData(url, goalType);
+
+    if (!goalData) return;
+
+    // ✅ Apply fallback data to global variables
+    if (goalType === "Follower Goal") {
+        followerCurrent = goalData.CurrentValue || 0;
+        followerGoal = goalData.goalValue || 1;
+    } else if (goalType === "Subscription Goal") {
+        subCurrent = goalData.CurrentValue || 0;
+        subGoal = goalData.goalValue || 1;
+    } else if (goalType === "Bits Goal") {
+        bitsCurrent = goalData.CurrentValue || 0;
+        bitsGoal = goalData.goalValue || 1;
+    } else if (goalType === "Donation Goal") {
+        donationCurrent = goalData.CurrentValue || 0;
+        donationGoal = goalData.goalValue || 1;
     }
-
-    async function loadInitialData() {
-        let timerData = await fetchData("https://script.google.com/macros/s/...", "timer");
-        if (!timerData) return;
-
-        targetDate = new Date(timerData.endTime);
-        document.getElementById("targetDateDisplay").textContent = `Target Date: ${targetDate.toDateString()} ${targetDate.toLocaleTimeString()}`;
-
-        await fetchAllGoalData();
-    }
-
-    async function fetchAllGoalData() {
-        const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
-        await Promise.all(goalTypes.map(goalType => fetchGoalData(goalType)));
-    }
-
-    async function fetchGoalData(goalType) {
-        const url = `https://script.google.com/macros/s/...&goalType=${encodeURIComponent(goalType)}`;
-        const goalData = await fetchData(url, goalType);
-        if (!goalData) return;
-
-        if (goalType === "Follower Goal") { followerCurrent = goalData.CurrentValue; followerGoal = goalData.goalValue; }
-        else if (goalType === "Subscription Goal") { subCurrent = goalData.CurrentValue; subGoal = goalData.goalValue; }
-        else if (goalType === "Bits Goal") { bitsCurrent = goalData.CurrentValue; bitsGoal = goalData.goalValue; }
-        else if (goalType === "Donation Goal") { donationCurrent = goalData.CurrentValue; donationGoal = goalData.goalValue; }
-    }
+}
 
     function getTimeRemaining() {
         let now = new Date();
@@ -145,19 +161,20 @@
         requestAnimationFrame(drawAll);
     }
 
-    function setupCanvas() {
-        canvas = document.getElementById("goalCanvas");
-        ctx = canvas.getContext("2d");
-        centerX = canvas.width / 2;
-        centerY = canvas.height / 2;
+function setupCanvas() {
+    canvas = document.getElementById("goalCanvas");
+    ctx = canvas.getContext("2d");
+    centerX = canvas.width / 2;
+    centerY = canvas.height / 2;
 
-        cameraImage.onload = () => {
-            loadInitialData();
-            requestAnimationFrame(drawAll);
-        };
-    }
+    cameraImage.onload = () => {
+        loadInitialData(); // ✅ Start loading data
+    };
 
-    window.onload = setupCanvas;
+    cameraImage.src = 'your-image-url.png'; // Replace with actual image URL
+}
+
+window.onload = setupCanvas;
 </script>
 </body>
 </html>
