@@ -221,22 +221,12 @@ unction drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabe
             requestAnimationFrame(drawAll);
         }
 
-function setupCanvas() {
-    canvas = document.getElementById("goalCanvas");
-    ctx = canvas.getContext("2d");
-    centerX = canvas.width / 2;
-    centerY = canvas.height / 2;
-
-    cameraImage.onload = () => {
-        loadInitialData(); // ✅ Start loading data
-    };
-if (!canvas || !ctx) {
-    console.error("Canvas or context not found!");
-}
-    cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png'; // Replace with actual image URL
+        
+cameraImage.onload = function() {
+loadInitialData(); // ✅ Start loading data
+    drawAll();
 }
 
-window.onload = setupCanvas;
 </script>
 </body>
 </html>
