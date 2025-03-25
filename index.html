@@ -195,31 +195,31 @@ unction drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabe
 		ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
         }
 
-    function drawAll() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    function drawAll() {function drawAll() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
+            drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
 
-    const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
-    const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
+            const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
+            const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
-    let data = [
-        { label: countdownText, percentage: percentage, color: 'red' },
-        { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'red' },
-        { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'red' },
-        { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'red' },
-        { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'red' }
-    ];
+            let data = [
+                { label: countdownText, percentage: percentage, color: 'red' },
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'red' },
+                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'red' },
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'red' },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'red' }
+            ];
 
-    data.sort((a, b) => b.percentage - a.percentage);
+            data.sort((a, b) => b.percentage - a.percentage);
 
-    data.forEach((item, index) => {
-        drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
-        drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'white', 'red', 'white');
-    });
+            data.forEach((item, index) => {
+                drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
+                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'red', 'black', 'black');
+            });
 
-    requestAnimationFrame(drawAll);
-}
+            requestAnimationFrame(drawAll);
+        }
 
 function setupCanvas() {
     canvas = document.getElementById("goalCanvas");
