@@ -35,40 +35,56 @@
 
         cameraImage.onload = () => drawAll(); // Ensure the image is loaded before drawing
 
-        async function fetchData(url) {
-            try {
-                console.log(`Fetching data from: ${url}`);
-                const response = await fetch(url);
-                if (!response.ok) throw new Error("Network error");
-                return await response.json();
-            } catch (error) {
-                console.error("Fetch error:", error);
-                document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
-                return null;
-            }
+    async function fetchData(url, fallbackType = null) {
+        try {
+            console.log(`Fetching data from: ${url}`);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Network error");
+            return await response.json();
+        } catch (error) {
+            console.error("Fetch error:", error);
+            document.getElementById("errorMessage").textContent = "Failed to load data. Using fallback values.";
+            return getRevertData(fallbackType);
+        }
+    }
+
+    function getRevertData(type) {
+        console.warn(`Using fallback data for: ${type}`);
+        const fallbackData = {
+            timer: {
+                startTime: new Date().toISOString(),
+                endTime: new Date(Date.now() + 3600000).toISOString(), // 1 hour later
+            },
+            "Follower Goal": { CurrentValue: 50, goalValue: 100 },
+            "Subscription Goal": { CurrentValue: 10, goalValue: 20 },
+            "Bits Goal": { CurrentValue: 500, goalValue: 1000 },
+            "Donation Goal": { CurrentValue: 20, goalValue: 100 },
+        };
+        return fallbackData[type] || null;
+    }
+        
+      async function loadInitialData() {
+        console.log("Loading initial data...");
+        let timerData = await fetchData("https://script.google.com/macros/s/...", "timer");
+
+        if (!timerData) {
+            console.warn("Failed to fetch timer data.");
+            return;
         }
 
-        async function loadInitialData() {
-            console.log("Loading initial data...");
-            let timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
+        startTime = new Date(timerData.startTime);
+        endTime = new Date(timerData.endTime);
+        targetDate = endTime;
 
-            if (!timerData) {
-                console.warn("Failed to fetch timer data.");
-                return;
-            }
+        const targetDateElement = document.getElementById("targetDateDisplay");
+        if (targetDateElement) targetDateElement.textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
 
-            startTime = new Date(timerData.startTime);
-            endTime = new Date(timerData.endTime);
-            targetDate = endTime;
+        updateTimerChart();
+        updateCountdown();
+        await fetchAllGoalData();
+        initiationComplete = true;
+    }
 
-            const targetDateElement = document.getElementById("targetDateDisplay");
-            if (targetDateElement) targetDateElement.textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-
-            updateTimerChart();
-            updateCountdown();
-            await fetchAllGoalData();
-            initiationComplete = true;
-        }
 
         function updateCountdown() {
             const countdownElement = document.getElementById("countdownTimer");
@@ -112,18 +128,18 @@
             }
         }
 
-        async function fetchAllGoalData() {
-            const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
-            await Promise.all(goalTypes.map(fetchGoalData));
-        }
+    async function fetchAllGoalData() {
+        const goalTypes = ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"];
+        await Promise.all(goalTypes.map(goalType => fetchGoalData(goalType)));
+    }
 
-        async function fetchGoalData(goalType) {
-            const url = `https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
-            const goalData = await fetchData(url);
-            if (!goalData || !goalData.CurrentValue || !goalData.goalValue) return;
-            
-            updateGoalChart(goalType, goalData.CurrentValue, goalData.goalValue);
-        }
+    async function fetchGoalData(goalType) {
+        const url = `https://script.google.com/macros/s/...&goalType=${encodeURIComponent(goalType)}`;
+        const goalData = await fetchData(url, goalType);
+        if (!goalData) return;
+        
+        updateGoalChart(goalType, goalData.CurrentValue, goalData.goalValue);
+    }
 
         function updateGoalChart(goalType, current, goal) {
             const chartId = {
