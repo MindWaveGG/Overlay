@@ -447,7 +447,7 @@ function drawCameraCircle(x, y, radius, transparency) {
 		ctx.beginPath();
 		ctx.moveTo(startX, startY);
 		ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
-		ctx.strokeStyle = 'white';
+		ctx.strokeStyle = "white";
 		ctx.lineWidth = 10;
 		ctx.stroke();
 		// 🖼️ Draw the label background
@@ -455,7 +455,7 @@ function drawCameraCircle(x, y, radius, transparency) {
 		//ctx.globalAlpha = .5;
 		ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
 		 // 📝 Draw the label text
-		ctx.fillStyle = textColor;
+		ctx.fillStyle = "white";
 		ctx.textAlign = "left";
 		ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
         }
