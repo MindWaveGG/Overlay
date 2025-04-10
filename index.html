@@ -559,9 +559,10 @@ function refreshDataPeriodically() {
 
         cameraImage.onload = function() {
             drawAll();
+		refreshDataPeriodically();
         };
 
-        refreshDataPeriodically();
+        
     </script>
 </body>
 </html>
