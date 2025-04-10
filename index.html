@@ -491,11 +491,8 @@ function drawCameraCircle(x, y, radius, transparency) {
         // Initialize data loading
         loadInitialData();
 
-        // Periodically refresh data every 5 seconds
-        function refreshDataPeriodically() {
-            setInterval(async function() {
-                console.log("Refreshing data..."); // Debug log
 
+async function getUpdatedTimerData() {
                 // Re-fetch timer data
                 const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
                 
@@ -506,6 +503,15 @@ function drawCameraCircle(x, y, radius, transparency) {
                     updateTimerChart();
                     updateCountdown();
                 }
+
+}
+	    
+        // Periodically refresh data every 5 seconds
+        function refreshDataPeriodically() {
+            setInterval(async function() {
+                console.log("Refreshing data..."); // Debug log
+
+		await getUpdatedTimerData();
 
                 // Re-fetch goal data for each goal type
                 await fetchAllGoalData();
