@@ -493,69 +493,69 @@ function drawCameraCircle(x, y, radius, transparency) {
 
 
 async function getUpdatedTimerData() {
-                // Re-fetch timer data
-                const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
-                
-                if (timerData) {
-                    startTime = new Date(timerData.startTime);
-                    endTime = new Date(timerData.endTime);
-                    document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-                    updateTimerChart();
-                    updateCountdown();
-                }
+    // Re-fetch timer data
+    const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
 
+    if (timerData) {
+        startTime = new Date(timerData.startTime);
+        endTime = new Date(timerData.endTime);
+        document.getElementById("targetDateDisplay").textContent =
+            `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
+        updateTimerChart();
+        updateCountdown();
+    } else {
+        console.error("Failed to fetch timer data.");
+    }
 }
+
 	    
-        // Periodically refresh data every 5 seconds
-        function refreshDataPeriodically() {
-            setInterval(async function() {
-                console.log("Refreshing data..."); // Debug log
+// Periodically refresh data every 5 seconds
+function refreshDataPeriodically() {
+    setInterval(async function () {
+        console.log("Refreshing data..."); // Debug log
 
-		await getUpdatedTimerData();
+        try {
+            // Re-fetch timer data
+            await getUpdatedTimerData();
 
-                // Re-fetch goal data for each goal type
-                await fetchAllGoalData();
-                
-                // After fetching the goal data, force the chart labels to refresh
-                for (const goalType of ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"]) {
-                    if (goalCharts[goalType]) {
-                        const currentData = goalCharts[goalType].data.datasets[0].data;
-                        const progress = currentData[0]; // Current progress
-                        const remaining = currentData[1]; // Remaining goal value
+            // Re-fetch goal data for each goal type
+            await fetchAllGoalData();
 
-                        // Calculate the progress and remaining percentages
-                        const total = progress + remaining;
-                        const progressPercentage = Math.round((progress / total) * 100);
-                        const remainingPercentage = 100 - progressPercentage;
+            // Ensure goalCharts exists and is populated
+            if (!goalCharts || Object.keys(goalCharts).length === 0) {
+                console.warn("No goal charts found to update.");
+                return;
+            }
 
-                        // Update the chart with the new data
-                        goalCharts[goalType].data.datasets[0].data = [progressPercentage, remainingPercentage];
+            // Refresh each goal chart
+            for (const goalType of ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"]) {
+                const chart = goalCharts[goalType];
 
-                        // Update the chart
-                        goalCharts[goalType].update();
+                if (chart) {
+                    const currentData = chart.data.datasets[0].data;
+                    const [progress, remaining] = currentData;
 
-                        // Force the datalabels plugin to recalculate the labels
-                        goalCharts[goalType].options.plugins.datalabels.formatter = function(value, context) {
-                            const currentData = context.chart.data.datasets[0].data;
-                            const total = currentData[0] + currentData[1];
-                            const currentPercent = Math.round((currentData[0] / total) * 100);
-                            
-                            // Ensure correct label for progress and remaining sections
-                            if (context.dataset.data[0] === value) {
-                                return `${currentPercent}%`;  // Show progress percentage
-                            } else {
-                                const remainingPercent = 100 - currentPercent;
-                                return `${remainingPercent}%`;  // Show remaining percentage
-                            }
-                        };
+                    const total = progress + remaining;
+                    const progressPercentage = total > 0 ? Math.round((progress / total) * 100) : 0;
+                    const remainingPercentage = 100 - progressPercentage;
 
-                        // Re-update the chart with the new data labels
-                        goalCharts[goalType].update();
-                    }
+                    // Update chart data with percentages
+                    chart.data.datasets[0].data = [progressPercentage, remainingPercentage];
+
+                    // Update the datalabels formatter
+                    chart.options.plugins.datalabels.formatter = (value) => `${value}%`;
+
+                    // Refresh chart
+                    chart.update();
                 }
-                
-            }, 5000); // Set the interval to 5 seconds (5000ms) for testing, adjust as needed
+            }
+        } catch (error) {
+            console.error("Error during periodic data refresh:", error);
         }
+
+    }, 5000); // Refresh every 5 seconds
+}
+
 
         cameraImage.onload = function() {
             drawAll();
