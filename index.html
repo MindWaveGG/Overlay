@@ -138,8 +138,8 @@
                 endTime = new Date(timerData.endTime);
 				targetDate = new Date(timerData.endTime);
                 document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-                updateTimerChart();
-                updateCountdown();
+                await updateTimerChart();
+                await updateCountdown(startTime, endTime);
             }
 
             // Fetch goal data for each goal type
