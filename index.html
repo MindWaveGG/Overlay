@@ -392,7 +392,7 @@ function drawCameraCircle(x, y, radius, transparency) {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.lineWidth = 8;
-    ctx.strokeStyle = 'blue';
+    ctx.strokeStyle = '#ff6a03cc';
     ctx.stroke();
 }
 
@@ -469,18 +469,18 @@ function drawCameraCircle(x, y, radius, transparency) {
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
             let data = [
-                { label: countdownText, percentage: percentage, color: 'blue' },
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: 'blue' },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: 'blue' },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: 'blue' },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: 'blue' }
+                { label: countdownText, percentage: percentage, color: '#ff6a03cc' },
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#ff6a03cc' },
+                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#ff6a03cc' },
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#ff6a03cc' },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#ff6a03cc' }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
 
             data.forEach((item, index) => {
                 drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
-                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, 'blue', 'black', 'black');
+                drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, '#ff6a03cc', 'black', 'black');
             });
 
             requestAnimationFrame(drawAll);
