@@ -474,11 +474,11 @@ function drawCameraCircle(x, y, radius, transparency) {
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
             let data = [
-                { label: countdownText, percentage: percentage, color: '#1D3ACDcc' },
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#1D3ACDcc' },
+                { label: countdownText, percentage: percentage, color: '#D0D0D0cc' },
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#D0D0D0cc' },
                 { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#1D3ACDcc' },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#1D3ACDcc' },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#1D3ACDcc' }
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#D0D0D0cc' },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#D0D0D0cc' }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
