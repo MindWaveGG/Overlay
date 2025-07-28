@@ -393,7 +393,7 @@ function drawCameraCircle(x, y, radius, transparency) {
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.lineWidth = 8;
 	// 
-    ctx.strokeStyle = '#FA8C06cc';
+    ctx.strokeStyle = '#1D3ACDCC';
     ctx.stroke();
 }
 
@@ -474,11 +474,11 @@ function drawCameraCircle(x, y, radius, transparency) {
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
             let data = [
-                { label: countdownText, percentage: percentage, color: '#FA8C06cc' },
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#FA8C06cc' },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#FA8C06cc' },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#FA8C06cc' },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#FA8C06cc' }
+                { label: countdownText, percentage: percentage, color: '#1D3ACDCC' },
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#1D3ACDCC' },
+                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#1D3ACDCC' },
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#1D3ACDCC' },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#1D3ACDCC' }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
