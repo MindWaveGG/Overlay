@@ -485,8 +485,8 @@ function drawCameraCircle(x, y, radius, transparency) {
             data.sort((a, b) => b.percentage - a.percentage);
 
             data.forEach((item, index) => {
-                drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
                 drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, '#FF0000CC', 'black', 'black');
+				drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color)
             });
 
             requestAnimationFrame(drawAll);
@@ -572,6 +572,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
