@@ -466,6 +466,28 @@ function drawCameraCircle(x, y, radius, transparency) {
 		ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
         }
 
+	function lerpColor(color1, color2, t) {
+    // color1 and color2 are {r, g, b} objects
+    return {
+        r: Math.round(color1.r + (color2.r - color1.r) * t),
+        g: Math.round(color1.g + (color2.g - color1.g) * t),
+        b: Math.round(color1.b + (color2.b - color1.b) * t)
+    };
+}
+
+function rgbToHex(color) {
+    return "#" + ((1 << 24) + (color.r << 16) + (color.g << 8) + color.b)
+        .toString(16)
+        .slice(1);
+}
+
+		const red = { r: 255, g: 0, b: 0 };
+const blue = { r: 0, g: 0, b: 255 };
+const now = Date.now() / 1000; // seconds
+const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
+const currentColor = lerpColor(red, blue, t);
+const colorHex = rgbToHex(currentColor);
+		
         function drawAll() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -476,11 +498,11 @@ function drawCameraCircle(x, y, radius, transparency) {
 
             let data = [
                 
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#1D3ACDD9' },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#1D3ACDD9' },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#1D3ACDD9' },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#1D3ACDD9' },
-				{ label: countdownText, percentage: percentage, color: '#1D3ACDD9' }
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
+                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
+				{ label: countdownText, percentage: percentage, color: colorHex }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
@@ -600,6 +622,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
