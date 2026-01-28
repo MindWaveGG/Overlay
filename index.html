@@ -194,7 +194,7 @@
                         maintainAspectRatio: false,
                         plugins: {
                             datalabels: {
-                                color: 'white',
+                                color: 'cyan',
                                 font: {
                                     weight: 'bold',
                                     size: 14
@@ -287,7 +287,7 @@
                         maintainAspectRatio: false,
                         plugins: {
                             datalabels: {
-                                color: 'white',
+                                color: 'brown',
                                 font: {
                                     weight: 'bold',
                                     size: 14
@@ -431,7 +431,7 @@ function drawCameraCircle(x, y, radius, transparency) {
             const padding = 10;
             const fontSize = 80;
             ctx.font = `bold ${fontSize}px Arial`;
-            ctx.fillStyle = 'orange';
+            ctx.fillStyle = 'yellow';
 
             const textWidth = ctx.measureText(label).width;
             const labelWidth = textWidth + padding * 2;
@@ -452,7 +452,7 @@ function drawCameraCircle(x, y, radius, transparency) {
 		ctx.beginPath();
 		ctx.moveTo(startX, startY);
 		ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2);
-		ctx.strokeStyle = "white";
+		ctx.strokeStyle = "orange";
 		ctx.lineWidth = 4;
 		ctx.stroke();
 		// 🖼️ Draw the label background
@@ -460,7 +460,7 @@ function drawCameraCircle(x, y, radius, transparency) {
 		//ctx.globalAlpha = .5;
 		ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
 		 // 📝 Draw the label text
-		ctx.fillStyle = "white";
+		ctx.fillStyle = "purple";
 		ctx.textAlign = "left";
 		ctx.fillText(label, labelX + padding, labelY + fontSize + padding / 2);
         }
@@ -597,6 +597,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
