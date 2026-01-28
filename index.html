@@ -130,7 +130,7 @@
         // Load initial data including the timer and goal data
         async function loadInitialData() {
             console.log("Loading initial data...");  // Debug log
-            const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
+            const timerData = await fetchData("https://script.google.com/macros/s/1RDhKSUotxo5wqbwrjVcwxq7EQe75OUuBSg4u14K4KDbnBXMdr38eGRrO/exec?action=getTimer&timerName=Timer");
 
             if (timerData) {
                 console.log("Timer data loaded:", timerData);  // Debug log
@@ -620,6 +620,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
