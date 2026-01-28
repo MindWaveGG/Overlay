@@ -485,6 +485,18 @@ function drawCameraCircle(x, y, radius, transparency) {
             data.sort((a, b) => b.percentage - a.percentage);
 
 
+// 1️⃣ Draw all donuts first
+data.forEach((item, index) => {
+    drawDonut(
+        centerX,
+        centerY,
+        baseRadius + index * (donutWidth + donutSpacing),
+        donutWidth,
+        item.percentage,
+        item.color
+    );
+});
+
 // 2️⃣ Then draw all labels on top
 data.forEach((item, index) => {
     drawLabelWithLine(
@@ -500,17 +512,7 @@ data.forEach((item, index) => {
         'black'
     );
 });
-          // 1️⃣ Draw all donuts first
-data.forEach((item, index) => {
-    drawDonut(
-        centerX,
-        centerY,
-        baseRadius + index * (donutWidth + donutSpacing),
-        donutWidth,
-        item.percentage,
-        item.color
-    );
-});
+
 
 
 
@@ -597,6 +599,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
