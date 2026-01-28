@@ -410,9 +410,9 @@ function drawCameraCircle(x, y, radius, transparency) {
                 ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle);
                 ctx.lineWidth = 5;
 		    // Check 
-		ctx.lineColor = '#1D3ACDD9';
+		ctx.lineColor = colorHex;
 		    // Outer border
-                ctx.strokeStyle = '#1D3ACDD9';
+                ctx.strokeStyle = colorHex;
                 ctx.stroke();
 
                 ctx.beginPath();
@@ -483,10 +483,6 @@ function rgbToHex(color) {
 
 		const red = { r: 255, g: 0, b: 0 };
 const blue = { r: 0, g: 0, b: 255 };
-const now = Date.now() / 1000; // seconds
-const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
-const currentColor = lerpColor(red, blue, t);
-const colorHex = rgbToHex(currentColor);
 		
         function drawAll() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -495,7 +491,11 @@ const colorHex = rgbToHex(currentColor);
 
             const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
             const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
-
+			
+const now = Date.now() / 1000; // seconds
+const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
+const currentColor = lerpColor(red, blue, t);
+const colorHex = rgbToHex(currentColor);
             let data = [
                 
                 { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
@@ -622,6 +622,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
