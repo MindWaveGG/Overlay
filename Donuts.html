@@ -398,34 +398,32 @@ function drawCameraCircle(x, y, radius, transparency) {
 }
 
         function drawDonut(x, y, radius, width, percentage, color) {
-            const endAngle = Math.PI * 2 * percentage - Math.PI / 2;
-            if (percentage > 0) {
-                ctx.beginPath();
-                ctx.arc(x, y, radius, -Math.PI / 2, endAngle);
-                ctx.lineWidth = width;
-                ctx.strokeStyle = color;
-                ctx.stroke();
+    if (percentage <= 0) return; // Skip if nothing to draw
 
-                ctx.beginPath();
-                ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle);
-                ctx.lineWidth = 5;
-		    // Check 
-		ctx.lineColor = colorHex;
-		    // Outer border
-                ctx.strokeStyle = colorHex;
-                ctx.stroke();
+    const endAngle = Math.PI * 2 * percentage - Math.PI / 2;
 
-                ctx.beginPath();
-                ctx.arc(x, y, radius - width / 2, -Math.PI / 2, endAngle);
-                ctx.lineWidth = 5;
-		    //
-		ctx.lineColor = 'black';
-		    // Inner Border
-                ctx.strokeStyle = 'black';
-                ctx.stroke();
-               
-            }
-        }
+    // Main donut
+    ctx.beginPath();
+    ctx.arc(x, y, radius, -Math.PI / 2, endAngle);
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color; // Use the passed color
+    ctx.stroke();
+
+    // Outer border (same color as main donut for smooth transition)
+    ctx.beginPath();
+    ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = color; // <-- remove ctx.lineColor
+    ctx.stroke();
+
+    // Inner border
+    ctx.beginPath();
+    ctx.arc(x, y, radius - width / 2, -Math.PI / 2, endAngle);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'black'; // Inner border remains black
+    ctx.stroke();
+}
+
 
         function drawLabelWithLine(label, x, y, radius, percentage, labelIndex, totalLabels, textColor, lineColor, borderColor) {
             const padding = 10;
@@ -622,6 +620,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
