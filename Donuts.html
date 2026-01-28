@@ -410,9 +410,9 @@ function drawCameraCircle(x, y, radius, transparency) {
                 ctx.arc(x, y, radius + width / 2, -Math.PI / 2, endAngle);
                 ctx.lineWidth = 5;
 		    // Check 
-		ctx.lineColor = '#1D3ACDFF';
+		ctx.lineColor = '#1D3ACDD9';
 		    // Outer border
-                ctx.strokeStyle = '#1D3ACDFF';
+                ctx.strokeStyle = '#1D3ACDD9';
                 ctx.stroke();
 
                 ctx.beginPath();
@@ -476,11 +476,11 @@ function drawCameraCircle(x, y, radius, transparency) {
 
             let data = [
                 
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#1D3ACDFF' },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#1D3ACDFF' },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#1D3ACDFF' },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#1D3ACDFF' },
-				{ label: countdownText, percentage: percentage, color: '#1D3ACDFF' }
+                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: '#1D3ACDD9' },
+                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: '#1D3ACDD9' },
+                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: '#1D3ACDD9' },
+                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: '#1D3ACDD9' },
+				{ label: countdownText, percentage: percentage, color: '#1D3ACDD9' }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
@@ -600,6 +600,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
