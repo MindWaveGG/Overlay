@@ -228,7 +228,7 @@
 
         // Fetch data for a specific goal
         async function fetchGoalData(goalType) {
-            const url = `https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+            const url = `https://script.google.com/macros/s/AKfycbzoPT50eDJ1kQ_qAlaEWBgxWzzF2i22kXftCcxw14DqmnedWYSNmhOamVLvvQ9WsImA/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
             console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
             
             const goalData = await fetchData(url);
@@ -620,6 +620,7 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
+
 
 
 
