@@ -227,26 +227,35 @@
         }
 
         // Fetch data for a specific goal
-        async function fetchGoalData(goalType) {
-            const url = `https://script.google.com/macros/s/AKfycbzoPT50eDJ1kQ_qAlaEWBgxWzzF2i22kXftCcxw14DqmnedWYSNmhOamVLvvQ9WsImA/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
-            console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
-            
-            const goalData = await fetchData(url);
-            
-            if (goalData) {
-                console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
-                const current = goalData.CurrentCount;
-                const goal = goalData.goalValue;
-                if (current !== undefined && goal !== undefined) {
-                    updateGoalChart(goalType, current, goal);
-                    updateGoalStats(goalType, current, goal);
-                } else {
-                    console.error(`Missing CurrentCount or goalValue for ${goalType}`);
-                }
-            } else {
-                console.error(`Failed to fetch goal data for ${goalType}`);
-            }
+async function fetchGoalData(goalType) {
+    // Determine the current value for this goal from the frontend variables
+    let currentValue = 0;
+    if (goalType === "Follower Goal") currentValue = followerCurrent;
+    if (goalType === "Subscription Goal") currentValue = subCurrent;
+    if (goalType === "Bits Goal") currentValue = bitsCurrent;
+    if (goalType === "Donation Goal") currentValue = donationCurrent;
+
+    // Include currentValue in the request so the backend can auto-update goals
+    const url = `https://script.google.com/macros/s/AKfycbzoPT50eDJ1kQ_qAlaEWBgxWzzF2i22kXftCcxw14DqmnedWYSNmhOamVLvvQ9WsImA/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}&currentValue=${currentValue}`;
+    console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
+
+    const goalData = await fetchData(url);
+
+    if (goalData) {
+        console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
+        const current = goalData.CurrentCount ?? currentValue;
+        const goal = goalData.goalValue;
+        if (current !== undefined && goal !== undefined) {
+            updateGoalChart(goalType, current, goal);
+            updateGoalStats(goalType, current, goal);
+        } else {
+            console.error(`Missing CurrentCount or goalValue for ${goalType}`);
         }
+    } else {
+        console.error(`Failed to fetch goal data for ${goalType}`);
+    }
+}
+
 
 
 
