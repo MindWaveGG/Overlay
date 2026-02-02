@@ -29,17 +29,17 @@
             text-align: center;
             margin-top: 10px;
         }
-        #countdownTimer {
-            font-size: 1.5em;
-            font-weight: bold;
-        }
-        #timerStats {
-            font-size: 1.2em;
-            margin-top: 10px;
-        }
-        #targetDateDisplay {
-            font-size: 1.2em;
-            margin-top: 10px;
+       // #countdownTimer {
+       //     font-size: 1.5em;
+       //     font-weight: bold;
+        //}
+        //#timerStats {
+        //    font-size: 1.2em;
+        //    margin-top: 10px;
+        //}
+        //#targetDateDisplay {
+        //    font-size: 1.2em;
+        //    margin-top: 10px;
         }
     </style>
 </head>
@@ -48,16 +48,16 @@
     <h1>Timer and Goal Tracker</h1>
     <div id="errorMessage" style="color: red;"></div>
 
-    <!-- Timer Section -->
-    <div id="countdownTimer"></div>
-    <div id="timerStats"></div>
-    <div id="targetDateDisplay"></div>
+   // <!-- Timer Section -->
+    //<div id="countdownTimer"></div>
+   // <div id="timerStats"></div>
+    //<div id="targetDateDisplay"></div>
 
-    <div class="container">
-        <!-- Timer Chart -->
-        <div class="chart-container">
-            <canvas id="timerChart"></canvas>
-        </div>
+    //<div class="container">
+    //    <!-- Timer Chart -->
+    //    <div class="chart-container">
+    //        <canvas id="timerChart"></canvas>
+    //    </div>
 
         <!-- Goal Charts -->
         <div class="chart-container">
@@ -83,10 +83,10 @@
 	
     <script>
         let initiationComplete = false;
-        let targetDate = 0;
-        let startTime;
-        let endTime;
-        let timerChart = null; // Initialize as null, not empty object
+       // let targetDate = 0;
+       // let startTime;
+       // let endTime;
+       // let timerChart = null; // Initialize as null, not empty object
         const goalCharts = {};
 
         let followerCurrent = 0, followerGoal = 0;
@@ -130,17 +130,17 @@
         // Load initial data including the timer and goal data
         async function loadInitialData() {
             console.log("Loading initial data...");  // Debug log
-            const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
+           // const timerData = await fetchData("https://script.google.com/macros/s/AKfycbysupnim3NfJld36ocDX8DXZhRSAIrAZBlHmFbrire2eVNLeHwyL_iNmJAZxva6Qs5B/exec?action=getTimer&timerName=Timer");
 
-            if (timerData) {
-                console.log("Timer data loaded:", timerData);  // Debug log
-                startTime = new Date(timerData.startTime);
-                endTime = new Date(timerData.endTime);
-				targetDate = new Date(timerData.endTime);
-                document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-                await updateTimerChart();
-                await updateCountdown(startTime, endTime);
-            }
+           // if (timerData) {
+           //     console.log("Timer data loaded:", timerData);  // Debug log
+           //     startTime = new Date(timerData.startTime);
+           //     endTime = new Date(timerData.endTime);
+			//	targetDate = new Date(timerData.endTime);
+           //     document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
+           //     await updateTimerChart();
+           //     await updateCountdown(startTime, endTime);
+           // }
 
             // Fetch goal data for each goal type
             await fetchAllGoalData();
@@ -148,76 +148,76 @@
         }
 
         // Update countdown timer
-        function updateCountdown() {
-            const countdownElement = document.getElementById("countdownTimer");
-            const now = new Date();
-            const timeRemaining = endTime - now;
-            const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
-            countdownElement.textContent = `Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+      //  function updateCountdown() {
+      //      const countdownElement = document.getElementById("countdownTimer");
+      //      const now = new Date();
+      //      const timeRemaining = endTime - now;
+      //      const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+      //      const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      //      const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+       //     const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+       //     countdownElement.textContent = `Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`;
 
-            if (timeRemaining <= 0) {
-                countdownElement.textContent = "Time's up!";
-            }
-        }
+       //     if (timeRemaining <= 0) {
+       //         countdownElement.textContent = "Time's up!";
+       //     }
+       // }
 
         // Calculate timer progress and update chart
-        function updateTimerChart() {
-            const now = new Date();
-            const elapsedTime = now - startTime;
-            const totalTime = endTime - startTime;
-            const progressPercentage = Math.min(100, (elapsedTime / totalTime) * 100);
-            console.log("Timer progress: ", progressPercentage);  // Debug log
+       // function updateTimerChart() {
+        //    const now = new Date();
+        //    const elapsedTime = now - startTime;
+        //    const totalTime = endTime - startTime;
+        //    const progressPercentage = Math.min(100, (elapsedTime / totalTime) * 100);
+        //    console.log("Timer progress: ", progressPercentage);  // Debug log
 
-            const ctx = document.getElementById("timerChart")?.getContext('2d');
+        //    const ctx = document.getElementById("timerChart")?.getContext('2d');
             
-            if (!ctx) {
-                console.error("Chart context for Overall Timer not found.");
-                return; // This is okay: it stops the function if context is not found.
-            }
+        //    if (!ctx) {
+        //        console.error("Chart context for Overall Timer not found.");
+        //        return; // This is okay: it stops the function if context is not found.
+        //    }
 
             // If the timerChart does not exist, initialize it
-            if (!timerChart) {
-                timerChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ["Progress", "Remaining"],
-                        datasets: [{
-                            data: [progressPercentage, 100 - progressPercentage],
-                            backgroundColor: ["#4caf50", "#ddd"]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            datalabels: {
-                                color: 'white',
-                                font: {
-                                    weight: 'bold',
-                                    size: 14
-                                },
-                                formatter: function(value, context) {
-                                    if (context.dataset.data[0] === value) {
-                                        return `${Math.round(progressPercentage)}%`;
-                                    } else {
-                                        return '';
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    plugins: [ChartDataLabels]
-                });
-            } else {
-                timerChart.data.datasets[0].data = [progressPercentage, 100 - progressPercentage];
-                timerChart.update();
-            }
+         //   if (!timerChart) {
+         //       timerChart = new Chart(ctx, {
+         //           type: 'doughnut',
+         //           data: {
+         //               labels: ["Progress", "Remaining"],
+         //               datasets: [{
+         //                   data: [progressPercentage, 100 - progressPercentage],
+         //                   backgroundColor: ["#4caf50", "#ddd"]
+         //               }]
+         //           },
+         //           options: {
+         //               responsive: true,
+         //               maintainAspectRatio: false,
+          //              plugins: {
+         //                   datalabels: {
+         //                       color: 'white',
+         //                       font: {
+         //                           weight: 'bold',
+         //                           size: 14
+         //                       },
+         //                       formatter: function(value, context) {
+         //                           if (context.dataset.data[0] === value) {
+         //                               return `${Math.round(progressPercentage)}%`;
+          //                          } else {
+          //                              return '';
+          //                          }
+          //                      }
+          //                  }
+          //              }
+          //          },
+          //          plugins: [ChartDataLabels]
+          //      });
+           // } else {
+           //     timerChart.data.datasets[0].data = [progressPercentage, 100 - progressPercentage];
+          //      timerChart.update();
+          //  }
 
-            document.getElementById("timerStats").textContent = `Timer Progress: ${Math.round(progressPercentage)}%`;
-        }
+         //   document.getElementById("timerStats").textContent = `Timer Progress: ${Math.round(progressPercentage)}%`;
+       // }
 
         // Fetch all goal data
         async function fetchAllGoalData() {
@@ -227,26 +227,35 @@
         }
 
         // Fetch data for a specific goal
-        async function fetchGoalData(goalType) {
-            const url = `https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
-            console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
-            
-            const goalData = await fetchData(url);
-            
-            if (goalData) {
-                console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
-                const current = goalData.CurrentCount;
-                const goal = goalData.goalValue;
-                if (current !== undefined && goal !== undefined) {
-                    updateGoalChart(goalType, current, goal);
-                    updateGoalStats(goalType, current, goal);
-                } else {
-                    console.error(`Missing CurrentCount or goalValue for ${goalType}`);
-                }
-            } else {
-                console.error(`Failed to fetch goal data for ${goalType}`);
-            }
+async function fetchGoalData(goalType) {
+    // Determine the current value for this goal from the frontend variables
+    let currentValue = 0;
+    if (goalType === "Follower Goal") currentValue = followerCurrent;
+    if (goalType === "Subscription Goal") currentValue = subCurrent;
+    if (goalType === "Bits Goal") currentValue = bitsCurrent;
+    if (goalType === "Donation Goal") currentValue = donationCurrent;
+
+    // Include currentValue in the request so the backend can auto-update goals
+    const url = `https://script.google.com/macros/s/AKfycbzoPT50eDJ1kQ_qAlaEWBgxWzzF2i22kXftCcxw14DqmnedWYSNmhOamVLvvQ9WsImA/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}&currentValue=${currentValue}`;
+    console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
+
+    const goalData = await fetchData(url);
+
+    if (goalData) {
+        console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
+        const current = goalData.CurrentCount ?? currentValue;
+        const goal = goalData.goalValue;
+        if (current !== undefined && goal !== undefined) {
+            updateGoalChart(goalType, current, goal);
+            updateGoalStats(goalType, current, goal);
+        } else {
+            console.error(`Missing CurrentCount or goalValue for ${goalType}`);
         }
+    } else {
+        console.error(`Failed to fetch goal data for ${goalType}`);
+    }
+}
+
 
 
 
@@ -362,18 +371,18 @@ function updateGoalStats(goalType, current, goal) {
 }
 
 
-        function getTimeRemaining() {
-            const now = new Date().getTime();
-            const timeLeft = targetDate - now;
-
-            return {
-                countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
-                countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-                countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
-                countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
-                percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
-            };
-        }
+     //   function getTimeRemaining() {
+     //       const now = new Date().getTime();
+     //       const timeLeft = targetDate - now;
+//
+     //       return {
+     //           countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
+     //           countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+     //           countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
+     //           countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
+     //           percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
+      //      };
+     //   }
 		
 		
 function drawCameraCircle(x, y, radius, transparency) {
@@ -487,8 +496,8 @@ const blue = { r: 0, g: 0, b: 255 };
 
             drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
 
-            const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
-            const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
+          //  const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
+          //  const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 			
 const now = Date.now() / 1000; // seconds
 const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
@@ -500,7 +509,7 @@ const colorHex = rgbToHex(currentColor);
                 { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
                 { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
                 { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
-				{ label: countdownText, percentage: percentage, color: colorHex }
+				//{ label: countdownText, percentage: percentage, color: colorHex }
             ];
 
             data.sort((a, b) => b.percentage - a.percentage);
@@ -546,21 +555,21 @@ data.forEach((item, index) => {
         loadInitialData();
 
 
-async function getUpdatedTimerData() {
+//async function getUpdatedTimerData() {
     // Re-fetch timer data
-    const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
-
-    if (timerData) {
-        startTime = new Date(timerData.startTime);
-        endTime = new Date(timerData.endTime);
-        document.getElementById("targetDateDisplay").textContent =
-            `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-        updateTimerChart();
-        updateCountdown();
-    } else {
-        console.error("Failed to fetch timer data.");
-    }
-}
+//    const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
+//
+//    if (timerData) {
+//        startTime = new Date(timerData.startTime);
+//        endTime = new Date(timerData.endTime);
+//        document.getElementById("targetDateDisplay").textContent =
+//            `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
+//        updateTimerChart();
+//        updateCountdown();
+//    } else {
+//        console.error("Failed to fetch timer data.");
+//    }
+//}
 
 	    
 // Periodically refresh data every 5 seconds
@@ -570,7 +579,7 @@ function refreshDataPeriodically() {
 
         try {
             // Re-fetch timer data
-            await getUpdatedTimerData();
+            //await getUpdatedTimerData();
 
             // Re-fetch goal data for each goal type
             await fetchAllGoalData();
@@ -620,23 +629,3 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
