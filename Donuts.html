@@ -236,8 +236,7 @@ function drawCamera() {
 }
 
 function drawDonut(radius, pct, color) {
-  if (!Number.isFinite(pct) || pct <= 0) return;
-
+  if (pct <= 0) return;
 
   const start = -Math.PI / 2;
   const end = start + Math.PI * 2 * pct;
@@ -257,18 +256,13 @@ function drawAll() {
 
   const items = [];
 
-  function safePct(current, goal) {
-  if (!goal || goal <= 0) return 0;
-  return clamp01(current / goal);
-}
-
-items.push(
-  { label: "Followers", pct: safePct(goals.followers.current, goals.followers.goal) },
-  { label: "Subs", pct: safePct(goals.subs.current, goals.subs.goal) },
-  { label: "Bits", pct: safePct(goals.bits.current, goals.bits.goal) },
-  { label: "Donations", pct: safePct(goals.donations.current, goals.donations.goal) }
-);
-
+  // Goals
+  items.push(
+    { label: "Followers", pct: goals.followers.current / goals.followers.goal },
+    { label: "Subs", pct: goals.subs.current / goals.subs.goal },
+    { label: "Bits", pct: goals.bits.current / goals.bits.goal },
+    { label: "Donations", pct: goals.donations.current / goals.donations.goal }
+  );
 
   // Timers
   timers.forEach(t => {
@@ -305,13 +299,8 @@ setInterval(async () => {
    INIT
 ====================================================== */
 async function init() {
-	await Promise.all([loadTimers(), loadGoals()]);
-	if (cameraImage.complete) {
-		drawAll();
-	} else {
-	cameraImage.onload = drawAll;
-	}
-
+  await Promise.all([loadTimers(), loadGoals()]);
+  cameraImage.onload = drawAll;
 }
 
 init();
