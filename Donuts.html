@@ -79,6 +79,10 @@
             <canvas id="donationChart"></canvas>
             <div id="donationStats" class="stats"></div>
         </div>
+		<div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">
+			Last refresh: N/A
+		</div>
+
     </div>
 	
     <script>
@@ -164,7 +168,7 @@
         }
 
         // Calculate timer progress and update chart
-        function updateTimerChart() {
+        async function updateTimerChart() {
             const now = new Date();
             const elapsedTime = now - startTime;
             const totalTime = endTime - startTime;
@@ -363,17 +367,21 @@ function updateGoalStats(goalType, current, goal) {
 
 
         function getTimeRemaining() {
-            const now = new Date().getTime();
-            const timeLeft = targetDate - now;
+    const now = new Date().getTime();
+    const timeLeft = endTime - now;
+    const totalDuration = endTime - startTime;
 
-            return {
-                countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
-                countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-                countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
-                countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
-                percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
-            };
-        }
+    const percentage = Math.max(0, Math.min(1, 1 - timeLeft / totalDuration));
+
+    return {
+        countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
+        countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
+        countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
+        percentage: percentage
+    };
+}
+
 		
 		
 function drawCameraCircle(x, y, radius, transparency) {
@@ -483,62 +491,68 @@ function rgbToHex(color) {
 const blue = { r: 0, g: 0, b: 255 };
 		
         function drawAll() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
+    // Update the countdown text in the DOM
+    updateCountdown();
 
-            const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
-            const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
-			
-const now = Date.now() / 1000; // seconds
-const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
-const currentColor = lerpColor(red, blue, t);
-const colorHex = rgbToHex(currentColor);
-            let data = [
-                
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
-				{ label: countdownText, percentage: percentage, color: colorHex }
-            ];
+    // Draw the central camera circle
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
-            data.sort((a, b) => b.percentage - a.percentage);
+    // Get current countdown info and percentage
+    const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
+    const countdownText = `Timer: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
 
+    // Smooth color oscillation for donuts
+    const now = Date.now() / 1000; // seconds
+    const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
+    const currentColor = lerpColor(red, blue, t);
+    const colorHex = rgbToHex(currentColor);
 
-// 1️⃣ Draw all donuts first
-data.forEach((item, index) => {
-    drawDonut(
-        centerX,
-        centerY,
-        baseRadius + index * (donutWidth + donutSpacing),
-        donutWidth,
-        item.percentage,
-        item.color
-    );
-});
+    // Prepare all donut data
+    const data = [
+        { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
+        { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
+        { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
+        { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
+        { label: countdownText, percentage: percentage, color: colorHex } // ✅ Use the percentage we already calculated
+    ];
 
-// 2️⃣ Then draw all labels on top
-data.forEach((item, index) => {
-    drawLabelWithLine(
-        item.label,
-        centerX,
-        centerY,
-        baseRadius + index * (donutWidth + donutSpacing),
-        item.percentage,
-        index,
-        data.length,
-        '#FF0000CC',
-        'black',
-        'black'
-    );
-});
+    // Sort by percentage descending
+    data.sort((a, b) => b.percentage - a.percentage);
 
+    // 1️⃣ Draw all donuts
+    data.forEach((item, index) => {
+        drawDonut(
+            centerX,
+            centerY,
+            baseRadius + index * (donutWidth + donutSpacing),
+            donutWidth,
+            item.percentage,
+            item.color
+        );
+    });
 
+    // 2️⃣ Draw all labels on top
+    data.forEach((item, index) => {
+        drawLabelWithLine(
+            item.label,
+            centerX,
+            centerY,
+            baseRadius + index * (donutWidth + donutSpacing),
+            item.percentage,
+            index,
+            data.length,
+            '#FF0000CC',
+            'black',
+            'black'
+        );
+    });
 
+    // Continue the animation loop
+    requestAnimationFrame(drawAll);
+}
 
-            requestAnimationFrame(drawAll);
-        }
 
 
 
@@ -563,9 +577,14 @@ async function getUpdatedTimerData() {
 }
 
 	    
-// Periodically refresh data every 5 seconds
-function refreshDataPeriodically() {
+// Periodically refresh timer and goal data every 5 seconds
+async function refreshDataPeriodically() {
     setInterval(async function () {
+		getUpdatedTimerData();
+        const trackerDiv = document.getElementById("refreshTracker");
+        const now = new Date();
+        if (trackerDiv) trackerDiv.textContent = `Refreshing data at: ${now.toLocaleTimeString()}`;
+
         console.log("Refreshing data..."); // Debug log
 
         try {
@@ -574,12 +593,6 @@ function refreshDataPeriodically() {
 
             // Re-fetch goal data for each goal type
             await fetchAllGoalData();
-
-            // Ensure goalCharts exists and is populated
-            if (!goalCharts || Object.keys(goalCharts).length === 0) {
-                console.warn("No goal charts found to update.");
-                return;
-            }
 
             // Refresh each goal chart
             for (const goalType of ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"]) {
@@ -593,13 +606,8 @@ function refreshDataPeriodically() {
                     const progressPercentage = total > 0 ? Math.round((progress / total) * 100) : 0;
                     const remainingPercentage = 100 - progressPercentage;
 
-                    // Update chart data with percentages
                     chart.data.datasets[0].data = [progressPercentage, remainingPercentage];
-
-                    // Update the datalabels formatter
                     chart.options.plugins.datalabels.formatter = (value) => `${value}%`;
-
-                    // Refresh chart
                     chart.update();
                 }
             }
@@ -607,16 +615,26 @@ function refreshDataPeriodically() {
             console.error("Error during periodic data refresh:", error);
         }
 
-    }, 5000); // Refresh every 5 seconds
+    }, 5000); // every 5 seconds
 }
+
+
 
 
         cameraImage.onload = function() {
             drawAll();
-		refreshDataPeriodically();
-        };
+		};
+// Initialize data loading
+	async function init() {
+		await loadInitialData();       // Load initial timer and goal data
+		drawAll();                     // Start the animation loop
+		refreshDataPeriodically();     // Start periodic refresh after initial load
+	}
+ 
+init();
 
-        
+
+
     </script>
 </body>
 </html>
