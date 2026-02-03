@@ -484,6 +484,7 @@ const blue = { r: 0, g: 0, b: 255 };
 		
         function drawAll() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+			updateCountdown(); // keeps countdown updated every frame
 
             drawCameraCircle(centerX, centerY, cameraRadius + 20, .13);
 
@@ -563,60 +564,57 @@ async function getUpdatedTimerData() {
 }
 
 	    
-// Periodically refresh data every 5 seconds
-async function refreshDataPeriodically() {
-    setInterval(async function () {
-        console.log("Refreshing data..."); // Debug log
+// Periodically refresh timer and goal data every 5 seconds
+function refreshDataPeriodically() {
+    setInterval(async () => {
+        console.log("Refreshing data...");
 
         try {
-            // Re-fetch timer data
+            // 1️⃣ Update timer data
             await getUpdatedTimerData();
 
-            // Re-fetch goal data for each goal type
+            // 2️⃣ Update goal data
             await fetchAllGoalData();
 
-            // Ensure goalCharts exists and is populated
-            if (!goalCharts || Object.keys(goalCharts).length === 0) {
-                console.warn("No goal charts found to update.");
-                return;
-            }
+            // 3️⃣ Refresh charts using the **latest fetched goal values**
+            const goalValues = {
+                "Follower Goal": [followerCurrent, followerGoal],
+                "Subscription Goal": [subCurrent, subGoal],
+                "Bits Goal": [bitsCurrent, bitsGoal],
+                "Donation Goal": [donationCurrent, donationGoal]
+            };
 
-            // Refresh each goal chart
             for (const goalType of ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"]) {
                 const chart = goalCharts[goalType];
-
                 if (chart) {
-                    const currentData = chart.data.datasets[0].data;
-                    const [progress, remaining] = currentData;
-
-                    const total = progress + remaining;
-                    const progressPercentage = total > 0 ? Math.round((progress / total) * 100) : 0;
-                    const remainingPercentage = 100 - progressPercentage;
-
-                    // Update chart data with percentages
-                    chart.data.datasets[0].data = [progressPercentage, remainingPercentage];
-
-                    // Update the datalabels formatter
-                    chart.options.plugins.datalabels.formatter = (value) => `${value}%`;
-
-                    // Refresh chart
+                    const [current, goal] = goalValues[goalType];
+                    const progress = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
+                    chart.data.datasets[0].data = [progress, 100 - progress];
                     chart.update();
                 }
             }
         } catch (error) {
             console.error("Error during periodic data refresh:", error);
         }
-
-    }, 5000); // Refresh every 5 seconds
+    }, 5000); // Every 5 seconds
 }
+
 
 
         cameraImage.onload = function() {
             drawAll();
-		refreshDataPeriodically();
-        };
+		};
+// Initialize data loading
+	async function init() {
+		await loadInitialData();       // Load initial timer and goal data
+		drawAll();                     // Start the animation loop
+		refreshDataPeriodically();     // Start periodic refresh after initial load
+	}
+ 
+init();
 
-        
+
+
     </script>
 </body>
 </html>
