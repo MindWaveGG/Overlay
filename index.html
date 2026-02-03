@@ -367,17 +367,21 @@ function updateGoalStats(goalType, current, goal) {
 
 
         function getTimeRemaining() {
-            const now = new Date().getTime();
-            const timeLeft = targetDate - now;
+    const now = new Date().getTime();
+    const timeLeft = endTime - now;
+    const totalDuration = endTime - startTime;
 
-            return {
-                countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
-                countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-                countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
-                countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
-                percentage: Math.max(0, Math.min(1, 1 - timeLeft / (targetDate - new Date("2025-02-18T00:00:00").getTime())))
-            };
-        }
+    const percentage = Math.max(0, Math.min(1, 1 - timeLeft / totalDuration));
+
+    return {
+        countdownDays: Math.floor(timeLeft / (1000 * 60 * 60 * 24)),
+        countdownHours: Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+        countdownMinutes: Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60)),
+        countdownSeconds: Math.floor((timeLeft % (1000 * 60)) / 1000),
+        percentage: percentage
+    };
+}
+
 		
 		
 function drawCameraCircle(x, y, radius, transparency) {
