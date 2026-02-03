@@ -79,6 +79,10 @@
             <canvas id="donationChart"></canvas>
             <div id="donationStats" class="stats"></div>
         </div>
+		<div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">
+			Last refresh: N/A
+		</div>
+
     </div>
 	
     <script>
@@ -565,39 +569,45 @@ async function getUpdatedTimerData() {
 
 	    
 // Periodically refresh timer and goal data every 5 seconds
-function refreshDataPeriodically() {
-    setInterval(async () => {
-        console.log("Refreshing data...");
+async function refreshDataPeriodically() {
+    setInterval(async function () {
+        const trackerDiv = document.getElementById("refreshTracker");
+        const now = new Date();
+        if (trackerDiv) trackerDiv.textContent = `Refreshing data at: ${now.toLocaleTimeString()}`;
+
+        console.log("Refreshing data..."); // Debug log
 
         try {
-            // 1️⃣ Update timer data
+            // Re-fetch timer data
             await getUpdatedTimerData();
 
-            // 2️⃣ Update goal data
+            // Re-fetch goal data for each goal type
             await fetchAllGoalData();
 
-            // 3️⃣ Refresh charts using the **latest fetched goal values**
-            const goalValues = {
-                "Follower Goal": [followerCurrent, followerGoal],
-                "Subscription Goal": [subCurrent, subGoal],
-                "Bits Goal": [bitsCurrent, bitsGoal],
-                "Donation Goal": [donationCurrent, donationGoal]
-            };
-
+            // Refresh each goal chart
             for (const goalType of ["Follower Goal", "Subscription Goal", "Bits Goal", "Donation Goal"]) {
                 const chart = goalCharts[goalType];
+
                 if (chart) {
-                    const [current, goal] = goalValues[goalType];
-                    const progress = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0;
-                    chart.data.datasets[0].data = [progress, 100 - progress];
+                    const currentData = chart.data.datasets[0].data;
+                    const [progress, remaining] = currentData;
+
+                    const total = progress + remaining;
+                    const progressPercentage = total > 0 ? Math.round((progress / total) * 100) : 0;
+                    const remainingPercentage = 100 - progressPercentage;
+
+                    chart.data.datasets[0].data = [progressPercentage, remainingPercentage];
+                    chart.options.plugins.datalabels.formatter = (value) => `${value}%`;
                     chart.update();
                 }
             }
         } catch (error) {
             console.error("Error during periodic data refresh:", error);
         }
-    }, 5000); // Every 5 seconds
+
+    }, 5000); // every 5 seconds
 }
+
 
 
 
