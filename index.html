@@ -503,14 +503,14 @@ const now = Date.now() / 1000; // seconds
 const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
 const currentColor = lerpColor(red, blue, t);
 const colorHex = rgbToHex(currentColor);
-            let data = [
-                
-                { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
-                { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
-                { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
-                { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
-				{ label: countdownText, percentage: percentage, color: colorHex }
-            ];
+			let data = [
+				{ label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
+				{ label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
+				{ label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
+				{ label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
+				{ label: countdownText, percentage: getTimeRemaining().percentage, color: colorHex } // <- use updated percentage
+			];
+
 
             data.sort((a, b) => b.percentage - a.percentage);
 
