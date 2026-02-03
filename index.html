@@ -490,68 +490,49 @@ function rgbToHex(color) {
 		const red = { r: 255, g: 0, b: 0 };
 const blue = { r: 0, g: 0, b: 255 };
 		
-        function drawAll() {
+        function drawAll() function drawAll() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Update the countdown text in the DOM
-    updateCountdown();
+    // Only draw countdown if startTime and endTime are defined
+    let countdownText = "";
+    let countdownPercentage = 0;
+    if (startTime && endTime) {
+        updateCountdown();
+        const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
+        countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
+        countdownPercentage = percentage;
+    }
 
     // Draw the central camera circle
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
-    // Get current countdown info and percentage
-    const { countdownDays, countdownHours, countdownMinutes, countdownSeconds, percentage } = getTimeRemaining();
-    const countdownText = `Retires In: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
-
     // Smooth color oscillation for donuts
-    const now = Date.now() / 1000; // seconds
-    const t = (Math.sin(now) + 1) / 2; // oscillates 0 → 1 → 0 smoothly
+    const now = Date.now() / 1000; 
+    const t = (Math.sin(now) + 1) / 2; 
     const currentColor = lerpColor(red, blue, t);
     const colorHex = rgbToHex(currentColor);
 
     // Prepare all donut data
     const data = [
-        { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal, color: colorHex },
-        { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal, color: colorHex },
-        { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal, color: colorHex },
-        { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal, color: colorHex },
-        { label: countdownText, percentage: percentage, color: colorHex } // ✅ Use the percentage we already calculated
+        { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerCurrent / followerGoal || 0, color: colorHex },
+        { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subCurrent / subGoal || 0, color: colorHex },
+        { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationCurrent / donationGoal || 0, color: colorHex },
+        { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsCurrent / bitsGoal || 0, color: colorHex },
+        { label: countdownText, percentage: countdownPercentage, color: colorHex }
     ];
 
     // Sort by percentage descending
     data.sort((a, b) => b.percentage - a.percentage);
 
-    // 1️⃣ Draw all donuts
+    // Draw donuts and labels
     data.forEach((item, index) => {
-        drawDonut(
-            centerX,
-            centerY,
-            baseRadius + index * (donutWidth + donutSpacing),
-            donutWidth,
-            item.percentage,
-            item.color
-        );
+        drawDonut(centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), donutWidth, item.percentage, item.color);
+        drawLabelWithLine(item.label, centerX, centerY, baseRadius + index * (donutWidth + donutSpacing), item.percentage, index, data.length, '#FF0000CC', 'black', 'black');
     });
 
-    // 2️⃣ Draw all labels on top
-    data.forEach((item, index) => {
-        drawLabelWithLine(
-            item.label,
-            centerX,
-            centerY,
-            baseRadius + index * (donutWidth + donutSpacing),
-            item.percentage,
-            index,
-            data.length,
-            '#FF0000CC',
-            'black',
-            'black'
-        );
-    });
-
-    // Continue the animation loop
     requestAnimationFrame(drawAll);
 }
+
 
 
 
@@ -621,15 +602,16 @@ async function refreshDataPeriodically() {
 
 
 
-        cameraImage.onload = function() {
-            drawAll();
+        cameraImage.onload = async function() {
+			await init();
 		};
-// Initialize data loading
-	async function init() {
-		await loadInitialData();       // Load initial timer and goal data
-		drawAll();                     // Start the animation loop
-		refreshDataPeriodically();     // Start periodic refresh after initial load
-	}
+
+		async function init() {
+			await loadInitialData();       // Load initial timer and goal data
+			drawAll();                     // Start the animation loop
+			refreshDataPeriodically();     // Start periodic refresh after initial load
+		}
+
  
 init();
 
