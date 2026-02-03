@@ -130,7 +130,7 @@
         // Load initial data including the timer and goal data
         async function loadInitialData() {
             console.log("Loading initial data...");  // Debug log
-            const timerData = await fetchData("https://script.google.com/macros/s/AKfycbysupnim3NfJld36ocDX8DXZhRSAIrAZBlHmFbrire2eVNLeHwyL_iNmJAZxva6Qs5B/exec?action=getTimer&timerName=Timer");
+            const timerData = await fetchData("https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getTimer&timerName=Timer");
 
             if (timerData) {
                 console.log("Timer data loaded:", timerData);  // Debug log
@@ -148,7 +148,7 @@
         }
 
         // Update countdown timer
-        function updateCountdown() {
+        async function updateCountdown() {
             const countdownElement = document.getElementById("countdownTimer");
             const now = new Date();
             const timeRemaining = endTime - now;
@@ -164,7 +164,7 @@
         }
 
         // Calculate timer progress and update chart
-        function updateTimerChart() {
+        async function updateTimerChart() {
             const now = new Date();
             const elapsedTime = now - startTime;
             const totalTime = endTime - startTime;
@@ -227,35 +227,26 @@
         }
 
         // Fetch data for a specific goal
-async function fetchGoalData(goalType) {
-    // Determine the current value for this goal from the frontend variables
-    let currentValue = 0;
-    if (goalType === "Follower Goal") currentValue = followerCurrent;
-    if (goalType === "Subscription Goal") currentValue = subCurrent;
-    if (goalType === "Bits Goal") currentValue = bitsCurrent;
-    if (goalType === "Donation Goal") currentValue = donationCurrent;
-
-    // Include currentValue in the request so the backend can auto-update goals
-    const url = `https://script.google.com/macros/s/AKfycbzoPT50eDJ1kQ_qAlaEWBgxWzzF2i22kXftCcxw14DqmnedWYSNmhOamVLvvQ9WsImA/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}&currentValue=${currentValue}`;
-    console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
-
-    const goalData = await fetchData(url);
-
-    if (goalData) {
-        console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
-        const current = goalData.CurrentCount ?? currentValue;
-        const goal = goalData.goalValue;
-        if (current !== undefined && goal !== undefined) {
-            updateGoalChart(goalType, current, goal);
-            updateGoalStats(goalType, current, goal);
-        } else {
-            console.error(`Missing CurrentCount or goalValue for ${goalType}`);
+        async function fetchGoalData(goalType) {
+            const url = `https://script.google.com/macros/s/AKfycby4UKXfW68KHrWyGoRUpuPnUcTk2Eu2SyLxm3XrcYPX7qwtlWG6I02WWrckkbAgI3Af/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+            console.log(`Fetching goal data for ${goalType} from: ${url}`);  // Debug log
+            
+            const goalData = await fetchData(url);
+            
+            if (goalData) {
+                console.log(`Fetched data for ${goalType}:`, goalData);  // Debug log
+                const current = goalData.CurrentCount;
+                const goal = goalData.goalValue;
+                if (current !== undefined && goal !== undefined) {
+                    updateGoalChart(goalType, current, goal);
+                    updateGoalStats(goalType, current, goal);
+                } else {
+                    console.error(`Missing CurrentCount or goalValue for ${goalType}`);
+                }
+            } else {
+                console.error(`Failed to fetch goal data for ${goalType}`);
+            }
         }
-    } else {
-        console.error(`Failed to fetch goal data for ${goalType}`);
-    }
-}
-
 
 
 
@@ -573,7 +564,7 @@ async function getUpdatedTimerData() {
 
 	    
 // Periodically refresh data every 5 seconds
-function refreshDataPeriodically() {
+async function refreshDataPeriodically() {
     setInterval(async function () {
         console.log("Refreshing data..."); // Debug log
 
@@ -629,27 +620,3 @@ function refreshDataPeriodically() {
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
