@@ -571,6 +571,7 @@ async function getUpdatedTimerData() {
 // Periodically refresh timer and goal data every 5 seconds
 async function refreshDataPeriodically() {
     setInterval(async function () {
+		getUpdatedTimerData();
         const trackerDiv = document.getElementById("refreshTracker");
         const now = new Date();
         if (trackerDiv) trackerDiv.textContent = `Refreshing data at: ${now.toLocaleTimeString()}`;
