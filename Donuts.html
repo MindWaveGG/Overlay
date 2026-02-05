@@ -7,13 +7,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:20px; }
-    h1 { text-align:center; }
-    .container { display:flex; justify-content:space-around; flex-wrap:wrap; }
-    .chart-container { width:300px; height:300px; margin:20px; }
-    .stats { text-align:center; margin-top:10px; }
-    #countdownTimer { font-size:1.5em; font-weight:bold; }
-    #timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
+body { font-family: Arial, sans-serif; margin:0; padding:20px; }
+h1 { text-align:center; }
+.container { display:flex; justify-content:space-around; flex-wrap:wrap; }
+.chart-container { width:300px; height:300px; margin:20px; }
+.stats { text-align:center; margin-top:10px; }
+#countdownTimer { font-size:1.5em; font-weight:bold; }
+#timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -21,9 +21,7 @@
 <h1>Timer and Goal Tracker</h1>
 <div id="errorMessage" style="color:red;"></div>
 
-<div id="countdownTimer"></div>
-<div id="timerStats"></div>
-<div id="targetDateDisplay"></div>
+<div id="countdownTimers"></div>
 
 <div class="container">
     <div class="chart-container"><canvas id="timerChart"></canvas></div>
@@ -35,8 +33,7 @@
 </div>
 
 <script>
-let initiationComplete = false;
-let startTime = 0, endTime = 0;
+let timers = []; // store all timers dynamically
 let timerChart = null;
 const goalCharts = {};
 
@@ -55,7 +52,7 @@ const donutWidth = 40, donutSpacing = 15, cameraRadius = 670, baseRadius = camer
 const cameraImage = new Image();
 cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
 
-// ----------------- UTILITY FETCH -----------------
+// ----------------- UTILITY -----------------
 async function fetchData(url) {
     try {
         const response = await fetch(url);
@@ -68,49 +65,36 @@ async function fetchData(url) {
     }
 }
 
-// ----------------- TIMER & GOALS -----------------
-async function loadInitialData() {
-    await getUpdatedTimerData();
-    await fetchAllGoalData();
-    initiationComplete = true;
-}
-
-// Update countdown
-function updateCountdown() {
-    if(!startTime || !endTime) return;
-    const now = new Date();
-    const timeRemaining = endTime - now;
-    const days = Math.floor(timeRemaining / (1000*60*60*24));
-    const hours = Math.floor((timeRemaining % (1000*60*60*24))/(1000*60*60));
-    const minutes = Math.floor((timeRemaining % (1000*60*60))/(1000*60));
-    const seconds = Math.floor((timeRemaining % (1000*60))/1000);
-    const countdownElement = document.getElementById("countdownTimer");
-    countdownElement.textContent = timeRemaining>0?`Countdown: ${days}d ${hours}h ${minutes}m ${seconds}s`:"Time's up!";
-}
-
-// Update timer chart
-async function updateTimerChart() {
-    if(!startTime || !endTime) return;
-    const now = new Date();
-    const elapsedTime = now - startTime;
-    const totalTime = endTime - startTime;
-    const progressPercentage = Math.min(100, (elapsedTime/totalTime)*100);
-
-    const ctxTimer = document.getElementById("timerChart")?.getContext('2d');
-    if(!ctxTimer) return;
-
-    if(!timerChart) {
-        timerChart = new Chart(ctxTimer, {
-            type:'doughnut',
-            data:{labels:["Progress","Remaining"], datasets:[{data:[progressPercentage, 100-progressPercentage], backgroundColor:["#4caf50","#ddd"]}]},
-            options:{responsive:true, maintainAspectRatio:false, plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>ctx.dataset.data[0]===v?`${Math.round(progressPercentage)}%`:""}}},
-            plugins:[ChartDataLabels]
-        });
+// ----------------- TIMERS -----------------
+async function fetchAllTimers() {
+    const data = await fetchData("https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimers");
+    if(data && Array.isArray(data)){
+        timers = data.map(timer => ({
+            name: timer.name,
+            startTime: new Date(timer.startTime),
+            endTime: new Date(timer.endTime)
+        }));
     } else {
-        timerChart.data.datasets[0].data = [progressPercentage, 100-progressPercentage];
-        timerChart.update();
+        timers = [];
     }
-    document.getElementById("timerStats").textContent = `Timer Progress: ${Math.round(progressPercentage)}%`;
+}
+
+// Update countdown text for all timers
+function updateCountdownTimers() {
+    const container = document.getElementById("countdownTimers");
+    container.innerHTML = '';
+    const now = new Date();
+    timers.forEach(timer => {
+        const remaining = timer.endTime - now;
+        const days = Math.floor(remaining / (1000*60*60*24));
+        const hours = Math.floor((remaining % (1000*60*60*24))/(1000*60*60));
+        const minutes = Math.floor((remaining % (1000*60*60))/(1000*60));
+        const seconds = Math.floor((remaining % (1000*60))/1000);
+        const text = remaining>0?`${timer.name} → ${days}d ${hours}h ${minutes}m ${seconds}s`:"Time's up!";
+        const div = document.createElement("div");
+        div.textContent = text;
+        container.appendChild(div);
+    });
 }
 
 // ----------------- GOALS -----------------
@@ -132,7 +116,7 @@ async function fetchGoalData(goalType) {
     }
 }
 
-function updateGoalChart(goalType,current,goal) {
+function updateGoalChart(goalType,current,goal){
     const map = {"Follower Goal":"followerChart","Subscription Goal":"subscriptionChart","Bits Goal":"bitsChart","Donation Goal":"donationChart"};
     const ctxGoal = document.getElementById(map[goalType])?.getContext('2d');
     if(!ctxGoal) return;
@@ -155,7 +139,6 @@ function updateGoalChart(goalType,current,goal) {
         goalCharts[goalType].update();
     }
 
-    // Save globals
     if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
     if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
     if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
@@ -172,37 +155,7 @@ function updateGoalStats(goalType,current,goal){
     document.getElementById(map[goalType]).textContent = `${goalType}: ${cur} / ${g}`;
 }
 
-// ----------------- TIMER REFRESH -----------------
-async function getUpdatedTimerData() {
-    const timerData = await fetchData("https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimer&timerName=Timer");
-    if(timerData){
-        startTime=new Date(timerData.startTime);
-        endTime=new Date(timerData.endTime);
-        document.getElementById("targetDateDisplay").textContent = `Target Date: ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-        await updateTimerChart();
-        updateCountdown();
-    } else {
-        startTime=null; endTime=null;
-        document.getElementById("targetDateDisplay").textContent = "No active timer";
-    }
-}
-
-// ----------------- CANVAS -----------------
-function getTimeRemaining(){
-    if(!startTime || !endTime) return {countdownDays:0,countdownHours:0,countdownMinutes:0,countdownSeconds:0,percentage:0};
-    const now = new Date().getTime();
-    const timeLeft = endTime-now;
-    const totalDuration = endTime-startTime;
-    const percentage=Math.max(0,Math.min(1,1-timeLeft/totalDuration));
-    return {
-        countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
-        countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
-        countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
-        countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-        percentage
-    };
-}
-
+// ----------------- CANVAS DRAW -----------------
 function drawCameraCircle(x,y,radius,alpha){
     ctx.save(); ctx.globalAlpha=alpha;
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
@@ -211,51 +164,28 @@ function drawCameraCircle(x,y,radius,alpha){
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
 }
 
-function drawDonut(x,y,radius,width,percentage,color){
-    if(percentage<=0) return;
-    const endAngle = Math.PI*2*percentage-Math.PI/2;
-    ctx.beginPath(); ctx.arc(x,y,radius,-Math.PI/2,endAngle); ctx.lineWidth=width; ctx.strokeStyle=color; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,radius+width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle=color; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,radius-width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle='black'; ctx.stroke();
-}
-
-function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
-    const padding=10, fontSize=80;
-    ctx.font=`bold ${fontSize}px Arial`;
-    ctx.fillStyle='white';
-    const textWidth=ctx.measureText(label).width;
-    const labelWidth=textWidth+padding*2;
-    const labelHeight=fontSize+padding*2;
-    const reversedIndex=totalLabels-index-1;
-    const labelX=100,labelY=100+reversedIndex*(labelHeight+10);
-    const angle=-Math.PI/2+Math.PI*2*percentage;
-    const startX=x+radius*Math.cos(angle), startY=y+radius*Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(startX,startY); ctx.lineTo(labelX+labelWidth,labelY+labelHeight/2); ctx.strokeStyle=lineColor; ctx.lineWidth=4; ctx.stroke();
-    ctx.strokeStyle=borderColor; ctx.lineWidth=10; ctx.strokeRect(labelX,labelY,labelWidth,labelHeight);
-    ctx.fillStyle='#0000007F'; ctx.fillRect(labelX,labelY,labelWidth,labelHeight);
-    ctx.fillStyle='white'; ctx.textAlign='left'; ctx.fillText(label,labelX+padding,labelY+fontSize+padding/2);
-}
-
-function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
-function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
-
 function drawAll(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    updateCountdown();
     drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
-    const {countdownDays,countdownHours,countdownMinutes,countdownSeconds,percentage}=getTimeRemaining();
-    const countdownText = `Time to Live: ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
-    const nowSec=Date.now()/1000; const t=(Math.sin(nowSec)+1)/2;
-    const colorHex = rgbToHex(lerpColor(red,blue,t));
 
-    const data=[
-        {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0,color:colorHex},
-        {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0,color:colorHex},
-        {label:`Donations: $${donationCurrent}/$${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0,color:colorHex},
-        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex},
-        {label:countdownText,percentage:percentage,color:colorHex}
-    ];
+    const nowSec = Date.now()/1000;
+    const t=(Math.sin(nowSec)+1)/2;
+    const colorHex = rgbToHex(lerpColor({r:255,g:0,b:0},{r:0,g:0,b:255},t));
+
+    const data = [];
+
+    // Add all timers to the donut visualization
+    const now = new Date();
+    timers.forEach(timer => {
+        const pct = Math.max(0, Math.min(1, (now - timer.startTime)/(timer.endTime-timer.startTime)));
+        data.push({label:`${timer.name}`, percentage:pct, color:colorHex});
+    });
+
+    // Add goals
+    data.push({label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0,color:colorHex});
+    data.push({label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0,color:colorHex});
+    data.push({label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0,color:colorHex});
+    data.push({label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex});
 
     data.sort((a,b)=>b.percentage-a.percentage);
     data.forEach((item,index)=>drawDonut(centerX,centerY,baseRadius+index*(donutWidth+donutSpacing),donutWidth,item.percentage,item.color));
@@ -269,14 +199,21 @@ async function refreshDataPeriodically(){
     setInterval(async ()=>{
         const now = new Date();
         document.getElementById("refreshTracker").textContent=`Refreshing data at: ${now.toLocaleTimeString()}`;
-        await getUpdatedTimerData();
+        await fetchAllTimers();
+        updateCountdownTimers();
         await fetchAllGoalData();
     },5000);
 }
 
 // ----------------- INIT -----------------
 cameraImage.onload = ()=>{drawAll();}
-async function init(){await loadInitialData(); drawAll(); refreshDataPeriodically();}
+async function init(){
+    await fetchAllTimers();
+    updateCountdownTimers();
+    await fetchAllGoalData();
+    drawAll();
+    refreshDataPeriodically();
+}
 init();
 
 </script>
