@@ -120,7 +120,7 @@ async function fetchAllGoalData() {
 }
 
 async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/.../exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
     const goalData = await fetchData(url);
     if(goalData) {
         const current = goalData.CurrentCount;
@@ -174,7 +174,7 @@ function updateGoalStats(goalType,current,goal){
 
 // ----------------- TIMER REFRESH -----------------
 async function getUpdatedTimerData() {
-    const timerData = await fetchData("https://script.google.com/macros/s/.../exec?action=getTimer&timerName=Timer");
+    const timerData = await fetchData("https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimer&timerName=Timer");
     if(timerData){
         startTime=new Date(timerData.startTime);
         endTime=new Date(timerData.endTime);
