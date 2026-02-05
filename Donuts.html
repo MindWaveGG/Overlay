@@ -89,18 +89,22 @@ async function loadInitialData() {
 
 // ----------------- MULTI-TIMER -----------------
 async function getUpdatedTimerData() {
-    const url = "https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimers";
+    const url = "https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=getTimers";
     const timerDataArray = await fetchData(url);
-    if(timerDataArray && timerDataArray.length>0){
+    
+    if (timerDataArray && timerDataArray.length > 0) {
         timers = timerDataArray.map(t => ({
             name: t.timerName,
-            startTime: new Date(t.startDateTime),
-            endTime: new Date(t.endDateTime)
+            // Convert to timestamp numbers for easier math in the loop
+            startTime: new Date(t.startDateTime).getTime(), 
+            endTime: new Date(t.endDateTime).getTime()
         }));
 
-        document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
-            `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
-        ).join('<br>');
+        // For the display, we create a temporary Date object since we stored numbers above
+        document.getElementById("targetDateDisplay").innerHTML = timers.map(t => {
+            const d = new Date(t.endTime);
+            return `${t.name}: ${d.toDateString()} ${d.toLocaleTimeString()}`;
+        }).join('<br>');
     } else {
         timers = [];
         document.getElementById("targetDateDisplay").textContent = "No active timers";
@@ -134,7 +138,7 @@ async function removeExpiredTimers() {
             console.log(`Timer expired: ${timer.name}`);
 
             // Call Google Apps Script to delete timer
-            const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+            const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
             fetch(url).then(r => r.json()).then(res => {
                 console.log('Deleted timer response:', res);
             }).catch(err => console.error('Error deleting timer:', err));
@@ -153,7 +157,7 @@ async function fetchAllGoalData() {
 }
 
 async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
     const goalData = await fetchData(url);
     if(goalData){
         const current = goalData.CurrentCount;
@@ -208,37 +212,106 @@ function updateGoalStats(goalType,current,goal){
 
 // ----------------- CANVAS -----------------
 function drawCameraCircle(x,y,radius,alpha){
-    ctx.save(); ctx.globalAlpha=alpha;
-    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
-    ctx.drawImage(cameraImage,x-radius,y-radius,radius*2,radius*2);
+    ctx.save(); 
+    ctx.globalAlpha=alpha;
+    ctx.beginPath(); 
+    ctx.arc(x,y,radius,0,Math.PI*2); 
+    ctx.clip();
+    // Use the passed radius to ensure the image fills the circle
+    ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
     ctx.restore();
-    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
+
+    // The Border
+    ctx.beginPath(); 
+    ctx.arc(x,y,radius,0,Math.PI*2); 
+    ctx.lineWidth=8; 
+    ctx.strokeStyle='#FF0000CC'; 
+    ctx.stroke();
 }
 
-function drawDonut(x,y,radius,width,percentage,color){
-    if(percentage<=0) return;
-    const endAngle = Math.PI*2*percentage-Math.PI/2;
-    ctx.beginPath(); ctx.arc(x,y,radius,-Math.PI/2,endAngle); ctx.lineWidth=width; ctx.strokeStyle=color; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,radius+width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle=color; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,radius-width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle='black'; ctx.stroke();
+
+function drawDonut(x, y, radius, width, percentage, color) {
+    if (percentage <= 0) return;
+
+    // Standardize the end angle calculation
+    const startAngle = -Math.PI / 2;
+    const endAngle = (Math.PI * 2 * percentage) + startAngle;
+
+    // 1. MAIN RING
+    ctx.beginPath();
+    ctx.arc(x, y, radius, startAngle, endAngle);
+    ctx.lineWidth = width; // This now scales dynamically (e.g., drops from 40 to 15)
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'butt'; // Keeps edges clean for math alignment
+    ctx.stroke();
+
+    // 2. OUTER BORDER (Color)
+    ctx.beginPath();
+    ctx.arc(x, y, radius + width / 2, startAngle, endAngle);
+    ctx.lineWidth = Math.min(5, width * 0.15); // Scales border down if the ring gets very thin
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    // 3. INNER BORDER (Black)
+    ctx.beginPath();
+    ctx.arc(x, y, radius - width / 2, startAngle, endAngle);
+    ctx.lineWidth = Math.min(5, width * 0.15); // Scales border down if the ring gets very thin
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
 }
 
-function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
-    const padding=10, fontSize=80;
-    ctx.font=`bold ${fontSize}px Arial`;
-    ctx.fillStyle='white';
-    const textWidth=ctx.measureText(label).width;
-    const labelWidth=textWidth+padding*2;
-    const labelHeight=fontSize+padding*2;
-    const reversedIndex=totalLabels-index-1;
-    const labelX=100,labelY=100+reversedIndex*(labelHeight+10);
-    const angle=-Math.PI/2+Math.PI*2*percentage;
-    const startX=x+radius*Math.cos(angle), startY=y+radius*Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(startX,startY); ctx.lineTo(labelX+labelWidth,labelY+labelHeight/2); ctx.strokeStyle=lineColor; ctx.lineWidth=4; ctx.stroke();
-    ctx.strokeStyle=borderColor; ctx.lineWidth=10; ctx.strokeRect(labelX,labelY,labelWidth,labelHeight);
-    ctx.fillStyle='#0000007F'; ctx.fillRect(labelX,labelY,labelWidth,labelHeight);
-    ctx.fillStyle='white'; ctx.textAlign='left'; ctx.fillText(label,labelX+padding,labelY+fontSize+padding/2);
+function drawLabelWithLine(label, x, y, radius, percentage, index, totalLabels, textColor, lineColor, borderColor) {
+    // 1. DYNAMIC FONT SCALING
+    // If we have many timers, we shrink the text so the list doesn't go off the canvas
+    let fontSize = 80;
+    if (totalLabels > 7) {
+        fontSize = Math.max(30, 80 * (7 / totalLabels)); 
+    }
+
+    const padding = fontSize * 0.125; // Keep padding proportional to font size
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.fillStyle = 'white';
+
+    const textWidth = ctx.measureText(label).width;
+    const labelWidth = textWidth + padding * 2;
+    const labelHeight = fontSize + padding * 2;
+
+    // 2. POSITIONING
+    // Removed reversedIndex to prevent lines from crossing over other rings.
+    // Outermost ring (index 0) is now at the top of the list.
+    const labelX = 100;
+    const labelY = 100 + index * (labelHeight + 10);
+
+    // 3. LINE MATH
+    // Angle matches the 'tip' of the donut ring
+    const angle = -Math.PI / 2 + Math.PI * 2 * percentage;
+    const startX = x + radius * Math.cos(angle);
+    const startY = y + radius * Math.sin(angle);
+
+    // 4. DRAWING THE LINE
+    ctx.beginPath(); 
+    ctx.moveTo(startX, startY); 
+    // Line connects to the center-right of the label box
+    ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2); 
+    ctx.strokeStyle = lineColor; 
+    ctx.lineWidth = Math.max(2, fontSize / 20); // Scale line thickness with font
+    ctx.stroke();
+
+    // 5. DRAWING THE LABEL BOX
+    ctx.strokeStyle = borderColor; 
+    ctx.lineWidth = Math.max(4, fontSize / 8); 
+    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
+    
+    ctx.fillStyle = '#0000007F'; // Semi-transparent background
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+
+    // 6. DRAWING THE TEXT
+    ctx.fillStyle = 'white'; 
+    ctx.textAlign = 'left'; 
+    // Vertical alignment adjustment based on font size
+    ctx.fillText(label, labelX + padding, labelY + fontSize);
 }
+
 
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
