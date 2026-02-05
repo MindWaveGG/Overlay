@@ -226,7 +226,7 @@ function drawAll(){
     timers.forEach(timer => {
         const tRem = getTimeRemaining(timer);
         data.push({
-            label: `Time (${timer.name}): ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
+            label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
             percentage: tRem.percentage,
             color: colorHex
         });
