@@ -81,7 +81,7 @@ async function loadInitialData() {
 
 // ----------------- MULTI-TIMER -----------------
 async function getUpdatedTimerData() {
-    const url = "https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimers";
+    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getTimers";
     const timerDataArray = await fetchData(url);
     if(timerDataArray && timerDataArray.length>0){
         timers = timerDataArray.map(t => ({
@@ -129,7 +129,7 @@ async function removeExpiredTimers() {
             console.log(`Timer expired: ${timer.name}`);
 
             // Call Google Apps Script to delete timer
-            const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+            const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
             fetch(url).then(r => r.json()).then(res => {
                 console.log('Deleted timer response:', res);
             }).catch(err => console.error('Error deleting timer:', err));
@@ -149,7 +149,7 @@ async function fetchAllGoalData() {
 }
 
 async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
     const goalData = await fetchData(url);
     if(goalData){
         const current = goalData.CurrentCount;
@@ -329,3 +329,4 @@ init();
 </script>
 </body>
 </html>
+
