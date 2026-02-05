@@ -243,63 +243,69 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
-function drawAll() {
-    removeExpiredTimers(); 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // 1. Basic Layout Setup
-    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
-    const nowSec = Date.now() / 1000; 
-    const t = (Math.sin(nowSec) + 1) / 2;
-    const colorHex = rgbToHex(lerpColor(red, blue, t));
+function drawAll(){
+    removeExpiredTimers(); // ✅ check and remove expired timers each frame
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
 
-    // 2. Build the Dataset
-    const data = [
-        {label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerGoal ? followerCurrent / followerGoal : 0, color: colorHex},
-        {label: `Subs: ${subCurrent}/${subGoal}`, percentage: subGoal ? subCurrent / subGoal : 0, color: colorHex},
-        {label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationGoal ? donationCurrent / donationGoal : 0, color: colorHex},
-        {label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsGoal ? bitsCurrent / bitsGoal : 0, color: colorHex}
+    const nowSec=Date.now()/1000; 
+    const t=(Math.sin(nowSec)+1)/2;
+    const colorHex = rgbToHex(lerpColor(red,blue,t));
+
+    const data=[
+        {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0,color:colorHex},
+        {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0,color:colorHex},
+        {label:`Donations: $${donationCurrent}/$${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0,color:colorHex},
+        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex}
     ];
 
+    // Add a donut for each active timer dynamically
     timers.forEach(timer => {
         const tRem = getTimeRemaining(timer);
         data.push({
             label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
-            percentage: tRem.percentage, // Now correctly decreases (1.0 -> 0.0)
+            percentage: tRem.percentage,
             color: colorHex
         });
     });
 
-    data.sort((a, b) => b.percentage - a.percentage);
+    data.sort((a,b)=>b.percentage-a.percentage);
 
-    // 3. DYNAMIC SCALING MATH
-    // totalItems is the sum of goals + active timers
+    // --- NEW DYNAMIC SCALING MATH START ---
+    let currentDonutWidth = 40;
+    let currentSpacing = 15;
     const totalItems = data.length;
-    let dynamicWidth = 40;
-    let dynamicSpacing = 15;
-    const maxAvailableSpace = (canvasSize / 2) - cameraRadius - 20; // 20px padding from camera
+    const maxSpace = (canvas.width / 2) - cameraRadius - 40; 
 
-    // Threshold: if more than 7 rings, scale them down
     if (totalItems > 7) {
-        const combinedUnit = maxAvailableSpace / totalItems;
-        dynamicWidth = combinedUnit * 0.72;    
-        dynamicSpacing = combinedUnit * 0.28;
+        const unit = maxSpace / totalItems;
+        currentDonutWidth = unit * 0.72;    
+        currentSpacing = unit * 0.28;
     }
 
-    // Offset to the center of the first stroke
-    const dynamicBaseRadius = cameraRadius + dynamicSpacing + (dynamicWidth / 2) + 20;
+    // Recalculate baseRadius based on the (potentially) new width
+    const currentBaseRadius = cameraRadius + currentSpacing + (currentDonutWidth / 2) + 20;
+    // --- NEW DYNAMIC SCALING MATH END ---
 
-    // 4. DRAWING
     data.forEach((item, index) => {
-        // Calculate the radius for this specific index
-        const ringRadius = dynamicBaseRadius + (index * (dynamicWidth + dynamicSpacing));
+        // Calculate the specific radius for this ring index
+        const ringRadius = currentBaseRadius + index * (currentDonutWidth + currentSpacing);
         
-        // Draw the ring
-        drawDonut(centerX, centerY, ringRadius, dynamicWidth, item.percentage, item.color);
+        drawDonut(
+            centerX, 
+            centerY, 
+            ringRadius, 
+            currentDonutWidth, 
+            item.percentage, 
+            item.color
+        );
+    });
+
+    data.forEach((item, index) => {
+        // Must use the same calculated ringRadius for the labels to line up
+        const ringRadius = currentBaseRadius + index * (currentDonutWidth + currentSpacing);
         
-        // Draw the label
-        // We pass dynamicWidth and ringRadius so the labels align with the scaled rings
         drawLabelWithLine(
             item.label, 
             centerX, 
@@ -307,7 +313,7 @@ function drawAll() {
             ringRadius, 
             item.percentage, 
             index, 
-            totalItems, 
+            data.length, 
             '#FF0000CC', 
             'black', 
             'black'
