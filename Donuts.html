@@ -36,10 +36,9 @@
 
 <script>
 let initiationComplete = false;
-let startTime = 0, endTime = 0;
 let timerChart = null;
 const goalCharts = {};
-let activeTimer = null;
+let timers = []; // <-- store all active timers
 
 let followerCurrent=0, followerGoal=0;
 let subCurrent=0, subGoal=0;
@@ -76,70 +75,38 @@ async function loadInitialData() {
     initiationComplete = true;
 }
 
-// ----------------- DYNAMIC TIMER -----------------
+// ----------------- MULTI-TIMER -----------------
 async function getUpdatedTimerData() {
     const url = "https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimers";
     const timerDataArray = await fetchData(url);
     if(timerDataArray && timerDataArray.length>0){
-        // pick first active timer by default
-        activeTimer = timerDataArray.find(t=>t.timerName==="Timer") || timerDataArray[0];
+        timers = timerDataArray.map(t => ({
+            name: t.timerName,
+            startTime: new Date(t.startDateTime),
+            endTime: new Date(t.endDateTime)
+        }));
 
-        startTime = new Date(activeTimer.startDateTime);
-        endTime = new Date(activeTimer.endDateTime);
-
-        document.getElementById("targetDateDisplay").textContent = 
-            `Target Date (${activeTimer.timerName}): ${endTime.toDateString()} ${endTime.toLocaleTimeString()}`;
-
-        await updateTimerChart();
-        updateCountdown();
+        document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
+            `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
+        ).join('<br>');
     } else {
-        activeTimer = null;
-        startTime = null;
-        endTime = null;
-        document.getElementById("targetDateDisplay").textContent = "No active timer";
+        timers = [];
+        document.getElementById("targetDateDisplay").textContent = "No active timers";
     }
 }
 
-function updateCountdown() {
-    if(!startTime || !endTime) return;
-    const now = new Date();
-    const timeRemaining = endTime - now;
-    const days = Math.floor(timeRemaining / (1000*60*60*24));
-    const hours = Math.floor((timeRemaining % (1000*60*60*24))/(1000*60*60));
-    const minutes = Math.floor((timeRemaining % (1000*60*60))/(1000*60));
-    const seconds = Math.floor((timeRemaining % (1000*60))/1000);
-    const countdownElement = document.getElementById("countdownTimer");
-    const timerName = activeTimer ? activeTimer.timerName : "Timer";
-    countdownElement.textContent = timeRemaining>0?
-        `Time to Live (${timerName}): ${days}d ${hours}h ${minutes}m ${seconds}s`
-        :"Time's up!";
-}
-
-// Update timer chart
-async function updateTimerChart() {
-    if(!startTime || !endTime) return;
-    const now = new Date();
-    const elapsedTime = now - startTime;
-    const totalTime = endTime - startTime;
-    const progressPercentage = Math.min(100, (elapsedTime/totalTime)*100);
-
-    const ctxTimer = document.getElementById("timerChart")?.getContext('2d');
-    if(!ctxTimer) return;
-
-    if(!timerChart){
-        timerChart = new Chart(ctxTimer,{
-            type:'doughnut',
-            data:{labels:["Progress","Remaining"], datasets:[{data:[progressPercentage,100-progressPercentage], backgroundColor:["#4caf50","#ddd"]}]},
-            options:{responsive:true, maintainAspectRatio:false,
-                plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>ctx.dataset.data[0]===v?`${Math.round(progressPercentage)}%`:""}}},
-            plugins:[ChartDataLabels]
-        });
-    } else {
-        timerChart.data.datasets[0].data = [progressPercentage,100-progressPercentage];
-        timerChart.update();
-    }
-
-    document.getElementById("timerStats").textContent = `Timer Progress: ${Math.round(progressPercentage)}%`;
+function getTimeRemaining(timer){
+    const now = new Date().getTime();
+    const timeLeft = timer.endTime - now;
+    const totalDuration = timer.endTime - timer.startTime;
+    const percentage = Math.max(0, Math.min(1, 1 - timeLeft/totalDuration));
+    return {
+        countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
+        countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
+        countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
+        countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
+        percentage
+    };
 }
 
 // ----------------- GOALS -----------------
@@ -203,21 +170,6 @@ function updateGoalStats(goalType,current,goal){
 }
 
 // ----------------- CANVAS -----------------
-function getTimeRemaining(){
-    if(!startTime || !endTime) return {countdownDays:0,countdownHours:0,countdownMinutes:0,countdownSeconds:0,percentage:0};
-    const now = new Date().getTime();
-    const timeLeft = endTime-now;
-    const totalDuration = endTime-startTime;
-    const percentage=Math.max(0,Math.min(1,1-timeLeft/totalDuration));
-    return {
-        countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
-        countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
-        countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
-        countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-        percentage
-    };
-}
-
 function drawCameraCircle(x,y,radius,alpha){
     ctx.save(); ctx.globalAlpha=alpha;
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
@@ -257,23 +209,31 @@ const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
 
 function drawAll(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    updateCountdown();
     drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
-    const {countdownDays,countdownHours,countdownMinutes,countdownSeconds,percentage}=getTimeRemaining();
-    const timerLabel = activeTimer ? activeTimer.timerName : "Timer";
-    const countdownText = `Time to Live (${timerLabel}): ${countdownDays}d ${countdownHours}h ${countdownMinutes}m ${countdownSeconds}s`;
-    const nowSec=Date.now()/1000; const t=(Math.sin(nowSec)+1)/2;
+
+    const nowSec=Date.now()/1000; 
+    const t=(Math.sin(nowSec)+1)/2;
     const colorHex = rgbToHex(lerpColor(red,blue,t));
 
     const data=[
         {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0,color:colorHex},
         {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0,color:colorHex},
         {label:`Donations: $${donationCurrent}/$${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0,color:colorHex},
-        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex},
-        {label:countdownText,percentage:percentage,color:colorHex}
+        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex}
     ];
 
+    // Add a donut for each active timer dynamically
+    timers.forEach(timer => {
+        const tRem = getTimeRemaining(timer);
+        data.push({
+            label: `Time (${timer.name}): ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
+            percentage: tRem.percentage,
+            color: colorHex
+        });
+    });
+
     data.sort((a,b)=>b.percentage-a.percentage);
+
     data.forEach((item,index)=>drawDonut(centerX,centerY,baseRadius+index*(donutWidth+donutSpacing),donutWidth,item.percentage,item.color));
     data.forEach((item,index)=>drawLabelWithLine(item.label,centerX,centerY,baseRadius+index*(donutWidth+donutSpacing),item.percentage,index,data.length,'#FF0000CC','black','black'));
 
