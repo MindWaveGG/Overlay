@@ -50,7 +50,7 @@ const ctx = canvas.getContext('2d');
 const canvasSize = 2200;
 canvas.width = canvasSize; canvas.height = canvasSize;
 const centerX = canvas.width/2, centerY = canvas.height/2;
-let donutWidth = 150; 
+let donutWidth = 67.5; 
 let donutSpacing = 15, cameraRadius = 670, baseRadius = cameraRadius + donutSpacing + donutWidth;
 
 const cameraImage = new Image();
@@ -246,10 +246,10 @@ function drawAll(){
     const totalrings = getTotalRings();
 
     if (totalrings > 4) {
-        donutWidth   = Math.max(12, 150 * (4 / totalrings));
+        donutWidth   = Math.max(12, 67.5 * (4 / totalrings));
         donutSpacing = Math.max(6, 15 * (4 / totalrings));
     } else {
-        donutWidth = 150;
+        donutWidth = 67.5;
         donutSpacing = 15;
     }
 
