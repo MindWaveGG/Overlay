@@ -39,7 +39,7 @@ let initiationComplete = false;
 let timerChart = null;
 const goalCharts = {};
 let timers = []; // <-- store all active timers
-
+let totalrings = 4;
 let followerCurrent=0, followerGoal=0;
 let subCurrent=0, subGoal=0;
 let donationCurrent=0, donationGoal=0;
@@ -50,7 +50,8 @@ const ctx = canvas.getContext('2d');
 const canvasSize = 2200;
 canvas.width = canvasSize; canvas.height = canvasSize;
 const centerX = canvas.width/2, centerY = canvas.height/2;
-const donutWidth = 40, donutSpacing = 15, cameraRadius = 670, baseRadius = cameraRadius + donutSpacing + donutWidth;
+let donutWidth = 40; 
+let donutSpacing = 15, cameraRadius = 670, baseRadius = cameraRadius + donutSpacing + donutWidth;
 
 const cameraImage = new Image();
 cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
@@ -66,6 +67,9 @@ async function fetchData(url) {
         document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
         return null;
     }
+}
+function getTotalRings() {
+    return 4 + timers.length;
 }
 
 // ----------------- TIMER & GOALS -----------------
@@ -85,14 +89,17 @@ async function getUpdatedTimerData() {
             startTime: new Date(t.startDateTime),
             endTime: new Date(t.endDateTime)
         }));
-
-        document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
+		
+		document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
             `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
         ).join('<br>');
     } else {
         timers = [];
         document.getElementById("targetDateDisplay").textContent = "No active timers";
     }
+ if(timers.length > 0) {
+	totalrings = 4 + timers.length;
+ }
 }
 
 function getTimeRemaining(timer){
@@ -130,6 +137,7 @@ async function removeExpiredTimers() {
             // Remove from local array so it disappears from canvas immediately
             timers.splice(i, 1);
         }
+		
     }
 }
 
@@ -233,22 +241,35 @@ function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).sl
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
 
 function drawAll(){
-	removeExpiredTimers(); // ✅ check and remove expired timers each frame
+    removeExpiredTimers();
+
+    const totalrings = getTotalRings();
+
+    if (totalrings > 7) {
+        donutWidth   = Math.max(12, 40 * (7 / totalrings));
+        donutSpacing = Math.max(6, 15 * (7 / totalrings));
+    } else {
+        donutWidth = 40;
+        donutSpacing = 15;
+    }
+
+    // 🔑 recompute baseRadius AFTER scaling
+    const baseRadius = cameraRadius + donutSpacing + donutWidth;
+
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
 
-    const nowSec=Date.now()/1000; 
-    const t=(Math.sin(nowSec)+1)/2;
+    const nowSec = Date.now() / 1000;
+    const t = (Math.sin(nowSec) + 1) / 2;
     const colorHex = rgbToHex(lerpColor(red,blue,t));
 
-    const data=[
-        {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0,color:colorHex},
-        {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0,color:colorHex},
-        {label:`Donations: $${donationCurrent}/$${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0,color:colorHex},
-        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex}
+    const data = [
+        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
+        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
+        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
     ];
 
-    // Add a donut for each active timer dynamically
     timers.forEach(timer => {
         const tRem = getTimeRemaining(timer);
         data.push({
@@ -260,11 +281,35 @@ function drawAll(){
 
     data.sort((a,b)=>b.percentage-a.percentage);
 
-    data.forEach((item,index)=>drawDonut(centerX,centerY,baseRadius+index*(donutWidth+donutSpacing),donutWidth,item.percentage,item.color));
-    data.forEach((item,index)=>drawLabelWithLine(item.label,centerX,centerY,baseRadius+index*(donutWidth+donutSpacing),item.percentage,index,data.length,'#FF0000CC','black','black'));
+    data.forEach((item,index)=>
+        drawDonut(
+            centerX,
+            centerY,
+            baseRadius + index * (donutWidth + donutSpacing),
+            donutWidth,
+            item.percentage,
+            item.color
+        )
+    );
+
+    data.forEach((item,index)=>
+        drawLabelWithLine(
+            item.label,
+            centerX,
+            centerY,
+            baseRadius + index * (donutWidth + donutSpacing),
+            item.percentage,
+            index,
+            data.length,
+            '#FF0000CC',
+            'black',
+            'black'
+        )
+    );
 
     requestAnimationFrame(drawAll);
 }
+
 
 // ----------------- PERIODIC REFRESH -----------------
 async function refreshDataPeriodically(){
