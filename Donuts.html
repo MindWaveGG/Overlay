@@ -4,70 +4,46 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Timer and Goal Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<script src="https://cdn.jsdelivr.net"></script>
+<script src="https://cdn.jsdelivr.net"></script>
 <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:20px; }
-    h1 { text-align:center; }
-    .container { display:flex; justify-content:space-around; flex-wrap:wrap; }
-    .chart-container { width:300px; height:300px; margin:20px; }
-    .stats { text-align:center; margin-top:10px; }
-    #countdownTimer { font-size:1.5em; font-weight:bold; }
-    #timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
+    body { font-family: Arial, sans-serif; margin:0; padding:20px; background-color: transparent; }
+    h1 { text-align:center; display: none; } /* Hidden for overlay cleaness */
+    .container { display:flex; justify-content:space-around; flex-wrap:wrap; display: none; }
+    #myCanvas { width: 100%; height: auto; }
+    #errorMessage { color:red; position: fixed; top: 10px; left: 10px; }
 </style>
 </head>
 <body>
 <canvas id="myCanvas"></canvas>
-<h1>Timer and Goal Tracker</h1>
-<div id="errorMessage" style="color:red;"></div>
-
-<div id="countdownTimer"></div>
-<div id="timerStats"></div>
-<div id="targetDateDisplay"></div>
-
-<div class="container">
-    <div class="chart-container"><canvas id="timerChart"></canvas></div>
-    <div class="chart-container"><canvas id="followerChart"></canvas><div id="followerStats" class="stats"></div></div>
-    <div class="chart-container"><canvas id="subscriptionChart"></canvas><div id="subscriptionStats" class="stats"></div></div>
-    <div class="chart-container"><canvas id="bitsChart"></canvas><div id="bitsStats" class="stats"></div></div>
-    <div class="chart-container"><canvas id="donationChart"></canvas><div id="donationStats" class="stats"></div></div>
-    <div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">Last refresh: N/A</div>
-</div>
+<div id="errorMessage"></div>
+<!-- Keeping IDs for script compatibility even if hidden -->
+<div id="refreshTracker" style="display:none"></div>
+<div id="targetDateDisplay" style="display:none"></div>
 
 <script>
+// --- GLOBALS ---
 let initiationComplete = false;
-let timerChart = null;
+let timers = []; 
+let followerCurrent=0, followerGoal=0, subCurrent=0, subGoal=0;
+let donationCurrent=0, donationGoal=0, bitsCurrent=0, bitsGoal=0;
 const goalCharts = {};
-let timers = []; // <-- store all active timers
-
-let followerCurrent=0, followerGoal=0;
-let subCurrent=0, subGoal=0;
-let donationCurrent=0, donationGoal=0;
-let bitsCurrent=0, bitsGoal=0;
 
 const canvas = document.getElementById('myCanvas');
 const ctx = canvas.getContext('2d');
-const canvasSize = 2200; canvas.width = canvasSize; canvas.height = canvasSize;
-const centerX = canvas.width/2, centerY = canvas.height/2;
-const cameraRadius = 670;
-const maxAvailableSpace = (canvasSize / 2) - cameraRadius; // 1100 - 670 = 430px total room
-// Default values
-let donutWidth = 40;
-let donutSpacing = 15;
+const canvasSize = 2200; 
+canvas.width = canvasSize; 
+canvas.height = canvasSize;
 
-// 2. Shrink logic (Only if they won't fit)
-if (totalTimers > 7) {
-    const combinedUnit = maxAvailableSpace / totalTimers;
-    donutWidth = combinedUnit * 0.72;    
-    donutSpacing = combinedUnit * 0.28;  
-}
-// 3. Calculate baseRadius AFTER the potential shrink
-const baseRadius = cameraRadius + donutSpacing + (donutWidth / 2);
+const centerX = canvas.width/2;
+const centerY = canvas.height/2;
+const cameraRadius = 670;
+const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
 
 const cameraImage = new Image();
-cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
+cameraImage.src = 'https://static-cdn.jtvnw.net';
 
-// ----------------- UTILITY FETCH -----------------
+// --- UTILITIES ---
 async function fetchData(url) {
     try {
         const response = await fetch(url);
@@ -75,48 +51,18 @@ async function fetchData(url) {
         return await response.json();
     } catch (error) {
         console.error("Fetch error:", error);
-        document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
         return null;
     }
 }
 
-// ----------------- TIMER & GOALS -----------------
-async function loadInitialData() {
-    await getUpdatedTimerData();
-    await fetchAllGoalData();
-    initiationComplete = true;
-}
+function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
+function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 
-// ----------------- MULTI-TIMER -----------------
-async function getUpdatedTimerData() {
-    const url = "https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=getTimers";
-    const timerDataArray = await fetchData(url);
-    
-    if (timerDataArray && timerDataArray.length > 0) {
-        timers = timerDataArray.map(t => ({
-            name: t.timerName,
-            // Convert to timestamp numbers for easier math in the loop
-            startTime: new Date(t.startDateTime).getTime(), 
-            endTime: new Date(t.endDateTime).getTime()
-        }));
-
-        // For the display, we create a temporary Date object since we stored numbers above
-        document.getElementById("targetDateDisplay").innerHTML = timers.map(t => {
-            const d = new Date(t.endTime);
-            return `${t.name}: ${d.toDateString()} ${d.toLocaleTimeString()}`;
-        }).join('<br>');
-    } else {
-        timers = [];
-        document.getElementById("targetDateDisplay").textContent = "No active timers";
-    }
-}
-
+// --- TIMER LOGIC ---
 function getTimeRemaining(timer){
-    const now = new Date().getTime();
+    const now = Date.now();
     const timeLeft = timer.endTime - now;
     const totalDuration = timer.endTime - timer.startTime;
-
-    // Change this line:
     const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
 
     return {
@@ -124,293 +70,147 @@ function getTimeRemaining(timer){
         countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
         countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
         countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-        percentage // Now 1.0 at start, 0.0 at finish
+        percentage
     };
 }
 
-
 async function removeExpiredTimers() {
-    const now = new Date().getTime();
-
-    for (let i = timers.length - 1; i >= 0; i--) { // iterate backwards to safely remove
-        const timer = timers[i];
-        if (timer.endTime <= now) {
-            console.log(`Timer expired: ${timer.name}`);
-
-            // Call Google Apps Script to delete timer
-            const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
-            fetch(url).then(r => r.json()).then(res => {
-                console.log('Deleted timer response:', res);
-            }).catch(err => console.error('Error deleting timer:', err));
-
-            // Remove from local array so it disappears from canvas immediately
+    const now = Date.now();
+    for (let i = timers.length - 1; i >= 0; i--) {
+        if (timers[i].endTime <= now) {
+            const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=deltimer&timername={encodeURIComponent(timers[i].name)}`;
+            fetch(url).catch(e => console.error("Del error", e));
             timers.splice(i, 1);
         }
     }
 }
 
-
-// ----------------- GOALS -----------------
-async function fetchAllGoalData() {
-    const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
-    await Promise.all(goalTypes.map(fetchGoalData));
+// --- DATA FETCHING ---
+async function getUpdatedTimerData() {
+    const url = "customapi.https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=gettimers";
+    const data = await fetchData(url);
+    if(data) {
+        timers = data.map(t => ({
+            name: t.timerName,
+            startTime: new Date(t.startDateTime).getTime(),
+            endTime: new Date(t.endDateTime).getTime()
+        }));
+    }
 }
 
 async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
-    const goalData = await fetchData(url);
-    if(goalData){
-        const current = goalData.CurrentCount;
-        const goal = goalData.goalValue;
-        if(current!==undefined && goal!==undefined){
-            updateGoalChart(goalType,current,goal);
-            updateGoalStats(goalType,current,goal);
-        }
+    const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=getgoal&goaltype={encodeURIComponent(goalType)}`;
+    const data = await fetchData(url);
+    if(data) {
+        if(goalType==="Follower Goal"){ followerCurrent=data.CurrentCount; followerGoal=data.goalValue; }
+        if(goalType==="Subscription Goal"){ subCurrent=data.CurrentCount; subGoal=data.goalValue; }
+        if(goalType==="Bits Goal"){ bitsCurrent=data.CurrentCount; bitsGoal=data.goalValue; }
+        if(goalType==="Donation Goal"){ donationCurrent=data.CurrentCount; donationGoal=data.goalValue; }
     }
 }
 
-function updateGoalChart(goalType,current,goal){
-    const map = {"Follower Goal":"followerChart","Subscription Goal":"subscriptionChart","Bits Goal":"bitsChart","Donation Goal":"donationChart"};
-    const ctxGoal = document.getElementById(map[goalType])?.getContext('2d');
-    if(!ctxGoal) return;
-
-    const progress = goal>0?Math.min(100,(current/goal)*100):0;
-    const remaining = 100-progress;
-
-    if(!goalCharts[goalType]){
-        goalCharts[goalType] = new Chart(ctxGoal,{
-            type:'doughnut',
-            data:{labels:["Progress","Remaining"], datasets:[{data:[progress,remaining], backgroundColor:["#4caf50","#ddd"]}]},
-            options:{responsive:true, maintainAspectRatio:false,
-                plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>{
-                    const total = ctx.chart.data.datasets[0].data[0]+ctx.chart.data.datasets[0].data[1];
-                    const pct = Math.round(ctx.chart.data.datasets[0].data[0]/total*100);
-                    return ctx.dataset.data[0]===v?`${pct}%`:`${100-pct}%`;
-                }}}}, plugins:[ChartDataLabels]
-        });
-    } else {
-        goalCharts[goalType].data.datasets[0].data = [progress,remaining];
-        goalCharts[goalType].update();
-    }
-
-    // Save globals
-    if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
-    if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
-    if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
-    if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
+async function fetchAllGoalData() {
+    const types = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
+    await Promise.all(types.map(fetchGoalData));
 }
 
-function updateGoalStats(goalType,current,goal){
-    const map = {"Follower Goal":"followerStats","Subscription Goal":"subscriptionStats","Bits Goal":"bitsStats","Donation Goal":"donationStats"};
-    let cur=current, g=goal;
-    if(goalType==="Donation Goal"){
-        cur=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(current);
-        g=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(goal);
-    }
-    document.getElementById(map[goalType]).textContent = `${goalType}: ${cur} / ${g}`;
-}
-
-// ----------------- CANVAS -----------------
+// --- DRAWING FUNCTIONS ---
 function drawCameraCircle(x,y,radius,alpha){
-    ctx.save(); 
-    ctx.globalAlpha=alpha;
-    ctx.beginPath(); 
-    ctx.arc(x,y,radius,0,Math.PI*2); 
-    ctx.clip();
-    // Use the passed radius to ensure the image fills the circle
-    ctx.drawImage(cameraImage, x - radius, y - radius, radius * 2, radius * 2);
+    ctx.save(); ctx.globalAlpha=alpha;
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(cameraImage,x-radius,y-radius,radius*2,radius*2);
     ctx.restore();
-
-    // The Border
-    ctx.beginPath(); 
-    ctx.arc(x,y,radius,0,Math.PI*2); 
-    ctx.lineWidth=8; 
-    ctx.strokeStyle='#FF0000CC'; 
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
 }
-
 
 function drawDonut(x, y, radius, width, percentage, color) {
     if (percentage <= 0) return;
-
-    // Standardize the end angle calculation
     const startAngle = -Math.PI / 2;
     const endAngle = (Math.PI * 2 * percentage) + startAngle;
+    const bW = Math.min(5, width * 0.15);
 
-    // 1. MAIN RING
-    ctx.beginPath();
-    ctx.arc(x, y, radius, startAngle, endAngle);
-    ctx.lineWidth = width; // This now scales dynamically (e.g., drops from 40 to 15)
-    ctx.strokeStyle = color;
-    ctx.lineCap = 'butt'; // Keeps edges clean for math alignment
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, radius, startAngle, endAngle);
+    ctx.lineWidth = width; ctx.strokeStyle = color; ctx.stroke();
 
-    // 2. OUTER BORDER (Color)
-    ctx.beginPath();
-    ctx.arc(x, y, radius + width / 2, startAngle, endAngle);
-    ctx.lineWidth = Math.min(5, width * 0.15); // Scales border down if the ring gets very thin
-    ctx.strokeStyle = color;
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, radius + width/2, startAngle, endAngle);
+    ctx.lineWidth = bW; ctx.strokeStyle = color; ctx.stroke();
 
-    // 3. INNER BORDER (Black)
-    ctx.beginPath();
-    ctx.arc(x, y, radius - width / 2, startAngle, endAngle);
-    ctx.lineWidth = Math.min(5, width * 0.15); // Scales border down if the ring gets very thin
-    ctx.strokeStyle = 'black';
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, radius - width/2, startAngle, endAngle);
+    ctx.lineWidth = bW; ctx.strokeStyle = 'black'; ctx.stroke();
 }
 
-function drawLabelWithLine(label, x, y, radius, percentage, index, totalLabels, textColor, lineColor, borderColor) {
-    // 1. DYNAMIC FONT SCALING
-    // If we have many timers, we shrink the text so the list doesn't go off the canvas
+function drawLabelWithLine(label, x, y, radius, percentage, index, totalLabels, color) {
     let fontSize = 80;
-    if (totalLabels > 7) {
-        fontSize = Math.max(30, 80 * (7 / totalLabels)); 
-    }
-
-    const padding = fontSize * 0.125; // Keep padding proportional to font size
+    if (totalLabels > 7) fontSize = Math.max(30, 80 * (7 / totalLabels)); 
+    const padding = fontSize * 0.125;
     ctx.font = `bold ${fontSize}px Arial`;
-    ctx.fillStyle = 'white';
-
-    const textWidth = ctx.measureText(label).width;
-    const labelWidth = textWidth + padding * 2;
     const labelHeight = fontSize + padding * 2;
-
-    // 2. POSITIONING
-    // Removed reversedIndex to prevent lines from crossing over other rings.
-    // Outermost ring (index 0) is now at the top of the list.
-    const labelX = 100;
-    const labelY = 100 + index * (labelHeight + 10);
-
-    // 3. LINE MATH
-    // Angle matches the 'tip' of the donut ring
+    const labelX = 100, labelY = 100 + index * (labelHeight + 10);
     const angle = -Math.PI / 2 + Math.PI * 2 * percentage;
-    const startX = x + radius * Math.cos(angle);
-    const startY = y + radius * Math.sin(angle);
+    const startX = x + radius * Math.cos(angle), startY = y + radius * Math.sin(angle);
 
-    // 4. DRAWING THE LINE
-    ctx.beginPath(); 
-    ctx.moveTo(startX, startY); 
-    // Line connects to the center-right of the label box
-    ctx.lineTo(labelX + labelWidth, labelY + labelHeight / 2); 
-    ctx.strokeStyle = lineColor; 
-    ctx.lineWidth = Math.max(2, fontSize / 20); // Scale line thickness with font
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(labelX + 200, labelY + labelHeight / 2); 
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
 
-    // 5. DRAWING THE LABEL BOX
-    ctx.strokeStyle = borderColor; 
-    ctx.lineWidth = Math.max(4, fontSize / 8); 
-    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
-    
-    ctx.fillStyle = '#0000007F'; // Semi-transparent background
-    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
-
-    // 6. DRAWING THE TEXT
-    ctx.fillStyle = 'white'; 
-    ctx.textAlign = 'left'; 
-    // Vertical alignment adjustment based on font size
-    ctx.fillText(label, labelX + padding, labelY + fontSize);
+    ctx.fillStyle = '#0000007F'; ctx.fillRect(labelX, labelY, ctx.measureText(label).width + padding*2, labelHeight);
+    ctx.fillStyle = 'white'; ctx.fillText(label, labelX + padding, labelY + fontSize);
 }
-
-
-function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
-function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
 
 function drawAll(){
-    removeExpiredTimers(); // ✅ check and remove expired timers each frame
+    if(!initiationComplete) { requestAnimationFrame(drawAll); return; }
+    removeExpiredTimers();
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
 
-    const nowSec=Date.now()/1000; 
-    const t=(Math.sin(nowSec)+1)/2;
-    const colorHex = rgbToHex(lerpColor(red,blue,t));
+    const colorHex = rgbToHex(lerpColor(red,blue,(Math.sin(Date.now()/1000)+1)/2));
 
     const data=[
-        {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0,color:colorHex},
-        {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0,color:colorHex},
-        {label:`Donations: $${donationCurrent}/$${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0,color:colorHex},
-        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0,color:colorHex}
+        {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0},
+        {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0},
+        {label:`Donations: $${donationCurrent}/${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0},
+        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0}
     ];
 
-    // Add a donut for each active timer dynamically
     timers.forEach(timer => {
         const tRem = getTimeRemaining(timer);
         data.push({
             label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
-            percentage: tRem.percentage,
-            color: colorHex
+            percentage: tRem.percentage
         });
     });
 
     data.sort((a,b)=>b.percentage-a.percentage);
 
-    // --- NEW DYNAMIC SCALING MATH START ---
-    let currentDonutWidth = 40;
-    let currentSpacing = 15;
-    const totalItems = data.length;
-    const maxSpace = (canvas.width / 2) - cameraRadius - 40; 
-
-    if (totalItems > 7) {
-        const unit = maxSpace / totalItems;
-        currentDonutWidth = unit * 0.72;    
-        currentSpacing = unit * 0.28;
+    let dW = 40, dS = 15;
+    const maxS = (canvasSize / 2) - cameraRadius - 60;
+    if (data.length > 7) {
+        const unit = maxS / data.length;
+        dW = unit * 0.72; dS = unit * 0.28;
     }
+    const bR = cameraRadius + dS + (dW / 2) + 20;
 
-    // Recalculate baseRadius based on the (potentially) new width
-    const currentBaseRadius = cameraRadius + currentSpacing + (currentDonutWidth / 2) + 20;
-    // --- NEW DYNAMIC SCALING MATH END ---
-
-    data.forEach((item, index) => {
-        // Calculate the specific radius for this ring index
-        const ringRadius = currentBaseRadius + index * (currentDonutWidth + currentSpacing);
-        
-        drawDonut(
-            centerX, 
-            centerY, 
-            ringRadius, 
-            currentDonutWidth, 
-            item.percentage, 
-            item.color
-        );
-    });
-
-    data.forEach((item, index) => {
-        // Must use the same calculated ringRadius for the labels to line up
-        const ringRadius = currentBaseRadius + index * (currentDonutWidth + currentSpacing);
-        
-        drawLabelWithLine(
-            item.label, 
-            centerX, 
-            centerY, 
-            ringRadius, 
-            item.percentage, 
-            index, 
-            data.length, 
-            '#FF0000CC', 
-            'black', 
-            'black'
-        );
+    data.forEach((item, i) => {
+        const r = bR + i * (dW + dS);
+        drawDonut(centerX, centerY, r, dW, item.percentage, colorHex);
+        drawLabelWithLine(item.label, centerX, centerY, r, item.percentage, i, data.length, colorHex);
     });
 
     requestAnimationFrame(drawAll);
 }
 
-
-// ----------------- PERIODIC REFRESH -----------------
-async function refreshDataPeriodically(){
-    setInterval(async ()=>{
-        const now = new Date();
-        document.getElementById("refreshTracker").textContent=`Refreshing data at: ${now.toLocaleTimeString()}`;
+// --- INIT ---
+async function init(){
+    await getUpdatedTimerData();
+    await fetchAllGoalData();
+    initiationComplete = true;
+    setInterval(async () => {
         await getUpdatedTimerData();
         await fetchAllGoalData();
-    },5000);
+    }, 5000);
 }
 
-// ----------------- INIT -----------------
-cameraImage.onload = ()=>{drawAll();}
-async function init(){await loadInitialData(); drawAll(); refreshDataPeriodically();}
 init();
+drawAll();
 
 </script>
 </body>
