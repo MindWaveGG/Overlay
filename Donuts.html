@@ -99,15 +99,19 @@ function getTimeRemaining(timer){
     const now = new Date().getTime();
     const timeLeft = timer.endTime - now;
     const totalDuration = timer.endTime - timer.startTime;
-    const percentage = Math.max(0, Math.min(1, 1 - timeLeft/totalDuration));
+
+    // Change this line:
+    const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
+
     return {
         countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
         countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
         countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
         countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-        percentage
+        percentage // Now 1.0 at start, 0.0 at finish
     };
 }
+
 
 async function removeExpiredTimers() {
     const now = new Date().getTime();
