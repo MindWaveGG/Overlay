@@ -109,6 +109,27 @@ function getTimeRemaining(timer){
     };
 }
 
+async function removeExpiredTimers() {
+    const now = new Date().getTime();
+
+    for (let i = timers.length - 1; i >= 0; i--) { // iterate backwards to safely remove
+        const timer = timers[i];
+        if (timer.endTime <= now) {
+            console.log(`Timer expired: ${timer.name}`);
+
+            // Call Google Apps Script to delete timer
+            const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+            fetch(url).then(r => r.json()).then(res => {
+                console.log('Deleted timer response:', res);
+            }).catch(err => console.error('Error deleting timer:', err));
+
+            // Remove from local array so it disappears from canvas immediately
+            timers.splice(i, 1);
+        }
+    }
+}
+
+
 // ----------------- GOALS -----------------
 async function fetchAllGoalData() {
     const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
@@ -208,6 +229,7 @@ function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).sl
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
 
 function drawAll(){
+	removeExpiredTimers(); // ✅ check and remove expired timers each frame
     ctx.clearRect(0,0,canvas.width,canvas.height);
     drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
 
