@@ -4,46 +4,70 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Timer and Goal Tracker</title>
-<script src="https://cdn.jsdelivr.net"></script>
-<script src="https://cdn.jsdelivr.net"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:20px; background-color: transparent; }
-    h1 { text-align:center; display: none; } /* Hidden for overlay cleaness */
-    .container { display:flex; justify-content:space-around; flex-wrap:wrap; display: none; }
-    #myCanvas { width: 100%; height: auto; }
-    #errorMessage { color:red; position: fixed; top: 10px; left: 10px; }
+    body { font-family: Arial, sans-serif; margin:0; padding:20px; }
+    h1 { text-align:center; }
+    .container { display:flex; justify-content:space-around; flex-wrap:wrap; }
+    .chart-container { width:300px; height:300px; margin:20px; }
+    .stats { text-align:center; margin-top:10px; }
+    #countdownTimer { font-size:1.5em; font-weight:bold; }
+    #timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
 </style>
 </head>
 <body>
 <canvas id="myCanvas"></canvas>
-<div id="errorMessage"></div>
-<!-- Keeping IDs for script compatibility even if hidden -->
-<div id="refreshTracker" style="display:none"></div>
-<div id="targetDateDisplay" style="display:none"></div>
+<h1>Timer and Goal Tracker</h1>
+<div id="errorMessage" style="color:red;"></div>
+
+<div id="countdownTimer"></div>
+<div id="timerStats"></div>
+<div id="targetDateDisplay"></div>
+
+<div class="container">
+    <div class="chart-container"><canvas id="timerChart"></canvas></div>
+    <div class="chart-container"><canvas id="followerChart"></canvas><div id="followerStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="subscriptionChart"></canvas><div id="subscriptionStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="bitsChart"></canvas><div id="bitsStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="donationChart"></canvas><div id="donationStats" class="stats"></div></div>
+    <div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">Last refresh: N/A</div>
+</div>
 
 <script>
-// --- GLOBALS ---
 let initiationComplete = false;
-let timers = []; 
-let followerCurrent=0, followerGoal=0, subCurrent=0, subGoal=0;
-let donationCurrent=0, donationGoal=0, bitsCurrent=0, bitsGoal=0;
+let timerChart = null;
 const goalCharts = {};
+let timers = []; // <-- store all active timers
+
+let followerCurrent=0, followerGoal=0;
+let subCurrent=0, subGoal=0;
+let donationCurrent=0, donationGoal=0;
+let bitsCurrent=0, bitsGoal=0;
 
 const canvas = document.getElementById('myCanvas');
 const ctx = canvas.getContext('2d');
-const canvasSize = 2200; 
-canvas.width = canvasSize; 
-canvas.height = canvasSize;
-
-const centerX = canvas.width/2;
-const centerY = canvas.height/2;
+const canvasSize = 2200; canvas.width = canvasSize; canvas.height = canvasSize;
+const centerX = canvas.width/2, centerY = canvas.height/2;
 const cameraRadius = 670;
-const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
+const maxAvailableSpace = (canvasSize / 2) - cameraRadius; // 1100 - 670 = 430px total room
+// Default values
+let donutWidth = 40;
+let donutSpacing = 15;
+
+// 2. Shrink logic (Only if they won't fit)
+if (totalTimers > 7) {
+    const combinedUnit = maxAvailableSpace / totalTimers;
+    donutWidth = combinedUnit * 0.72;    
+    donutSpacing = combinedUnit * 0.28;  
+}
+// 3. Calculate baseRadius AFTER the potential shrink
+const baseRadius = cameraRadius + donutSpacing + (donutWidth / 2);
 
 const cameraImage = new Image();
-cameraImage.src = 'https://static-cdn.jtvnw.net';
+cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
 
-// --- UTILITIES ---
+// ----------------- UTILITY FETCH -----------------
 async function fetchData(url) {
     try {
         const response = await fetch(url);
@@ -51,18 +75,44 @@ async function fetchData(url) {
         return await response.json();
     } catch (error) {
         console.error("Fetch error:", error);
+        document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
         return null;
     }
 }
 
-function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
-function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
+// ----------------- TIMER & GOALS -----------------
+async function loadInitialData() {
+    await getUpdatedTimerData();
+    await fetchAllGoalData();
+    initiationComplete = true;
+}
 
-// --- TIMER LOGIC ---
+// ----------------- MULTI-TIMER -----------------
+async function getUpdatedTimerData() {
+    const url = "https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getTimers";
+    const timerDataArray = await fetchData(url);
+    if(timerDataArray && timerDataArray.length>0){
+        timers = timerDataArray.map(t => ({
+            name: t.timerName,
+            startTime: new Date(t.startDateTime),
+            endTime: new Date(t.endDateTime)
+        }));
+
+        document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
+            `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
+        ).join('<br>');
+    } else {
+        timers = [];
+        document.getElementById("targetDateDisplay").textContent = "No active timers";
+    }
+}
+
 function getTimeRemaining(timer){
-    const now = Date.now();
+    const now = new Date().getTime();
     const timeLeft = timer.endTime - now;
     const totalDuration = timer.endTime - timer.startTime;
+
+    // Change this line:
     const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
 
     return {
@@ -70,51 +120,93 @@ function getTimeRemaining(timer){
         countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
         countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
         countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-        percentage
+        percentage // Now 1.0 at start, 0.0 at finish
     };
 }
 
+
 async function removeExpiredTimers() {
-    const now = Date.now();
-    for (let i = timers.length - 1; i >= 0; i--) {
-        if (timers[i].endTime <= now) {
-            const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=deltimer&timername={encodeURIComponent(timers[i].name)}`;
-            fetch(url).catch(e => console.error("Del error", e));
+    const now = new Date().getTime();
+
+    for (let i = timers.length - 1; i >= 0; i--) { // iterate backwards to safely remove
+        const timer = timers[i];
+        if (timer.endTime <= now) {
+            console.log(`Timer expired: ${timer.name}`);
+
+            // Call Google Apps Script to delete timer
+            const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+            fetch(url).then(r => r.json()).then(res => {
+                console.log('Deleted timer response:', res);
+            }).catch(err => console.error('Error deleting timer:', err));
+
+            // Remove from local array so it disappears from canvas immediately
             timers.splice(i, 1);
         }
     }
 }
 
-// --- DATA FETCHING ---
-async function getUpdatedTimerData() {
-    const url = "customapi.https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=gettimers";
-    const data = await fetchData(url);
-    if(data) {
-        timers = data.map(t => ({
-            name: t.timerName,
-            startTime: new Date(t.startDateTime).getTime(),
-            endTime: new Date(t.endDateTime).getTime()
-        }));
-    }
+
+// ----------------- GOALS -----------------
+async function fetchAllGoalData() {
+    const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
+    await Promise.all(goalTypes.map(fetchGoalData));
 }
 
 async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/AKfycbzCQF3jwwVF7Wy3wrY8-0JOViHOH8LJ3i42R3rDwMYkxFcAqI0lkMIE8YQWxHDEIDfD/exec?action=getgoal&goaltype={encodeURIComponent(goalType)}`;
-    const data = await fetchData(url);
-    if(data) {
-        if(goalType==="Follower Goal"){ followerCurrent=data.CurrentCount; followerGoal=data.goalValue; }
-        if(goalType==="Subscription Goal"){ subCurrent=data.CurrentCount; subGoal=data.goalValue; }
-        if(goalType==="Bits Goal"){ bitsCurrent=data.CurrentCount; bitsGoal=data.goalValue; }
-        if(goalType==="Donation Goal"){ donationCurrent=data.CurrentCount; donationGoal=data.goalValue; }
+    const url = `https://script.google.com/macros/s/AKfycbz8xXcw83dTAVF_kZ2ifrY7Hp7nsMJsiUAZp_ovxPpaB_YyWjf8F7GW-jkZs8KdC6yR/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const goalData = await fetchData(url);
+    if(goalData){
+        const current = goalData.CurrentCount;
+        const goal = goalData.goalValue;
+        if(current!==undefined && goal!==undefined){
+            updateGoalChart(goalType,current,goal);
+            updateGoalStats(goalType,current,goal);
+        }
     }
 }
 
-async function fetchAllGoalData() {
-    const types = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
-    await Promise.all(types.map(fetchGoalData));
+function updateGoalChart(goalType,current,goal){
+    const map = {"Follower Goal":"followerChart","Subscription Goal":"subscriptionChart","Bits Goal":"bitsChart","Donation Goal":"donationChart"};
+    const ctxGoal = document.getElementById(map[goalType])?.getContext('2d');
+    if(!ctxGoal) return;
+
+    const progress = goal>0?Math.min(100,(current/goal)*100):0;
+    const remaining = 100-progress;
+
+    if(!goalCharts[goalType]){
+        goalCharts[goalType] = new Chart(ctxGoal,{
+            type:'doughnut',
+            data:{labels:["Progress","Remaining"], datasets:[{data:[progress,remaining], backgroundColor:["#4caf50","#ddd"]}]},
+            options:{responsive:true, maintainAspectRatio:false,
+                plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>{
+                    const total = ctx.chart.data.datasets[0].data[0]+ctx.chart.data.datasets[0].data[1];
+                    const pct = Math.round(ctx.chart.data.datasets[0].data[0]/total*100);
+                    return ctx.dataset.data[0]===v?`${pct}%`:`${100-pct}%`;
+                }}}}, plugins:[ChartDataLabels]
+        });
+    } else {
+        goalCharts[goalType].data.datasets[0].data = [progress,remaining];
+        goalCharts[goalType].update();
+    }
+
+    // Save globals
+    if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
+    if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
+    if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
+    if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
 }
 
-// --- DRAWING FUNCTIONS ---
+function updateGoalStats(goalType,current,goal){
+    const map = {"Follower Goal":"followerStats","Subscription Goal":"subscriptionStats","Bits Goal":"bitsStats","Donation Goal":"donationStats"};
+    let cur=current, g=goal;
+    if(goalType==="Donation Goal"){
+        cur=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(current);
+        g=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(goal);
+    }
+    document.getElementById(map[goalType]).textContent = `${goalType}: ${cur} / ${g}`;
+}
+
+// ----------------- CANVAS -----------------
 function drawCameraCircle(x,y,radius,alpha){
     ctx.save(); ctx.globalAlpha=alpha;
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
@@ -123,94 +215,123 @@ function drawCameraCircle(x,y,radius,alpha){
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
 }
 
-function drawDonut(x, y, radius, width, percentage, color) {
-    if (percentage <= 0) return;
-    const startAngle = -Math.PI / 2;
-    const endAngle = (Math.PI * 2 * percentage) + startAngle;
-    const bW = Math.min(5, width * 0.15);
-
-    ctx.beginPath(); ctx.arc(x, y, radius, startAngle, endAngle);
-    ctx.lineWidth = width; ctx.strokeStyle = color; ctx.stroke();
-
-    ctx.beginPath(); ctx.arc(x, y, radius + width/2, startAngle, endAngle);
-    ctx.lineWidth = bW; ctx.strokeStyle = color; ctx.stroke();
-
-    ctx.beginPath(); ctx.arc(x, y, radius - width/2, startAngle, endAngle);
-    ctx.lineWidth = bW; ctx.strokeStyle = 'black'; ctx.stroke();
+function drawDonut(x,y,radius,width,percentage,color){
+    if(percentage<=0) return;
+    const endAngle = Math.PI*2*percentage-Math.PI/2;
+    ctx.beginPath(); ctx.arc(x,y,radius,-Math.PI/2,endAngle); ctx.lineWidth=width; ctx.strokeStyle=color; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,radius+width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle=color; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,radius-width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle='black'; ctx.stroke();
 }
 
-function drawLabelWithLine(label, x, y, radius, percentage, index, totalLabels, color) {
-    let fontSize = 80;
-    if (totalLabels > 7) fontSize = Math.max(30, 80 * (7 / totalLabels)); 
-    const padding = fontSize * 0.125;
-    ctx.font = `bold ${fontSize}px Arial`;
-    const labelHeight = fontSize + padding * 2;
-    const labelX = 100, labelY = 100 + index * (labelHeight + 10);
-    const angle = -Math.PI / 2 + Math.PI * 2 * percentage;
-    const startX = x + radius * Math.cos(angle), startY = y + radius * Math.sin(angle);
-
-    ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(labelX + 200, labelY + labelHeight / 2); 
-    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
-
-    ctx.fillStyle = '#0000007F'; ctx.fillRect(labelX, labelY, ctx.measureText(label).width + padding*2, labelHeight);
-    ctx.fillStyle = 'white'; ctx.fillText(label, labelX + padding, labelY + fontSize);
+function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
+    const padding=10, fontSize=80;
+    ctx.font=`bold ${fontSize}px Arial`;
+    ctx.fillStyle='white';
+    const textWidth=ctx.measureText(label).width;
+    const labelWidth=textWidth+padding*2;
+    const labelHeight=fontSize+padding*2;
+    const reversedIndex=totalLabels-index-1;
+    const labelX=100,labelY=100+reversedIndex*(labelHeight+10);
+    const angle=-Math.PI/2+Math.PI*2*percentage;
+    const startX=x+radius*Math.cos(angle), startY=y+radius*Math.sin(angle);
+    ctx.beginPath(); ctx.moveTo(startX,startY); ctx.lineTo(labelX+labelWidth,labelY+labelHeight/2); ctx.strokeStyle=lineColor; ctx.lineWidth=4; ctx.stroke();
+    ctx.strokeStyle=borderColor; ctx.lineWidth=10; ctx.strokeRect(labelX,labelY,labelWidth,labelHeight);
+    ctx.fillStyle='#0000007F'; ctx.fillRect(labelX,labelY,labelWidth,labelHeight);
+    ctx.fillStyle='white'; ctx.textAlign='left'; ctx.fillText(label,labelX+padding,labelY+fontSize+padding/2);
 }
 
-function drawAll(){
-    if(!initiationComplete) { requestAnimationFrame(drawAll); return; }
-    removeExpiredTimers();
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
+function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
+function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
+const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
+function drawAll() {
+    removeExpiredTimers(); 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 1. Basic Layout Setup
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
-    const colorHex = rgbToHex(lerpColor(red,blue,(Math.sin(Date.now()/1000)+1)/2));
+    const nowSec = Date.now() / 1000; 
+    const t = (Math.sin(nowSec) + 1) / 2;
+    const colorHex = rgbToHex(lerpColor(red, blue, t));
 
-    const data=[
-        {label:`Followers: ${followerCurrent}/${followerGoal}`,percentage:followerGoal?followerCurrent/followerGoal:0},
-        {label:`Subs: ${subCurrent}/${subGoal}`,percentage:subGoal?subCurrent/subGoal:0},
-        {label:`Donations: $${donationCurrent}/${donationGoal}`,percentage:donationGoal?donationCurrent/donationGoal:0},
-        {label:`Bits: ${bitsCurrent}/${bitsGoal}`,percentage:bitsGoal?bitsCurrent/bitsGoal:0}
+    // 2. Build the Dataset
+    const data = [
+        {label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerGoal ? followerCurrent / followerGoal : 0, color: colorHex},
+        {label: `Subs: ${subCurrent}/${subGoal}`, percentage: subGoal ? subCurrent / subGoal : 0, color: colorHex},
+        {label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationGoal ? donationCurrent / donationGoal : 0, color: colorHex},
+        {label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsGoal ? bitsCurrent / bitsGoal : 0, color: colorHex}
     ];
 
     timers.forEach(timer => {
         const tRem = getTimeRemaining(timer);
         data.push({
             label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
-            percentage: tRem.percentage
+            percentage: tRem.percentage, // Now correctly decreases (1.0 -> 0.0)
+            color: colorHex
         });
     });
 
-    data.sort((a,b)=>b.percentage-a.percentage);
+    data.sort((a, b) => b.percentage - a.percentage);
 
-    let dW = 40, dS = 15;
-    const maxS = (canvasSize / 2) - cameraRadius - 60;
-    if (data.length > 7) {
-        const unit = maxS / data.length;
-        dW = unit * 0.72; dS = unit * 0.28;
+    // 3. DYNAMIC SCALING MATH
+    // totalItems is the sum of goals + active timers
+    const totalItems = data.length;
+    let dynamicWidth = 40;
+    let dynamicSpacing = 15;
+    const maxAvailableSpace = (canvasSize / 2) - cameraRadius - 20; // 20px padding from camera
+
+    // Threshold: if more than 7 rings, scale them down
+    if (totalItems > 7) {
+        const combinedUnit = maxAvailableSpace / totalItems;
+        dynamicWidth = combinedUnit * 0.72;    
+        dynamicSpacing = combinedUnit * 0.28;
     }
-    const bR = cameraRadius + dS + (dW / 2) + 20;
 
-    data.forEach((item, i) => {
-        const r = bR + i * (dW + dS);
-        drawDonut(centerX, centerY, r, dW, item.percentage, colorHex);
-        drawLabelWithLine(item.label, centerX, centerY, r, item.percentage, i, data.length, colorHex);
+    // Offset to the center of the first stroke
+    const dynamicBaseRadius = cameraRadius + dynamicSpacing + (dynamicWidth / 2) + 20;
+
+    // 4. DRAWING
+    data.forEach((item, index) => {
+        // Calculate the radius for this specific index
+        const ringRadius = dynamicBaseRadius + (index * (dynamicWidth + dynamicSpacing));
+        
+        // Draw the ring
+        drawDonut(centerX, centerY, ringRadius, dynamicWidth, item.percentage, item.color);
+        
+        // Draw the label
+        // We pass dynamicWidth and ringRadius so the labels align with the scaled rings
+        drawLabelWithLine(
+            item.label, 
+            centerX, 
+            centerY, 
+            ringRadius, 
+            item.percentage, 
+            index, 
+            totalItems, 
+            '#FF0000CC', 
+            'black', 
+            'black'
+        );
     });
 
     requestAnimationFrame(drawAll);
 }
 
-// --- INIT ---
-async function init(){
-    await getUpdatedTimerData();
-    await fetchAllGoalData();
-    initiationComplete = true;
-    setInterval(async () => {
+
+// ----------------- PERIODIC REFRESH -----------------
+async function refreshDataPeriodically(){
+    setInterval(async ()=>{
+        const now = new Date();
+        document.getElementById("refreshTracker").textContent=`Refreshing data at: ${now.toLocaleTimeString()}`;
         await getUpdatedTimerData();
         await fetchAllGoalData();
-    }, 5000);
+    },5000);
 }
 
+// ----------------- INIT -----------------
+cameraImage.onload = ()=>{drawAll();}
+async function init(){await loadInitialData(); drawAll(); refreshDataPeriodically();}
 init();
-drawAll();
 
 </script>
 </body>
