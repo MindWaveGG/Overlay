@@ -262,42 +262,21 @@ const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
 function drawAll(){
     removeExpiredTimers();
-
     const totalrings = getTotalRings();
 
-    // 1. Fixed constraints to protect your camera and the canvas edge
-    const canvasLimit = (canvas.width / 2) - 60; // 1040px from center (safe boundary)
-    const ringZoneStart = cameraRadius + 20;      // Starts right after camera circle
-    const totalAvailableSpace = canvasLimit - ringZoneStart; 
+    // 1. Setup Boundaries
+    const canvasLimit = (canvas.width / 2) - 60; // 1040px
+    const ringZoneStart = cameraRadius + 20;     // 690px
+    const outerSpace = canvasLimit - ringZoneStart; 
 
-    // 2. Dynamic Scaling Logic
-    if (totalrings > 4) {
-        // Calculate the maximum space one ring + one gap can occupy
-        let unitSize = totalAvailableSpace / totalrings;
+    // 2. Dynamic Scaling with a "Hard Floor"
+    // We shrink rings until they hit 12px. If they still don't fit, we go inward.
+    let unitSize = outerSpace / totalrings;
+    donutWidth = Math.max(12, unitSize * 0.8);
+    donutSpacing = Math.max(6, unitSize * 0.2);
 
-        // Allocate 80% to ring, 20% to gap (matches your roughly 4:1 ratio)
-        donutWidth = unitSize * 0.8;
-        donutSpacing = unitSize * 0.2;
-
-        // Safety floor so rings don't become 1-pixel lines
-        if (donutWidth < 12) {
-            donutWidth = 12;
-            donutSpacing = 6;
-        }
-    } else {
-        // Default values for standard 4 rings
-        donutWidth = 67.5;
-        donutSpacing = 15;
-    }
-
-    // 3. Recompute baseRadius
-    // This is the radius of the INMOST ring.
-    // We add half the donutWidth so the arc draws centered on the path.
-    const baseRadius = ringZoneStart + (donutWidth / 2);
-
+    // 3. Setup Canvas and Colors
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    
-    // Draw your fixed camera area
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
     const nowSec = Date.now() / 1000;
@@ -334,37 +313,31 @@ function drawAll(){
 
     data.sort((a,b)=>b.percentage-a.percentage);
 
-    // 4. Draw Rings
-    data.forEach((item, index) =>
-        drawDonut(
-            centerX,
-            centerY,
-            baseRadius + index * (donutWidth + donutSpacing),
-            donutWidth,
-            item.percentage,
-            item.color
-        )
-    );
+    // 4. DRAWING LOOP: Smart Position Calculation
+    data.forEach((item, index) => {
+        // Calculate where the ring SHOULD go
+        let projectedRadius = ringZoneStart + (index * (donutWidth + donutSpacing)) + (donutWidth / 2);
+        let finalRadius;
 
-    // 5. Draw Labels
-    data.forEach((item, index) =>
-        drawLabelWithLine(
-            item.label,
-            centerX,
-            centerY,
-            baseRadius + index * (donutWidth + donutSpacing),
-            item.percentage,
-            index,
-            data.length,
-            '#FF0000CC',
-            'black',
-            'black'
-        )
-    );
+        // If the ring's outer edge exceeds the canvas limit, flip it inward
+        if (projectedRadius + (donutWidth / 2) > canvasLimit) {
+            // Find how many rings have overflowed
+            const overflowIndex = index - Math.floor(outerSpace / (donutWidth + donutSpacing));
+            // Move inward from the camera's inner edge
+            finalRadius = (cameraRadius - 10) - (overflowIndex * (donutWidth + donutSpacing)) - (donutWidth / 2);
+        } else {
+            finalRadius = projectedRadius;
+        }
+
+        // Only draw if the radius is positive and hasn't hit the absolute center
+        if (finalRadius > (donutWidth / 2)) {
+            drawDonut(centerX, centerY, finalRadius, donutWidth, item.percentage, item.color);
+            drawLabelWithLine(item.label, centerX, centerY, finalRadius, item.percentage, index, data.length, '#FF0000CC', 'black', 'black');
+        }
+    });
 
     requestAnimationFrame(drawAll);
 }
-
 
 
 // ----------------- PERIODIC REFRESH -----------------
