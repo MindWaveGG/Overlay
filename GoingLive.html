@@ -312,7 +312,7 @@ function drawAll() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
-    const ringZoneStart = cameraRadius + 20;
+    let ringZoneStart = cameraRadius + 20;
     const canvasOuterEdge = (canvas.width / 2) - 40;
     const outerSpace = canvasOuterEdge - ringZoneStart;
     const innerSpace = ringZoneStart - cameraRadius;
@@ -375,7 +375,7 @@ function drawAll() {
     let outward = data.filter(d=>d.allowOut);
     let inward = [];
 
-    const donutWidthOut = Math.max(12, (outerSpace / Math.max(1, outward.length)) * 0.8);
+    const donutWidthOut = Math.max(3, (outerSpace / Math.max(1, outward.length)) * 0.8);
     const donutSpacingOut = Math.max(6, (outerSpace / Math.max(1, outward.length)) * 0.2);
     const stepOut = donutWidthOut + donutSpacingOut;
 
@@ -384,9 +384,9 @@ function drawAll() {
         if(r + donutWidthOut/2 > canvasOuterEdge) inward.push(item);
         else item.finalRadius = r;
     });
-
+	ringZoneStart = cameraRadius - 2
     const inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
-    const donutWidthIn = Math.max(12, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
+    const donutWidthIn = Math.max(3, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
     const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.2);
     const stepIn = donutWidthIn + donutSpacingIn;
 
