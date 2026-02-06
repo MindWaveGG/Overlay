@@ -372,7 +372,7 @@ function drawAll() {
     let outward = data.filter(d=>d.allowOut);
     let inward = [];
 
-    const donutWidthOut = Math.max(12, (outerSpace / Math.max(1, outward.length)) * 0.8);
+    const donutWidthOut = Math.max(3, (outerSpace / Math.max(1, outward.length)) * 0.8);
     const donutSpacingOut = Math.max(6, (outerSpace / Math.max(1, outward.length)) * 0.2);
     const stepOut = donutWidthOut + donutSpacingOut;
 
@@ -383,7 +383,7 @@ function drawAll() {
     });
 
     const inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
-    const donutWidthIn = Math.max(12, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
+    const donutWidthIn = Math.max(3, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
     const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.2);
     const stepIn = donutWidthIn + donutSpacingIn;
 
