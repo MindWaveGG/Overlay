@@ -367,12 +367,13 @@ function drawAll() {
 
     // 6️⃣ Sort by percentage descending
     data.sort((a,b)=>b.percentage - a.percentage);
+    goingLiveTimers.sort((a,b)=>b.percentage - a.percentage); // ✅ ADDED: Sort GoingLive timers too
 
     // 7️⃣ Separate outward/inward stacks
     let outward = data.filter(d=>d.allowOut);
     let inward = [];
 
-    const donutWidthOut = Math.max(3, (outerSpace / Math.max(1, outward.length)) * 0.8);
+    const donutWidthOut = Math.max(12, (outerSpace / Math.max(1, outward.length)) * 0.8);
     const donutSpacingOut = Math.max(6, (outerSpace / Math.max(1, outward.length)) * 0.2);
     const stepOut = donutWidthOut + donutSpacingOut;
 
@@ -383,7 +384,7 @@ function drawAll() {
     });
 
     const inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
-    const donutWidthIn = Math.max(3, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
+    const donutWidthIn = Math.max(12, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
     const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.2);
     const stepIn = donutWidthIn + donutSpacingIn;
 
@@ -395,7 +396,7 @@ function drawAll() {
         item.finalRadius = inwardStart - (inward.length + i)*stepIn - donutWidthIn/2;
     });
 
-    // 8️⃣ Draw all donuts (✅ FIXED: combine all three arrays)
+    // 8️⃣ Draw all donuts
     [...outward, ...inward, ...goingLiveTimers].forEach(item=>{
         if(!item.finalRadius) return;
         drawDonut(centerX, centerY, item.finalRadius, item.goingLive ? donutWidthIn : donutWidthOut, item.percentage, item.color, item.ccw || false);
@@ -424,11 +425,11 @@ function drawAll() {
 
     outward.forEach((item,i)=>drawItemLabel(item, (outward.length-1)-i, outward.length));
     inward.forEach((item,i)=>drawItemLabel(item, (inward.length-1)-i, inward.length));
-    // ✅ No labels for goingLiveTimers (they have noLabel: true)
 
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
-}// ----------------- PERIODIC REFRESH -----------------
+}
+
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
         const now = new Date();
