@@ -259,8 +259,7 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
-
-function drawAll(){
+function drawAll() {
     removeExpiredTimers();
     const totalrings = getTotalRings();
 
@@ -269,14 +268,13 @@ function drawAll(){
     const ringZoneStart = cameraRadius + 20;     // 690px
     const outerSpace = canvasLimit - ringZoneStart; 
 
-    // 2. Dynamic Scaling with a "Hard Floor"
-    // We shrink rings until they hit 12px. If they still don't fit, we go inward.
+    // 2. Dynamic Scaling
     let unitSize = outerSpace / totalrings;
     donutWidth = Math.max(5, unitSize * 0.8);
     donutSpacing = Math.max(6, unitSize * 0.2);
 
-    // 3. Setup Canvas and Colors
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // 3. Setup Canvas, Colors, and Data
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
     const nowSec = Date.now() / 1000;
@@ -285,10 +283,10 @@ function drawAll(){
     const HypecolorHex = rgbToHex(lerpColor(red, gold, t));
 
     const data = [
-        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
-        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
-        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
+        { label: `Followers: ${followerCurrent}/${followerGoal}`, percentage: followerGoal ? followerCurrent / followerGoal : 0, color: colorHex },
+        { label: `Subs: ${subCurrent}/${subGoal}`, percentage: subGoal ? subCurrent / subGoal : 0, color: colorHex },
+        { label: `Donations: $${donationCurrent}/$${donationGoal}`, percentage: donationGoal ? donationCurrent / donationGoal : 0, color: colorHex },
+        { label: `Bits: ${bitsCurrent}/${bitsGoal}`, percentage: bitsGoal ? bitsCurrent / bitsGoal : 0, color: colorHex }
     ];
 
     timers.forEach(timer => {
@@ -300,7 +298,7 @@ function drawAll(){
         });
     });
 
-    if(hypeTrainData && hypeTrainData.hypeTrainActive){
+    if (hypeTrainData && hypeTrainData.hypeTrainActive) {
         const current = Number(hypeTrainData.currentLevel) || 0;
         const goal = Number(hypeTrainData.goalLevel) || 0;
         const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
@@ -311,33 +309,54 @@ function drawAll(){
         });
     }
 
-    data.sort((a,b)=>b.percentage-a.percentage);
+    data.sort((a, b) => b.percentage - a.percentage);
 
-    // 4. DRAWING LOOP: Smart Position Calculation
+    // 4a. FIRST PASS: Draw ALL Donut Rings and Calculate finalRadius
     data.forEach((item, index) => {
-        // Calculate where the ring SHOULD go
         let projectedRadius = ringZoneStart + (index * (donutWidth + donutSpacing)) + (donutWidth / 2);
         let finalRadius;
 
         // If the ring's outer edge exceeds the canvas limit, flip it inward
         if (projectedRadius + (donutWidth / 2) > canvasLimit) {
-            // Find how many rings have overflowed
-            const overflowIndex = index - Math.floor(outerSpace / (donutWidth + donutSpacing));
-            // Move inward from the camera's inner edge
+            const maxOuter = Math.floor(outerSpace / (donutWidth + donutSpacing));
+            const overflowIndex = index - maxOuter;
             finalRadius = (cameraRadius - 10) - (overflowIndex * (donutWidth + donutSpacing)) - (donutWidth / 2);
         } else {
             finalRadius = projectedRadius;
         }
 
-        // Only draw if the radius is positive and hasn't hit the absolute center
+        // Store the radius in the object so the label loop can use it
+        item.finalRadius = finalRadius;
+
+        // Draw the ring (This happens for all items first)
         if (finalRadius > (donutWidth / 2)) {
             drawDonut(centerX, centerY, finalRadius, donutWidth, item.percentage, item.color);
-            drawLabelWithLine(item.label, centerX, centerY, finalRadius, item.percentage, index, data.length, '#FF0000CC', 'black', 'black');
+        }
+    });
+
+    // 4b. SECOND PASS: Draw ALL Labels on top of all rings
+    data.forEach((item, index) => {
+        // We only draw labels for rings OUTSIDE the camera circle
+        // This keeps the center camera area clean and prevents crossing lines
+        if (item.finalRadius > cameraRadius && item.finalRadius > (donutWidth / 2)) {
+            drawLabelWithLine(
+                item.label, 
+                centerX, 
+                centerY, 
+                item.finalRadius, 
+                item.percentage, 
+                index, 
+                data.length, 
+                '#FF0000CC', 
+                'black', 
+                'black'
+            );
         }
     });
 
     requestAnimationFrame(drawAll);
 }
+
 
 
 // ----------------- PERIODIC REFRESH -----------------
