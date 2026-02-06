@@ -287,7 +287,7 @@ function drawAll() {
     const totalrings = getTotalRings();
 
     // 1. Define Boundaries
-    const ringZoneStart = cameraRadius + 20; // 690px
+    let ringZoneStart = cameraRadius + 20; // 690px
     const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
     const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
     
@@ -346,6 +346,7 @@ function drawAll() {
         // If the index is within the max outer rings count, draw outside
         if (index < maxOuterRings) {
             // Stack 1 (Outside): Draw outward with shrinking scale
+			ringZoneStart = cameraRadius + 0; // 690px
             finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
         } else {
             // Stack 2 (Inside): Draw inward from the camera (seamless transition)
