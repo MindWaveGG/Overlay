@@ -280,26 +280,27 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
+
+
 function drawAll() {
     removeExpiredTimers();
     const totalrings = getTotalRings();
 
-    // 1. Define Boundaries
+    // 1. Define Boundaries and the constant variable you pointed out
+    donutWidth = 67.5; // Ensure these are set to fixed size as requested
+    donutSpacing = 15;
+    
+    // --- FIX: Declaring MAX_RING_SIZE correctly here ---
+    const MAX_RING_SIZE = donutWidth + donutSpacing; // 82.5px total space per ring
+
     const ringZoneStart = cameraRadius + 20; // 690px
     const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
     const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
     
-    // 2. Dynamic Scaling Logic (Shrinks ALL rings to fit the space if needed)
-    let unitSize = outerSpaceAvailable / totalrings;
-    // Set donutWidth/Spacing dynamically based on the available space per ring
-    donutWidth = Math.max(12, unitSize * 0.8);
-    donutSpacing = Math.max(6, unitSize * 0.2);
-    const effectiveRingSize = donutWidth + donutSpacing;
+    // Calculate how many rings can physically fit in the outer zone
+    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); 
 
-    // Calculate exactly how many rings fit in the outer zone with this new dynamic size
-    const maxOuterRings = Math.floor(outerSpaceAvailable / effectiveRingSize);
-
-    // 3. Setup Canvas, Colors, and Data (Same as before)
+    // 2. Setup Canvas, Colors, and Data 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
@@ -312,7 +313,7 @@ function drawAll() {
         { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
         { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
         { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsCurrent/bitsGoal:0, color:colorHex }
     ];
 
     timers.forEach(timer => {
@@ -335,21 +336,19 @@ function drawAll() {
         });
     }
 
-    data.sort((a,b)=>b.percentage-a.percentage);
+    data.sort((a,b)=>b.percentage-a.percentage); 
 
-    // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
+    // --- 4. FIRST PASS: Draw ALL Donut Rings (Decide direction for each ring) ---
     data.forEach((item, index) => {
         let finalRadius;
 
-        // If the index is within the max outer rings count, draw outside
         if (index < maxOuterRings) {
-            // Stack 1 (Outside): Draw outward with shrinking scale
-            finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
+            // Stack 1 (Outside): Draw outward from the camera
+            finalRadius = ringZoneStart + (index * MAX_RING_SIZE) + (donutWidth / 2);
         } else {
-            // Stack 2 (Inside): Draw inward from the camera (seamless transition)
+            // Stack 2 (Inside): Draw inward from the camera
             const inwardIndex = index - maxOuterRings;
-            // The first inward ring sits exactly where the camera boundary is
-            finalRadius = (cameraRadius - 0) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
+            finalRadius = (cameraRadius - 0) - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
@@ -359,7 +358,7 @@ function drawAll() {
         }
     });
 
-    // --- 5. SECOND PASS: Draw ALL Labels (High % at Bottom of stack) ---
+    // --- 5. SECOND PASS: Draw ALL Labels (Using corrected counter logic) ---
     const visibleItems = data.filter(item => item.finalRadius > cameraRadius); 
     visibleItems.forEach((item, index) => {
         const bottomUpIndex = (visibleItems.length - 1) - index;
@@ -379,6 +378,7 @@ function drawAll() {
     });
     requestAnimationFrame(drawAll);
 }
+
 
 
 
