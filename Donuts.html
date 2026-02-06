@@ -335,24 +335,23 @@ function drawAll() {
     });
 
     // 4b. SECOND PASS: Draw ALL Labels on top of all rings
-    data.forEach((item, index) => {
-        // We only draw labels for rings OUTSIDE the camera circle
-        // This keeps the center camera area clean and prevents crossing lines
-        if (item.finalRadius > cameraRadius && item.finalRadius > (donutWidth / 2)) {
-            drawLabelWithLine(
-                item.label, 
-                centerX, 
-                centerY, 
-                item.finalRadius, 
-                item.percentage, 
-                index, 
-                data.length, 
-                '#FF0000CC', 
-                'black', 
-                'black'
-            );
-        }
-    });
+    // 4b. SECOND PASS: Draw ALL Labels
+	data.forEach((item, index) => {
+		if (item.finalRadius > cameraRadius && item.finalRadius > (donutWidth / 2)) {
+			drawLabelWithLine(
+				item.label, 
+				centerX, 
+				centerY, 
+				item.finalRadius, 
+				item.percentage, 
+				index, // Pass the NORMAL index here
+				data.length, 
+				'#FF0000CC', 
+				'black', 
+				'black'
+			);
+		}
+	});
 
     requestAnimationFrame(drawAll);
 }
