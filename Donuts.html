@@ -258,7 +258,7 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255};
+const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
 function drawAll(){
     removeExpiredTimers();
