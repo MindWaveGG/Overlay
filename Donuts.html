@@ -297,11 +297,43 @@ function drawAll() {
     donutWidth = 67.5;
     donutSpacing = 15;
 
-    // --- 3. Setup Canvas, Colors, and Data (Same as before) ---
+    // --- 3. Setup Canvas, Colors, and Data (The Missing Section) ---
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
-    // ... (color and data array setup code goes here) ... 
-    // (I am omitting it here for brevity, assume 'data' array is populated)
+
+    const nowSec = Date.now() / 1000;
+    const t = (Math.sin(nowSec) + 1) / 2;
+    const colorHex = rgbToHex(lerpColor(red, blue, t));
+    const HypecolorHex = rgbToHex(lerpColor(red, gold, t));
+
+    const data = [
+        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
+        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
+        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
+    ];
+
+    timers.forEach(timer => {
+        const tRem = getTimeRemaining(timer);
+        data.push({
+            label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
+            percentage: tRem.percentage,
+            color: (timer.name === 'Hype Train') ? HypecolorHex : colorHex
+        });
+    });
+
+    if(hypeTrainData && hypeTrainData.hypeTrainActive){
+        const current = Number(hypeTrainData.currentLevel) || 0;
+        const goal = Number(hypeTrainData.goalLevel) || 0;
+        const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
+        data.push({
+            label: `Hype Train Level: ${current}/${goal}`,
+            percentage: percentage,
+            color: HypecolorHex 
+        });
+    }
+
+    data.sort((a,b)=>b.percentage-a.percentage); // Sort by highest percentage first
 
     // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
     data.forEach((item, index) => {
@@ -313,19 +345,17 @@ function drawAll() {
         } else {
             // Stack 2 (Inside): Draw inward from the camera
             const inwardIndex = index - maxOuterRings;
-            // The first inward ring starts exactly where the camera ends (no gap)
             finalRadius = (cameraRadius - 0) - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
 
-        // Draw the ring if it's visible
         if (finalRadius > (donutWidth / 2) && finalRadius < canvasOuterEdge) {
             drawDonut(centerX, centerY, finalRadius, donutWidth, item.percentage, item.color);
         }
     });
 
-    // --- 5. SECOND PASS: Draw ALL Labels (Using the counter logic) ---
+    // --- 5. SECOND PASS: Draw ALL Labels (High % at Bottom of stack) ---
     const visibleItems = data.filter(item => item.finalRadius > cameraRadius); 
     visibleItems.forEach((item, index) => {
         const bottomUpIndex = (visibleItems.length - 1) - index;
@@ -345,6 +375,7 @@ function drawAll() {
     });
     requestAnimationFrame(drawAll);
 }
+
 
 
 
