@@ -295,7 +295,8 @@ function drawAll(){
         data.push({
             label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
             percentage: tRem.percentage,
-            color: HypecolorHex
+            color: (timer.name === 'Hype Train') ? HypecolorHex : colorHex
+			
         });
     });
 
