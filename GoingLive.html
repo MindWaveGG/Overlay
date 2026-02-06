@@ -393,11 +393,10 @@ function drawAll() {
 
     goingLiveTimers.forEach((item,i)=>{
         item.finalRadius = inwardStart - (inward.length + i)*stepIn - donutWidthIn/2;
-        inward.push(item);
     });
 
-    // 8️⃣ Draw all donuts
-    [...outward, ...inward].forEach(item=>{
+    // 8️⃣ Draw all donuts (✅ FIXED: combine all three arrays)
+    [...outward, ...inward, ...goingLiveTimers].forEach(item=>{
         if(!item.finalRadius) return;
         drawDonut(centerX, centerY, item.finalRadius, item.goingLive ? donutWidthIn : donutWidthOut, item.percentage, item.color, item.ccw || false);
     });
@@ -425,12 +424,11 @@ function drawAll() {
 
     outward.forEach((item,i)=>drawItemLabel(item, (outward.length-1)-i, outward.length));
     inward.forEach((item,i)=>drawItemLabel(item, (inward.length-1)-i, inward.length));
+    // ✅ No labels for goingLiveTimers (they have noLabel: true)
 
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
-}
-
-// ----------------- PERIODIC REFRESH -----------------
+}// ----------------- PERIODIC REFRESH -----------------
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
         const now = new Date();
