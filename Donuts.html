@@ -280,24 +280,25 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
+
+
+
 function drawAll() {
     removeExpiredTimers();
     const totalrings = getTotalRings();
 
-    // --- 1. Calculate How Many Rings Fit Outside ---
-    const ringZoneStart = cameraRadius + 20; // 690px
-    const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
+    const DESIRED_GAP_PX = 5; 
+
+    const ringZoneStart = cameraRadius + 20; 
+    const canvasOuterEdge = (canvas.width / 2) - 40; 
     const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
     
-    // Calculate max rings that fit at full size (82.5px total per ring)
     const MAX_RING_SIZE = 67.5 + 15; 
-    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); // Likely 4 or 5
+    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); 
 
-    // --- 2. Set Ring Dimensions (We keep these fixed now) ---
     donutWidth = 67.5;
     donutSpacing = 15;
 
-    // --- 3. Setup Canvas, Colors, and Data (The Missing Section) ---
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
@@ -310,7 +311,7 @@ function drawAll() {
         { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
         { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
         { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsCurrent/bitsGoal:0, color:colorHex }
     ];
 
     timers.forEach(timer => {
@@ -333,19 +334,19 @@ function drawAll() {
         });
     }
 
-    data.sort((a,b)=>b.percentage-a.percentage); // Sort by highest percentage first
+    data.sort((a,b)=>b.percentage-a.percentage);
 
-    // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
+    // --- 4. FIRST PASS: Draw ALL Donut Rings ---
     data.forEach((item, index) => {
         let finalRadius;
 
         if (index < maxOuterRings) {
-            // Stack 1 (Outside): Draw outward from the camera
             finalRadius = ringZoneStart + (index * MAX_RING_SIZE) + (donutWidth / 2);
         } else {
-            // Stack 2 (Inside): Draw inward from the camera
             const inwardIndex = index - maxOuterRings;
-            finalRadius = (cameraRadius - 0) - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
+            // FIXED LINE: Calculates center radius for a 5px visual gap
+            const innerEdgeStart = cameraRadius - DESIRED_GAP_PX; 
+            finalRadius = innerEdgeStart - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
@@ -375,6 +376,8 @@ function drawAll() {
     });
     requestAnimationFrame(drawAll);
 }
+
+
 
 
 
