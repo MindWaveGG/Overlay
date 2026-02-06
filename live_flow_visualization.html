@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Manager - Live Flow Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-panel {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.active {
+            background: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+
+        .status-dot.inactive {
+            background: #999;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+        }
+
+        .config-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .config-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .flow-canvas {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            padding: 40px;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-left: 2px solid rgba(102, 126, 234, 0.3);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .sidebar h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+        }
+
+        .event-log {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .log-entry {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            font-size: 0.9em;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .log-entry .timestamp {
+            color: #999;
+            font-size: 0.8em;
+            margin-bottom: 5px;
+        }
+
+        .log-entry .message {
+            color: white;
+        }
+
+        .log-entry.error {
+            border-left-color: #f44336;
+        }
+
+        .log-entry.success {
+            border-left-color: #4CAF50;
+        }
+
+        .log-entry.warning {
+            border-left-color: #ff9800;
+        }
+
+        /* Flow visualization nodes */
+        .flow-node {
+            position: absolute;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+            min-width: 150px;
+            text-align: center;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .flow-node:hover {
+            transform: scale(1.05);
+            z-index: 100;
+        }
+
+        .flow-node.active {
+            animation: nodeActivate 0.6s;
+            box-shadow: 0 0 30px rgba(102, 126, 234, 0.8);
+        }
+
+        @keyframes nodeActivate {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .flow-node.start {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .flow-node.process {
+            background: rgba(33, 150, 243, 0.8);
+        }
+
+        .flow-node.decision {
+            background: rgba(255, 152, 0, 0.8);
+            clip-path: polygon(10% 0%, 90% 0%, 100% 50%, 90% 100%, 10% 100%, 0% 50%);
+            padding: 20px 40px;
+        }
+
+        .flow-node.action {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .flow-node.error {
+            background: rgba(244, 67, 54, 0.8);
+        }
+
+        .flow-node.end {
+            background: rgba(156, 39, 176, 0.8);
+        }
+
+        /* Connection lines */
+        svg.connections {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .flow-node {
+            z-index: 2;
+        }
+
+        .connection-line {
+            stroke: rgba(102, 126, 234, 0.5);
+            stroke-width: 3;
+            fill: none;
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+        }
+
+        .connection-line.active {
+            animation: drawLine 1s forwards;
+            stroke: #667eea;
+            stroke-width: 4;
+            filter: drop-shadow(0 0 5px #667eea);
+        }
+
+        @keyframes drawLine {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .connection-arrow {
+            fill: rgba(102, 126, 234, 0.5);
+        }
+
+        .connection-arrow.active {
+            fill: #667eea;
+            animation: arrowPulse 0.5s 1s;
+        }
+
+        @keyframes arrowPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+        }
+
+        /* Particle effect for active flow */
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #667eea;
+            border-radius: 50%;
+            pointer-events: none;
+            box-shadow: 0 0 10px #667eea;
+            animation: moveParticle 2s linear;
+            z-index: 3;
+        }
+
+        @keyframes moveParticle {
+            to { opacity: 0; }
+        }
+
+        /* Config Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #16213e;
+            padding: 40px;
+            border-radius: 20px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content h2 {
+            color: #667eea;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #999;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 1em;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        .modal-btn {
+            padding: 12px 30px;
+            border-radius: 8px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .modal-btn.primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal-btn.primary:hover {
+            background: #764ba2;
+        }
+
+        .modal-btn.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .modal-btn.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .stats-panel {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #999;
+        }
+
+        .stat-value {
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .clear-log-btn {
+            width: 100%;
+            padding: 10px;
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+            color: #f44336;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+
+        .clear-log-btn:hover {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+            max-width: 300px;
+        }
+
+        .tooltip.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 Stream Manager - Live Flow Visualization</h1>
+            <div class="status-panel">
+                <div class="status-item">
+                    <div class="status-dot" id="connectionStatus"></div>
+                    <span id="connectionText">Disconnected</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="subathonStatus"></div>
+                    <span>Subathon: <span id="subathonText">Inactive</span></span>
+                </div>
+                <button class="config-btn" onclick="openConfig()">⚙️ Configure</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="flow-canvas" id="flowCanvas">
+                <svg class="connections" id="connectionsSvg"></svg>
+                <!-- Flow nodes will be generated here -->
+            </div>
+
+            <div class="sidebar">
+                <h2>📊 Live Statistics</h2>
+                <div class="stats-panel">
+                    <div class="stat-item">
+                        <span class="stat-label">Events Processed</span>
+                        <span class="stat-value" id="eventCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Queue Size</span>
+                        <span class="stat-value" id="queueSize">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Hype Train</span>
+                        <span class="stat-value" id="hypeMultiplier">1.0x</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Last Event</span>
+                        <span class="stat-value" id="lastEventType">None</span>
+                    </div>
+                </div>
+
+                <h2>📜 Event Log</h2>
+                <div class="event-log" id="eventLog">
+                    <div class="log-entry">
+                        <div class="timestamp">Waiting for events...</div>
+                        <div class="message">Configure your Web App URL to start</div>
+                    </div>
+                </div>
+                <button class="clear-log-btn" onclick="clearLog()">Clear Log</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Modal -->
+    <div class="modal" id="configModal">
+        <div class="modal-content">
+            <h2>⚙️ Configuration</h2>
+            <div class="form-group">
+                <label>Google Apps Script Web App URL</label>
+                <input type="text" id="webAppUrl" placeholder="https://script.google.com/...">
+            </div>
+            <div class="form-group">
+                <label>Poll Interval (seconds)</label>
+                <input type="number" id="pollInterval" value="2" min="1" max="60">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn secondary" onclick="closeConfig()">Cancel</button>
+                <button class="modal-btn primary" onclick="saveConfig()">Save & Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Configuration
+        let config = {
+            webAppUrl: localStorage.getItem('webAppUrl') || '',
+            pollInterval: parseInt(localStorage.getItem('pollInterval')) || 2
+        };
+
+        let pollTimer = null;
+        let eventCounter = 0;
+        let lastEventId = null;
+
+        // Flow map definition
+        const flowMap = {
+            webhook: { x: 100, y: 50, type: 'start', label: 'Webhook\nReceived', connections: ['parse'] },
+            parse: { x: 100, y: 180, type: 'process', label: 'Parse JSON', connections: ['route'] },
+            route: { x: 100, y: 310, type: 'decision', label: 'Route Event', connections: ['handleFollow', 'handleSub', 'handleBits', 'handleDonation', 'handleHype'] },
+            
+            handleFollow: { x: 300, y: 180, type: 'action', label: 'Handle\nFollow', connections: ['updateFollowGoal'] },
+            updateFollowGoal: { x: 300, y: 310, type: 'process', label: 'Update\nFollower Goal', connections: ['logEvent'] },
+            
+            handleSub: { x: 500, y: 180, type: 'action', label: 'Handle\nSubscription', connections: ['checkSubathon'] },
+            checkSubathon: { x: 500, y: 310, type: 'decision', label: 'Subathon\nActive?', connections: ['queueSub', 'updateSubGoal'] },
+            queueSub: { x: 650, y: 400, type: 'process', label: 'Queue Event\n+ Multiplier', connections: ['eventQueue'] },
+            updateSubGoal: { x: 350, y: 400, type: 'process', label: 'Update\nSub Goal', connections: ['logEvent'] },
+            
+            handleBits: { x: 700, y: 180, type: 'action', label: 'Handle\nBits', connections: ['checkSubathonBits'] },
+            checkSubathonBits: { x: 700, y: 310, type: 'decision', label: 'Subathon\nActive?', connections: ['queueBits', 'updateBitsGoal'] },
+            queueBits: { x: 850, y: 400, type: 'process', label: 'Queue Bits', connections: ['eventQueue'] },
+            updateBitsGoal: { x: 550, y: 400, type: 'process', label: 'Update\nBits Goal', connections: ['logEvent'] },
+            
+            handleDonation: { x: 900, y: 180, type: 'action', label: 'Handle\nDonation', connections: ['checkSubathonDonation'] },
+            checkSubathonDonation: { x: 900, y: 310, type: 'decision', label: 'Subathon\nActive?', connections: ['queueDonation', 'updateDonationGoal'] },
+            queueDonation: { x: 1050, y: 400, type: 'process', label: 'Queue\nDonation', connections: ['eventQueue'] },
+            updateDonationGoal: { x: 750, y: 400, type: 'process', label: 'Update\nDonation Goal', connections: ['logEvent'] },
+            
+            handleHype: { x: 1100, y: 180, type: 'action', label: 'Handle\nHype Train', connections: ['setMultiplier'] },
+            setMultiplier: { x: 1100, y: 310, type: 'process', label: 'Set\nMultiplier', connections: ['logEvent'] },
+            
+            eventQueue: { x: 850, y: 530, type: 'process', label: 'Event Queue\nSheet', connections: ['autoProcess'] },
+            autoProcess: { x: 850, y: 660, type: 'decision', label: '5s Since\nLast Process?', connections: ['processQueue', 'wait'] },
+            processQueue: { x: 1000, y: 790, type: 'action', label: 'Process\nQueue', connections: ['calcTime'] },
+            wait: { x: 700, y: 790, type: 'process', label: 'Wait', connections: [] },
+            calcTime: { x: 1000, y: 920, type: 'process', label: 'Calculate\nTime Bonus', connections: ['addTime'] },
+            addTime: { x: 1000, y: 1050, type: 'success', label: 'Add Time to\nSubathon', connections: ['updateGoals'] },
+            updateGoals: { x: 850, y: 1180, type: 'action', label: 'Update All\nGoals', connections: ['logEvent'] },
+            
+            logEvent: { x: 100, y: 1300, type: 'end', label: 'Log Event\n& Complete', connections: [] }
+        };
+
+        // Initialize
+        window.onload = function() {
+            if (config.webAppUrl) {
+                document.getElementById('webAppUrl').value = config.webAppUrl;
+                startPolling();
+            }
+            document.getElementById('pollInterval').value = config.pollInterval;
+            renderFlowMap();
+        };
+
+        function renderFlowMap() {
+            const canvas = document.getElementById('flowCanvas');
+            const svg = document.getElementById('connectionsSvg');
+            
+            // Clear existing
+            canvas.querySelectorAll('.flow-node').forEach(el => el.remove());
+            svg.innerHTML = '';
+
+            // Create nodes
+            Object.entries(flowMap).forEach(([id, node]) => {
+                const div = document.createElement('div');
+                div.id = `node-${id}`;
+                div.className = `flow-node ${node.type}`;
+                div.style.left = `${node.x}px`;
+                div.style.top = `${node.y}px`;
+                div.innerHTML = node.label.replace(/\n/g, '<br>');
+                
+                // Tooltip
+                div.addEventListener('mouseenter', (e) => showTooltip(e, id, node));
+                div.addEventListener('mouseleave', hideTooltip);
+                
+                canvas.appendChild(div);
+            });
+
+            // Draw connections
+            drawConnections();
+        }
+
+        function drawConnections() {
+            const svg = document.getElementById('connectionsSvg');
+            
+            Object.entries(flowMap).forEach(([fromId, fromNode]) => {
+                fromNode.connections.forEach(toId => {
+                    const toNode = flowMap[toId];
+                    if (!toNode) return;
+
+                    const fromEl = document.getElementById(`node-${fromId}`);
+                    const toEl = document.getElementById(`node-${toId}`);
+                    if (!fromEl || !toEl) return;
+
+                    const fromRect = fromEl.getBoundingClientRect();
+                    const toRect = toEl.getBoundingClientRect();
+                    const canvasRect = svg.getBoundingClientRect();
+
+                    const x1 = fromRect.left + fromRect.width / 2 - canvasRect.left;
+                    const y1 = fromRect.bottom - canvasRect.top;
+                    const x2 = toRect.left + toRect.width / 2 - canvasRect.left;
+                    const y2 = toRect.top - canvasRect.top;
+
+                    // Create path
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const d = `M ${x1} ${y1} Q ${x1} ${(y1 + y2) / 2}, ${x2} ${y2}`;
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', 'connection-line');
+                    path.setAttribute('data-from', fromId);
+                    path.setAttribute('data-to', toId);
+                    svg.appendChild(path);
+
+                    // Arrow
+                    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    arrow.setAttribute('points', `${x2},${y2} ${x2-5},${y2-10} ${x2+5},${y2-10}`);
+                    arrow.setAttribute('class', 'connection-arrow');
+                    arrow.setAttribute('data-from', fromId);
+                    arrow.setAttribute('data-to', toId);
+                    svg.appendChild(arrow);
+                });
+            });
+        }
+
+        function activateNode(nodeId) {
+            const node = document.getElementById(`node-${nodeId}`);
+            if (!node) return;
+
+            node.classList.add('active');
+            setTimeout(() => node.classList.remove('active'), 600);
+
+            // Activate outgoing connections
+            const connections = flowMap[nodeId]?.connections || [];
+            connections.forEach(toId => {
+                const lines = document.querySelectorAll(`[data-from="${nodeId}"][data-to="${toId}"]`);
+                lines.forEach(line => {
+                    line.classList.add('active');
+                    setTimeout(() => line.classList.remove('active'), 1000);
+                });
+                
+                // Create particle
+                createParticle(nodeId, toId);
+            });
+        }
+
+        function createParticle(fromId, toId) {
+            const fromEl = document.getElementById(`node-${fromId}`);
+            const toEl = document.getElementById(`node-${toId}`);
+            if (!fromEl || !toEl) return;
+
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            
+            const fromRect = fromEl.getBoundingClientRect();
+            const toRect = toEl.getBoundingClientRect();
+            const canvasRect = document.getElementById('flowCanvas').getBoundingClientRect();
+
+            particle.style.left = `${fromRect.left + fromRect.width / 2 - canvasRect.left}px`;
+            particle.style.top = `${fromRect.bottom - canvasRect.top}px`;
+
+            document.getElementById('flowCanvas').appendChild(particle);
+
+            const deltaX = toRect.left + toRect.width / 2 - fromRect.left - fromRect.width / 2;
+            const deltaY = toRect.top - fromRect.bottom;
+
+            particle.style.setProperty('--dx', `${deltaX}px`);
+            particle.style.setProperty('--dy', `${deltaY}px`);
+
+            particle.animate([
+                { transform: 'translate(0, 0)' },
+                { transform: `translate(${deltaX}px, ${deltaY}px)` }
+            ], {
+                duration: 1000,
+                easing: 'ease-in-out'
+            });
+
+            setTimeout(() => particle.remove(), 1000);
+        }
+
+        function showTooltip(e, nodeId, node) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.textContent = `Node: ${nodeId} | Type: ${node.type}`;
+            tooltip.style.left = `${e.pageX + 15}px`;
+            tooltip.style.top = `${e.pageY + 15}px`;
+            tooltip.classList.add('active');
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.remove('active');
+        }
+
+        function openConfig() {
+            document.getElementById('configModal').classList.add('active');
+        }
+
+        function closeConfig() {
+            document.getElementById('configModal').classList.remove('active');
+        }
+
+        function saveConfig() {
+            config.webAppUrl = document.getElementById('webAppUrl').value;
+            config.pollInterval = parseInt(document.getElementById('pollInterval').value);
+            
+            localStorage.setItem('webAppUrl', config.webAppUrl);
+            localStorage.setItem('pollInterval', config.pollInterval);
+            
+            closeConfig();
+            startPolling();
+        }
+
+        function startPolling() {
+            if (pollTimer) clearInterval(pollTimer);
+            
+            updateConnectionStatus(true);
+            pollForEvents();
+            pollTimer = setInterval(pollForEvents, config.pollInterval * 1000);
+        }
+
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+            
+            if (connected) {
+                dot.classList.add('active');
+                dot.classList.remove('inactive');
+                text.textContent = 'Connected';
+            } else {
+                dot.classList.remove('active');
+                dot.classList.add('inactive');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        async function pollForEvents() {
+            if (!config.webAppUrl) return;
+
+            try {
+                // Get subathon status
+                const statusResponse = await fetch(`${config.webAppUrl}?action=getsubathonstatus`);
+                const status = await statusResponse.json();
+                
+                updateSubathonStatus(status);
+                document.getElementById('queueSize').textContent = status.queuedEvents || 0;
+                document.getElementById('hypeMultiplier').textContent = `${status.hypeTrainMultiplier || 1.0}x`;
+
+                // Poll logs (you'd need to add a getRecentLogs endpoint to your script)
+                // For now, we'll simulate based on status changes
+                
+                updateConnectionStatus(true);
+
+            } catch (error) {
+                console.error('Polling error:', error);
+                updateConnectionStatus(false);
+                addLogEntry('error', 'Connection Error', error.message);
+            }
+        }
+
+        function updateSubathonStatus(status) {
+            const dot = document.getElementById('subathonStatus');
+            const text = document.getElementById('subathonText');
+            
+            if (status.isActive) {
+                dot.classList.add('active');
+                dot.classList.remove('inactive');
+                text.textContent = `Active (${status.timerName})`;
+            } else {
+                dot.classList.remove('active');
+                dot.classList.add('inactive');
+                text.textContent = 'Inactive';
+            }
+        }
+
+        function addLogEntry(type, title, message) {
+            const log = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+            
+            entry.innerHTML = `
+                <div class="timestamp">${timestamp}</div>
+                <div class="message"><strong>${title}:</strong> ${message}</div>
+            `;
+            
+            log.insertBefore(entry, log.firstChild);
+            
+            // Keep only last 50 entries
+            while (log.children.length > 50) {
+                log.removeChild(log.lastChild);
+            }
+
+            eventCounter++;
+            document.getElementById('eventCount').textContent = eventCounter;
+        }
+
+        function clearLog() {
+            const log = document.getElementById('eventLog');
+            log.innerHTML = '<div class="log-entry"><div class="timestamp">Log cleared</div><div class="message">Waiting for new events...</div></div>';
+        }
+
+        // Simulate event flow (for demo purposes - remove when connecting to real script)
+        function simulateEvent(eventType) {
+            addLogEntry('success', 'Event Received', eventType);
+            document.getElementById('lastEventType').textContent = eventType;
+            
+            // Activate flow based on event type
+            activateNode('webhook');
+            setTimeout(() => activateNode('parse'), 300);
+            setTimeout(() => activateNode('route'), 600);
+            
+            switch(eventType) {
+                case 'Follow':
+                    setTimeout(() => {
+                        activateNode('handleFollow');
+                        setTimeout(() => activateNode('updateFollowGoal'), 300);
+                        setTimeout(() => activateNode('logEvent'), 600);
+                    }, 900);
+                    break;
+                    
+                case 'Subscription':
+                    setTimeout(() => {
+                        activateNode('handleSub');
+                        setTimeout(() => activateNode('checkSubathon'), 300);
+                        const isSubathon = document.getElementById('subathonText').textContent !== 'Inactive';
+                        if (isSubathon) {
+                            setTimeout(() => {
+                                activateNode('queueSub');
+                                setTimeout(() => activateNode('eventQueue'), 300);
+                                setTimeout(() => activateNode('autoProcess'), 600);
+                                setTimeout(() => activateNode('processQueue'), 900);
+                                setTimeout(() => activateNode('calcTime'), 1200);
+                                setTimeout(() => activateNode('addTime'), 1500);
+                                setTimeout(() => activateNode('updateGoals'), 1800);
+                                setTimeout(() => activateNode('logEvent'), 2100);
+                            }, 600);
+                        } else {
+                            setTimeout(() => {
+                                activateNode('updateSubGoal');
+                                setTimeout(() => activateNode('logEvent'), 300);
+                            }, 600);
+                        }
+                    }, 900);
+                    break;
+                    
+                case 'Bits':
+                    setTimeout(() => {
+                        activateNode('handleBits');
+                        setTimeout(() => activateNode('checkSubathonBits'), 300);
+                        setTimeout(() => activateNode('queueBits'), 600);
+                        setTimeout(() => activateNode('eventQueue'), 900);
+                    }, 900);
+                    break;
+                    
+                case 'Donation':
+                    setTimeout(() => {
+                        activateNode('handleDonation');
+                        setTimeout(() => activateNode('checkSubathonDonation'), 300);
+                        setTimeout(() => activateNode('queueDonation'), 600);
+                        setTimeout(() => activateNode('eventQueue'), 900);
+                    }, 900);
+                    break;
+                    
+                case 'Hype Train':
+                    setTimeout(() => {
+                        activateNode('handleHype');
+                        setTimeout(() => activateNode('setMultiplier'), 300);
+                        setTimeout(() => activateNode('logEvent'), 600);
+                    }, 900);
+                    break;
+            }
+        }
+
+        // Demo buttons (remove in production)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === '1') simulateEvent('Follow');
+            if (e.key === '2') simulateEvent('Subscription');
+            if (e.key === '3') simulateEvent('Bits');
+            if (e.key === '4') simulateEvent('Donation');
+            if (e.key === '5') simulateEvent('Hype Train');
+        });
+    </script>
+</body>
+</html>
