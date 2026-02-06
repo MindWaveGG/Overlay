@@ -350,7 +350,7 @@ function drawAll() {
             finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
         } else {
             // Stack 2 (Inside): Draw inward from the camera (seamless transition)
-			ringZoneStart = cameraRadius - 5; // 690px
+			ringZoneStart = cameraRadius - 2; // 690px
             const inwardIndex = index - maxOuterRings;
             // The first inward ring sits exactly where the camera boundary is
 			finalRadius = ringZoneStart - (inwardIndex * effectiveRingSize) + (donutWidth / 2);
