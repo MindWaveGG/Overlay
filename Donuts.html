@@ -282,7 +282,7 @@ function drawAll(){
     const nowSec = Date.now() / 1000;
     const t = (Math.sin(nowSec) + 1) / 2;
     const colorHex = rgbToHex(lerpColor(red,blue,t));
-
+	const HypecolorHex = rgbToHex(lerpColor(red,gold,t));
     const data = [
         { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
         { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
@@ -304,7 +304,7 @@ function drawAll(){
 		const current = Number(hypeTrainData.currentLevel) || 0;
 		const goal = Number(hypeTrainData.goalLevel) || 0;
 		const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
-const hypeLevelColor = colorHex; // Or whatever dynamic hex you want
+const hypeLevelColor = HypecolorHex; // Or whatever dynamic hex you want
 		// Update label to show current/goal instead of just current
 		data.push({
 			label: `Hype Train Level: ${current}/${goal}`,
