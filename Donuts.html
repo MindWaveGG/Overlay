@@ -351,7 +351,7 @@ function drawAll() {
             // Stack 2 (Inside): Draw inward from the camera (seamless transition)
             const inwardIndex = index - maxOuterRings;
             // The first inward ring sits exactly where the camera boundary is
-            finalRadius = (cameraRadius - 0) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
+            finalRadius = (cameraRadius - 5) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
