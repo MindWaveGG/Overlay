@@ -346,14 +346,15 @@ function drawAll() {
         // If the index is within the max outer rings count, draw outside
         if (index < maxOuterRings) {
             // Stack 1 (Outside): Draw outward with shrinking scale
+			
             finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
         } else {
             // Stack 2 (Inside): Draw inward from the camera (seamless transition)
-			
 			ringZoneStart = cameraRadius + 0; // 690px
             const inwardIndex = index - maxOuterRings;
             // The first inward ring sits exactly where the camera boundary is
-            finalRadius = (cameraRadius - 0) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
+			finalRadius = ringZoneStart - (inwardIndex * effectiveRingSize) + (donutWidth / 2);
+            //finalRadius = (cameraRadius - 0) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
