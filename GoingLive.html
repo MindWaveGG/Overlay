@@ -231,26 +231,27 @@ function drawCameraCircle(x,y,radius,alpha){
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
 }
 
-function drawDonut(x, y, radius, width, percentage, color, ccw = false) {
+function drawDonut(x, y, radius, width, percentage, color, ccw = false, startAngleOffset = 0) {
     if (percentage <= 0) return;
-
-    const startAngle = -Math.PI / 2;
+    
+    // Convert offset from degrees to radians and add to base start angle
+    const startAngle = -Math.PI / 2 + (startAngleOffset * Math.PI / 180);
     const endAngle = startAngle + (ccw ? -1 : 1) * (Math.PI * 2 * percentage);
-
+    
     // Main ring
     ctx.beginPath();
     ctx.arc(x, y, radius, startAngle, endAngle, ccw);
     ctx.lineWidth = width;
     ctx.strokeStyle = color;
     ctx.stroke();
-
+    
     // Outer glow / highlight
     ctx.beginPath();
     ctx.arc(x, y, radius + width / 2, startAngle, endAngle, ccw);
     ctx.lineWidth = 5;
     ctx.strokeStyle = color;
     ctx.stroke();
-
+    
     // Inner black edge
     ctx.beginPath();
     ctx.arc(x, y, radius - width / 2, startAngle, endAngle, ccw);
@@ -344,7 +345,7 @@ function drawAll() {
             allowIn: true,
             noLabel: isGoingLive,
             goingLive: isGoingLive,
-            ccw: isGoingLive ? (idx % 2 === 0) : false
+            ccw: false // ✅ All counter-clockwise now
         };
 
         if (isGoingLive) goingLiveTimers.push(item);
@@ -367,7 +368,7 @@ function drawAll() {
 
     // 6️⃣ Sort by percentage descending
     data.sort((a,b)=>b.percentage - a.percentage);
-    goingLiveTimers.sort((a,b)=>b.percentage - a.percentage); // ✅ ADDED: Sort GoingLive timers too
+    goingLiveTimers.sort((a,b)=>b.percentage - a.percentage);
 
     // 7️⃣ Separate outward/inward stacks
     let outward = data.filter(d=>d.allowOut);
@@ -392,14 +393,22 @@ function drawAll() {
         item.finalRadius = inwardStart - i*stepIn - donutWidthIn/2;
     });
 
+    // ✅ ADDED: Set start angle offset for GoingLive timers (15 degrees per timer)
     goingLiveTimers.forEach((item,i)=>{
         item.finalRadius = inwardStart - (inward.length + i)*stepIn - donutWidthIn/2;
+        item.startAngleOffset = i * 15; // Each timer offset by 15 degrees
     });
 
     // 8️⃣ Draw all donuts
-    [...outward, ...inward, ...goingLiveTimers].forEach(item=>{
+    [...outward, ...inward].forEach(item=>{
         if(!item.finalRadius) return;
-        drawDonut(centerX, centerY, item.finalRadius, item.goingLive ? donutWidthIn : donutWidthOut, item.percentage, item.color, item.ccw || false);
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthOut, item.percentage, item.color, item.ccw || false);
+    });
+
+    // ✅ Draw GoingLive timers separately with start angle offsets
+    goingLiveTimers.forEach(item=>{
+        if(!item.finalRadius) return;
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthIn, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
     });
 
     // 9️⃣ Draw labels dynamically
@@ -429,6 +438,7 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
+
 
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
