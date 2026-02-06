@@ -301,13 +301,18 @@ function drawAll(){
 
 	// Add Hype Train if active and overlay not expired
 	if(hypeTrainData && hypeTrainData.hypeTrainActive){
-		const percentage = hypeTrainData.goalLevel > 0 ? Math.min(1, hypeTrainData.currentLevel / hypeTrainData.goalLevel) : 0;
+		const current = Number(hypeTrainData.currentLevel) || 0;
+		const goal = Number(hypeTrainData.goalLevel) || 0;
+		const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
+
+		// Update label to show current/goal instead of just current
 		data.push({
-			label: `Hype Train Level: ${hypeTrainData.currentLevel}`,
+			label: `Hype Train Level: ${current}/${goal}`,
 			percentage: percentage,
 			color: '#FFD700' // gold for hype train
 		});
 	}
+
 
     data.sort((a,b)=>b.percentage-a.percentage);
 
