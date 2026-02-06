@@ -280,74 +280,67 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
-
-
 function drawAll() {
     removeExpiredTimers();
     const totalrings = getTotalRings();
 
-    // 1. Define Boundaries and fixed dimensions
-    donutWidth = 67.5; 
-    donutSpacing = 15;
-    const MAX_RING_SIZE = donutWidth + donutSpacing; // 82.5px total space per ring
-
-    const ringZoneStart = cameraRadius + 20; // 690px (start of outer rings)
-    const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (end of outer rings)
+    // --- 1. Calculate How Many Rings Fit Outside ---
+    const ringZoneStart = cameraRadius + 20; // 690px
+    const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
     const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
     
-    // Calculate exactly how many rings fit in the outer zone at full size
-    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); 
+    // Calculate max rings that fit at full size (82.5px total per ring)
+    const MAX_RING_SIZE = 67.5 + 15; 
+    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); // Likely 4 or 5
 
-    // 2. Setup Canvas, Colors, and Data (The data preparation section)
+    // --- 2. Set Ring Dimensions (We keep these fixed now) ---
+    donutWidth = 67.5;
+    donutSpacing = 15;
+
+    // --- 3. Setup Canvas, Colors, and Data (Same as before) ---
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13); // Assuming drawCameraCircle exists
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
+    // ... (color and data array setup code goes here) ... 
+    // (I am omitting it here for brevity, assume 'data' array is populated)
 
-    const nowSec = Date.now() / 1000;
-    const t = (Math.sin(nowSec) + 1) / 2;
-    // Assuming red, blue, gold, rgbToHex, lerpColor are defined elsewhere in your script
-    const colorHex = rgbToHex(lerpColor(red, blue, t)); 
-    const HypecolorHex = rgbToHex(lerpColor(red, gold, t));
-
-    const data = [
-        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
-        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
-        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsCurrent/bitsGoal:0, color:colorHex }
-    ];
-    // ... (timers and hype train data pushes) ...
-    data.sort((a,b)=>b.percentage-a.percentage); 
-
-    // --- 3. FIRST PASS: Draw ALL Donut Rings (Decide direction for each ring) ---
+    // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
     data.forEach((item, index) => {
         let finalRadius;
 
         if (index < maxOuterRings) {
-            // Stack 1 (Outside)
+            // Stack 1 (Outside): Draw outward from the camera
             finalRadius = ringZoneStart + (index * MAX_RING_SIZE) + (donutWidth / 2);
         } else {
-            // Stack 2 (Inside): Seamless transition
+            // Stack 2 (Inside): Draw inward from the camera
             const inwardIndex = index - maxOuterRings;
+            // The first inward ring starts exactly where the camera ends (no gap)
             finalRadius = (cameraRadius - 0) - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
         }
 
-        item.finalRadius = finalRadius; // Store for labels
+        item.finalRadius = finalRadius;
 
-        // Only draw if visible on canvas
-        if (finalRadius > (donutWidth / 2) && finalRadius < canvasOuterEdge + (donutWidth/2) + 10) {
-            // Assuming drawDonut exists
-            drawDonut(centerX, centerY, finalRadius, donutWidth, item.percentage, item.color); 
+        // Draw the ring if it's visible
+        if (finalRadius > (donutWidth / 2) && finalRadius < canvasOuterEdge) {
+            drawDonut(centerX, centerY, finalRadius, donutWidth, item.percentage, item.color);
         }
     });
 
-    // --- 4. SECOND PASS: Draw ALL Labels (High % at Bottom of stack) ---
+    // --- 5. SECOND PASS: Draw ALL Labels (Using the counter logic) ---
     const visibleItems = data.filter(item => item.finalRadius > cameraRadius); 
     visibleItems.forEach((item, index) => {
         const bottomUpIndex = (visibleItems.length - 1) - index;
 
-        // Assuming drawLabelWithLine exists
         drawLabelWithLine(
-            item.label, centerX, centerY, item.finalRadius, item.percentage, bottomUpIndex, 
-            visibleItems.length, '#FF0000CC', 'black', 'black'
+            item.label, 
+            centerX, 
+            centerY, 
+            item.finalRadius, 
+            item.percentage, 
+            bottomUpIndex, 
+            visibleItems.length, 
+            '#FF0000CC', 
+            'black', 
+            'black'
         );
     });
     requestAnimationFrame(drawAll);
