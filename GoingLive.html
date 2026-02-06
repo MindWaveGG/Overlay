@@ -311,7 +311,6 @@ function drawAll() {
 
     const ringZoneStart = cameraRadius + 20;
     const canvasOuterEdge = (canvas.width / 2) - 40;
-
     const outerSpace = canvasOuterEdge - ringZoneStart;
     const innerSpace = ringZoneStart - cameraRadius;
 
@@ -322,10 +321,10 @@ function drawAll() {
     const hypeHex  = rgbToHex(lerpColor(red, gold, t));
 
     let data = [
-        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
-        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
-        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true }
+        { label:'Followers', percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:'Subs', percentage:subGoal?subCurrent/subGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:'Donations', percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:'Bits', percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true }
     ];
 
     let goingLiveTimers = [];
@@ -335,12 +334,12 @@ function drawAll() {
         const isGoingLive = timer.name.includes("GoingLive");
 
         const item = {
-            label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
+            timer: timer,               // attach timer object for live countdown
             percentage: tRem.percentage,
             color: isGoingLive ? '#00FFFF' : colorHex,
             allowOut: !isGoingLive,
             allowIn: true,
-            noLabel: isGoingLive,
+            noLabel: isGoingLive,       // GoingLive timers have no labels
             goingLive: isGoingLive,
             ccw: isGoingLive ? (idx % 2 === 0) : false // alternate CW/CCW
         };
@@ -353,11 +352,12 @@ function drawAll() {
         const cur = Number(hypeTrainData.currentLevel) || 0;
         const goal = Number(hypeTrainData.goalLevel) || 1;
         data.push({
-            label:`Hype Train ${cur}/${goal}`,
+            label:'Hype Train',
             percentage: Math.min(1, cur / goal),
             color: hypeHex,
             allowOut:true,
-            allowIn:true
+            allowIn:true,
+            isGoal:true
         });
     }
 
@@ -369,14 +369,13 @@ function drawAll() {
     let inward = []; // will be for spillover
 
     // --- 5. DYNAMIC OUTWARD SCALING ---
-    let donutWidthOut = Math.max(12, outerSpace / Math.max(1, outward.length) * 0.8);
-    const donutSpacingOut = Math.max(6, outerSpace / Math.max(1, outward.length) * 0.2);
+    const donutWidthOut = Math.max(12, (outerSpace / Math.max(1, outward.length)) * 0.8);
+    const donutSpacingOut = Math.max(6, (outerSpace / Math.max(1, outward.length)) * 0.2);
     const stepOut = donutWidthOut + donutSpacingOut;
 
     // --- 6. PLACE OUTWARD ---
     outward.forEach((item, i) => {
         const r = ringZoneStart + (i * stepOut) + donutWidthOut / 2;
-        // if radius exceeds outerSpace, push to inward
         if (r + donutWidthOut/2 > canvasOuterEdge) {
             inward.push(item);
         } else {
@@ -385,8 +384,7 @@ function drawAll() {
     });
 
     // --- 7. PLACE INWARD (spillover + GoingLive) ---
-    // calculate starting radius for inward stack to avoid overlap
-    let inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
+    const inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
     const donutWidthIn = Math.max(12, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
     const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.2);
     const stepIn = donutWidthIn + donutSpacingIn;
@@ -395,7 +393,6 @@ function drawAll() {
         item.finalRadius = inwardStart - i * stepIn - donutWidthIn/2;
     });
 
-    // GoingLive timers stacked further inward
     goingLiveTimers.forEach((item, i) => {
         item.finalRadius = inwardStart - (inward.length + i) * stepIn - donutWidthIn/2;
         inward.push(item);
@@ -407,21 +404,71 @@ function drawAll() {
         drawDonut(centerX, centerY, item.finalRadius, item.goingLive ? donutWidthIn : donutWidthOut, item.percentage, item.color, item.ccw || false);
     });
 
-    // --- 9. LABELS ---
+    // --- 9. DRAW LABELS (recompute dynamically) ---
     outward.forEach((item, i) => {
         if (item.noLabel || !item.finalRadius) return;
-        drawLabelWithLine(item.label, centerX, centerY, item.finalRadius, item.percentage,
-            (outward.length - 1) - i, outward.length, '#FF0000CC','black','black');
+
+        let label = '';
+        if (item.isGoal) {
+            switch(item.label) {
+                case 'Followers': label = `Followers: ${followerCurrent}/${followerGoal}`; break;
+                case 'Subs': label = `Subs: ${subCurrent}/${subGoal}`; break;
+                case 'Donations': label = `Donations: $${donationCurrent}/$${donationGoal}`; break;
+                case 'Bits': label = `Bits: ${bitsCurrent}/${bitsGoal}`; break;
+                default: label = item.label;
+            }
+        } else if (item.timer) {
+            const tRem = getTimeRemaining(item.timer);
+            label = `${item.timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`;
+        } else {
+            label = item.label;
+        }
+
+        drawLabelWithLine(
+            label,
+            centerX,
+            centerY,
+            item.finalRadius,
+            item.percentage,
+            (outward.length - 1) - i,
+            outward.length,
+            '#FF0000CC','black','black'
+        );
     });
+
     inward.forEach((item, i) => {
         if (item.noLabel || !item.finalRadius) return;
-        drawLabelWithLine(item.label, centerX, centerY, item.finalRadius, item.percentage,
-            (inward.length - 1) - i, inward.length, '#FF0000CC','black','black');
+
+        let label = '';
+        if (item.isGoal) {
+            switch(item.label) {
+                case 'Followers': label = `Followers: ${followerCurrent}/${followerGoal}`; break;
+                case 'Subs': label = `Subs: ${subCurrent}/${subGoal}`; break;
+                case 'Donations': label = `Donations: $${donationCurrent}/$${donationGoal}`; break;
+                case 'Bits': label = `Bits: ${bitsCurrent}/${bitsGoal}`; break;
+                default: label = item.label;
+            }
+        } else if (item.timer) {
+            const tRem = getTimeRemaining(item.timer);
+            label = `${item.timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`;
+        } else {
+            label = item.label;
+        }
+
+        drawLabelWithLine(
+            label,
+            centerX,
+            centerY,
+            item.finalRadius,
+            item.percentage,
+            (inward.length - 1) - i,
+            inward.length,
+            '#FF0000CC','black','black'
+        );
     });
 
     requestAnimationFrame(drawAll);
 }
-
 
 
 // ----------------- PERIODIC REFRESH -----------------
