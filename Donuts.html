@@ -282,23 +282,26 @@ function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).sl
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
 
-
 function drawAll() {
     removeExpiredTimers();
     const totalrings = getTotalRings();
 
-    const DESIRED_GAP_PX = 5; 
-
-    const ringZoneStart = cameraRadius + 20; 
-    const canvasOuterEdge = (canvas.width / 2) - 40; 
+    // 1. Define Boundaries
+    const ringZoneStart = cameraRadius + 20; // 690px
+    const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
     const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
     
-    const MAX_RING_SIZE = 67.5 + 15; 
-    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); 
+    // 2. Dynamic Scaling Logic (Shrinks ALL rings to fit the space if needed)
+    let unitSize = outerSpaceAvailable / totalrings;
+    // Set donutWidth/Spacing dynamically based on the available space per ring
+    donutWidth = Math.max(12, unitSize * 0.8);
+    donutSpacing = Math.max(6, unitSize * 0.2);
+    const effectiveRingSize = donutWidth + donutSpacing;
 
-    donutWidth = 67.5;
-    donutSpacing = 15;
+    // Calculate exactly how many rings fit in the outer zone with this new dynamic size
+    const maxOuterRings = Math.floor(outerSpaceAvailable / effectiveRingSize);
 
+    // 3. Setup Canvas, Colors, and Data (Same as before)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
@@ -311,7 +314,7 @@ function drawAll() {
         { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
         { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
         { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsCurrent/bitsGoal:0, color:colorHex }
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
     ];
 
     timers.forEach(timer => {
@@ -336,17 +339,19 @@ function drawAll() {
 
     data.sort((a,b)=>b.percentage-a.percentage);
 
-    // --- 4. FIRST PASS: Draw ALL Donut Rings ---
+    // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
     data.forEach((item, index) => {
         let finalRadius;
 
+        // If the index is within the max outer rings count, draw outside
         if (index < maxOuterRings) {
-            finalRadius = ringZoneStart + (index * MAX_RING_SIZE) + (donutWidth / 2);
+            // Stack 1 (Outside): Draw outward with shrinking scale
+            finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
         } else {
+            // Stack 2 (Inside): Draw inward from the camera (seamless transition)
             const inwardIndex = index - maxOuterRings;
-            // FIXED LINE: Calculates center radius for a 5px visual gap
-            const innerEdgeStart = cameraRadius - DESIRED_GAP_PX; 
-            finalRadius = innerEdgeStart - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
+            // The first inward ring sits exactly where the camera boundary is
+            finalRadius = (cameraRadius - 0) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
@@ -376,11 +381,6 @@ function drawAll() {
     });
     requestAnimationFrame(drawAll);
 }
-
-
-
-
-
 
 
 // ----------------- PERIODIC REFRESH -----------------
