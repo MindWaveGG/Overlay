@@ -284,20 +284,22 @@ function drawAll() {
     removeExpiredTimers();
     const totalrings = getTotalRings();
 
-    // --- 1. Calculate How Many Rings Fit Outside ---
+    // 1. Define Boundaries
     const ringZoneStart = cameraRadius + 20; // 690px
     const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
     const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
     
-    // Calculate max rings that fit at full size (82.5px total per ring)
-    const MAX_RING_SIZE = 67.5 + 15; 
-    const maxOuterRings = Math.floor(outerSpaceAvailable / MAX_RING_SIZE); // Likely 4 or 5
+    // 2. Dynamic Scaling Logic (Shrinks ALL rings to fit the space if needed)
+    let unitSize = outerSpaceAvailable / totalrings;
+    // Set donutWidth/Spacing dynamically based on the available space per ring
+    donutWidth = Math.max(12, unitSize * 0.8);
+    donutSpacing = Math.max(6, unitSize * 0.2);
+    const effectiveRingSize = donutWidth + donutSpacing;
 
-    // --- 2. Set Ring Dimensions (We keep these fixed now) ---
-    donutWidth = 67.5;
-    donutSpacing = 15;
+    // Calculate exactly how many rings fit in the outer zone with this new dynamic size
+    const maxOuterRings = Math.floor(outerSpaceAvailable / effectiveRingSize);
 
-    // --- 3. Setup Canvas, Colors, and Data (The Missing Section) ---
+    // 3. Setup Canvas, Colors, and Data (Same as before)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
@@ -333,19 +335,21 @@ function drawAll() {
         });
     }
 
-    data.sort((a,b)=>b.percentage-a.percentage); // Sort by highest percentage first
+    data.sort((a,b)=>b.percentage-a.percentage);
 
     // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
     data.forEach((item, index) => {
         let finalRadius;
 
+        // If the index is within the max outer rings count, draw outside
         if (index < maxOuterRings) {
-            // Stack 1 (Outside): Draw outward from the camera
-            finalRadius = ringZoneStart + (index * MAX_RING_SIZE) + (donutWidth / 2);
+            // Stack 1 (Outside): Draw outward with shrinking scale
+            finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
         } else {
-            // Stack 2 (Inside): Draw inward from the camera
+            // Stack 2 (Inside): Draw inward from the camera (seamless transition)
             const inwardIndex = index - maxOuterRings;
-            finalRadius = (cameraRadius - 0) - (inwardIndex * MAX_RING_SIZE) - (donutWidth / 2);
+            // The first inward ring sits exactly where the camera boundary is
+            finalRadius = (cameraRadius - 0) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
         }
 
         item.finalRadius = finalRadius;
@@ -375,6 +379,7 @@ function drawAll() {
     });
     requestAnimationFrame(drawAll);
 }
+
 
 
 
