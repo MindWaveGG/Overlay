@@ -265,24 +265,46 @@ function drawAll(){
 
     const totalrings = getTotalRings();
 
+    // 1. Fixed constraints to protect your camera and the canvas edge
+    const canvasLimit = (canvas.width / 2) - 60; // 1040px from center (safe boundary)
+    const ringZoneStart = cameraRadius + 20;      // Starts right after camera circle
+    const totalAvailableSpace = canvasLimit - ringZoneStart; 
+
+    // 2. Dynamic Scaling Logic
     if (totalrings > 4) {
-        donutWidth   = Math.max(12, 67.5 * (4 / totalrings));
-        donutSpacing = Math.max(6, 15 * (4 / totalrings));
+        // Calculate the maximum space one ring + one gap can occupy
+        let unitSize = totalAvailableSpace / totalrings;
+
+        // Allocate 80% to ring, 20% to gap (matches your roughly 4:1 ratio)
+        donutWidth = unitSize * 0.8;
+        donutSpacing = unitSize * 0.2;
+
+        // Safety floor so rings don't become 1-pixel lines
+        if (donutWidth < 12) {
+            donutWidth = 12;
+            donutSpacing = 6;
+        }
     } else {
+        // Default values for standard 4 rings
         donutWidth = 67.5;
         donutSpacing = 15;
     }
 
-    // 🔑 recompute baseRadius AFTER scaling
-    const baseRadius = cameraRadius + donutSpacing + donutWidth;
+    // 3. Recompute baseRadius
+    // This is the radius of the INMOST ring.
+    // We add half the donutWidth so the arc draws centered on the path.
+    const baseRadius = ringZoneStart + (donutWidth / 2);
 
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    drawCameraCircle(centerX,centerY,cameraRadius+20,0.13);
+    
+    // Draw your fixed camera area
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
     const nowSec = Date.now() / 1000;
     const t = (Math.sin(nowSec) + 1) / 2;
-    const colorHex = rgbToHex(lerpColor(red,blue,t));
-	const HypecolorHex = rgbToHex(lerpColor(red,gold,t));
+    const colorHex = rgbToHex(lerpColor(red, blue, t));
+    const HypecolorHex = rgbToHex(lerpColor(red, gold, t));
+
     const data = [
         { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
         { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
@@ -296,28 +318,24 @@ function drawAll(){
             label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
             percentage: tRem.percentage,
             color: (timer.name === 'Hype Train') ? HypecolorHex : colorHex
-			
         });
     });
 
-	// Add Hype Train if active and overlay not expired
-	if(hypeTrainData && hypeTrainData.hypeTrainActive){
-		const current = Number(hypeTrainData.currentLevel) || 0;
-		const goal = Number(hypeTrainData.goalLevel) || 0;
-		const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
-const hypeLevelColor = HypecolorHex; // Or whatever dynamic hex you want
-		// Update label to show current/goal instead of just current
-		data.push({
-			label: `Hype Train Level: ${current}/${goal}`,
-			percentage: percentage,
-			color: hypeLevelColor // gold for hype train
-		});
-	}
-
+    if(hypeTrainData && hypeTrainData.hypeTrainActive){
+        const current = Number(hypeTrainData.currentLevel) || 0;
+        const goal = Number(hypeTrainData.goalLevel) || 0;
+        const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
+        data.push({
+            label: `Hype Train Level: ${current}/${goal}`,
+            percentage: percentage,
+            color: HypecolorHex 
+        });
+    }
 
     data.sort((a,b)=>b.percentage-a.percentage);
 
-    data.forEach((item,index)=>
+    // 4. Draw Rings
+    data.forEach((item, index) =>
         drawDonut(
             centerX,
             centerY,
@@ -328,7 +346,8 @@ const hypeLevelColor = HypecolorHex; // Or whatever dynamic hex you want
         )
     );
 
-    data.forEach((item,index)=>
+    // 5. Draw Labels
+    data.forEach((item, index) =>
         drawLabelWithLine(
             item.label,
             centerX,
@@ -345,6 +364,7 @@ const hypeLevelColor = HypecolorHex; // Or whatever dynamic hex you want
 
     requestAnimationFrame(drawAll);
 }
+
 
 
 // ----------------- PERIODIC REFRESH -----------------
