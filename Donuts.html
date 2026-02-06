@@ -364,24 +364,29 @@ function drawAll() {
         }
     });
 
-    // --- 5. SECOND PASS: Draw ALL Labels (High % at Bottom of stack) ---
-    const visibleItems = data.filter(item => item.finalRadius > cameraRadius); 
-    visibleItems.forEach((item, index) => {
-        const bottomUpIndex = (visibleItems.length - 1) - index;
+    // --- 5. SECOND PASS: Draw ALL Labels ---
+	// Remove the filter so all items in 'data' are processed
+	data.forEach((item, index) => {
+		// Only skip labels if the ring is physically off-canvas (too small to see)
+		if (item.finalRadius <= (donutWidth / 2)) return;
 
-        drawLabelWithLine(
-            item.label, 
-            centerX, 
-            centerY, 
-            item.finalRadius, 
-            item.percentage, 
-            bottomUpIndex, 
-            visibleItems.length, 
-            '#FF0000CC', 
-            'black', 
-            'black'
-        );
-    });
+		// Use the original index to maintain the correct vertical stacking/spacing
+		const bottomUpIndex = (data.length - 1) - index;
+
+			drawLabelWithLine(
+				item.label, 
+				centerX, 
+				centerY, 
+				item.finalRadius, 
+				item.percentage, 
+				bottomUpIndex, 
+				data.length, // Use full data length for consistent spacing
+				'#FF0000CC', 
+				'black', 
+				'black'
+			);
+	});
+
     requestAnimationFrame(drawAll);
 }
 
