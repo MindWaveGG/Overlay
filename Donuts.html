@@ -341,7 +341,7 @@ function drawAll() {
         if (projectedRadius + (donutWidth / 2) > canvasLimit) {
             const maxOuter = Math.floor(outerSpace / (donutWidth + donutSpacing));
             const overflowIndex = index - maxOuter;
-            finalRadius = (cameraRadius - 10) - (overflowIndex * (donutWidth + donutSpacing)) - (donutWidth / 2);
+            finalRadius = (cameraRadius - 5) - (overflowIndex * (donutWidth + donutSpacing)) - (donutWidth / 2);
         } else {
             finalRadius = projectedRadius;
         }
