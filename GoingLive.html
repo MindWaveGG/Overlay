@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timer and Goal Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<style>
+    body { font-family: Arial, sans-serif; margin:0; padding:20px; }
+    h1 { text-align:center; }
+    .container { display:flex; justify-content:space-around; flex-wrap:wrap; }
+    .chart-container { width:300px; height:300px; margin:20px; }
+    .stats { text-align:center; margin-top:10px; }
+    #countdownTimer { font-size:1.5em; font-weight:bold; }
+    #timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
+</style>
+</head>
+<body>
+<canvas id="myCanvas"></canvas>
+<h1>Timer and Goal Tracker</h1>
+<div id="errorMessage" style="color:red;"></div>
+
+<div id="countdownTimer"></div>
+<div id="timerStats"></div>
+<div id="targetDateDisplay"></div>
+
+<div class="container">
+    <div class="chart-container"><canvas id="timerChart"></canvas></div>
+    <div class="chart-container"><canvas id="followerChart"></canvas><div id="followerStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="subscriptionChart"></canvas><div id="subscriptionStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="bitsChart"></canvas><div id="bitsStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="donationChart"></canvas><div id="donationStats" class="stats"></div></div>
+    <div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">Last refresh: N/A</div>
+</div>
+
+<script>
+let initiationComplete = false;
+let timerChart = null;
+const goalCharts = {};
+let timers = []; // <-- store all active timers
+let totalrings = 4;
+let followerCurrent=0, followerGoal=0;
+let subCurrent=0, subGoal=0;
+let donationCurrent=0, donationGoal=0;
+let bitsCurrent=0, bitsGoal=0;
+
+const canvas = document.getElementById('myCanvas');
+const ctx = canvas.getContext('2d');
+const canvasSize = 2200;
+canvas.width = canvasSize; canvas.height = canvasSize;
+const centerX = canvas.width/2, centerY = canvas.height/2;
+let donutWidth = 67.5; 
+let donutSpacing = 15, cameraRadius = 670, baseRadius = cameraRadius + donutSpacing + donutWidth;
+
+const cameraImage = new Image();
+cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
+
+// ----------------- UTILITY FETCH -----------------
+async function fetchData(url) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Network error");
+        return await response.json();
+    } catch (error) {
+        console.error("Fetch error:", error);
+        document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
+        return null;
+    }
+}
+
+function getTotalRings() {
+    let count = 4 + timers.length;
+    if(hypeTrainData && hypeTrainData.hypeTrainActive) count += 1;
+    return count;
+}
+
+
+
+// ----------------- TIMER & GOALS -----------------
+async function loadInitialData() {
+    await getUpdatedTimerData();
+    await fetchAllGoalData();
+    initiationComplete = true;
+}
+
+// ----------------- MULTI-TIMER -----------------
+async function getUpdatedTimerData() {
+    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getTimers";
+    const timerDataArray = await fetchData(url);
+    if(timerDataArray && timerDataArray.length>0){
+        timers = timerDataArray.map(t => ({
+            name: t.timerName,
+            startTime: new Date(t.startDateTime),
+            endTime: new Date(t.endDateTime)
+        }));
+		
+		document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
+            `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
+        ).join('<br>');
+    } else {
+        timers = [];
+        document.getElementById("targetDateDisplay").textContent = "No active timers";
+    }
+ if(timers.length > 0) {
+	totalrings = 4 + timers.length;
+ }
+}
+
+function getTimeRemaining(timer){
+    const now = new Date().getTime();
+    const timeLeft = timer.endTime - now;
+    const totalDuration = timer.endTime - timer.startTime;
+
+    // Change this line:
+    const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
+
+    return {
+        countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
+        countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
+        countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
+        countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
+        percentage // Now 1.0 at start, 0.0 at finish
+    };
+}
+
+
+async function removeExpiredTimers() {
+    const now = new Date().getTime();
+
+    for (let i = timers.length - 1; i >= 0; i--) { // iterate backwards to safely remove
+        const timer = timers[i];
+        if (timer.endTime <= now) {
+            console.log(`Timer expired: ${timer.name}`);
+
+            // Call Google Apps Script to delete timer
+            const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+            fetch(url).then(r => r.json()).then(res => {
+                console.log('Deleted timer response:', res);
+            }).catch(err => console.error('Error deleting timer:', err));
+
+            // Remove from local array so it disappears from canvas immediately
+            timers.splice(i, 1);
+        }
+		
+    }
+}
+
+
+// ----------------- GOALS -----------------
+async function fetchAllGoalData() {
+    const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
+    await Promise.all(goalTypes.map(fetchGoalData));
+}
+
+async function fetchGoalData(goalType) {
+    const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const goalData = await fetchData(url);
+    if(goalData){
+        const current = goalData.CurrentCount;
+        const goal = goalData.goalValue;
+        if(current!==undefined && goal!==undefined){
+            updateGoalChart(goalType,current,goal);
+            updateGoalStats(goalType,current,goal);
+        }
+    }
+}
+
+let hypeTrainData = null;
+
+async function fetchHypeTrainData() {
+    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=gethypetrain";
+    const data = await fetchData(url);
+    if(data){
+        hypeTrainData = data;
+    } else {
+        hypeTrainData = null;
+    }
+}
+
+
+
+
+function updateGoalChart(goalType,current,goal){
+    const map = {"Follower Goal":"followerChart","Subscription Goal":"subscriptionChart","Bits Goal":"bitsChart","Donation Goal":"donationChart"};
+    const ctxGoal = document.getElementById(map[goalType])?.getContext('2d');
+    if(!ctxGoal) return;
+
+    const progress = goal>0?Math.min(100,(current/goal)*100):0;
+    const remaining = 100-progress;
+
+    if(!goalCharts[goalType]){
+        goalCharts[goalType] = new Chart(ctxGoal,{
+            type:'doughnut',
+            data:{labels:["Progress","Remaining"], datasets:[{data:[progress,remaining], backgroundColor:["#4caf50","#ddd"]}]},
+            options:{responsive:true, maintainAspectRatio:false,
+                plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>{
+                    const total = ctx.chart.data.datasets[0].data[0]+ctx.chart.data.datasets[0].data[1];
+                    const pct = Math.round(ctx.chart.data.datasets[0].data[0]/total*100);
+                    return ctx.dataset.data[0]===v?`${pct}%`:`${100-pct}%`;
+                }}}}, plugins:[ChartDataLabels]
+        });
+    } else {
+        goalCharts[goalType].data.datasets[0].data = [progress,remaining];
+        goalCharts[goalType].update();
+    }
+
+    // Save globals
+    if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
+    if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
+    if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
+    if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
+}
+
+function updateGoalStats(goalType,current,goal){
+    const map = {"Follower Goal":"followerStats","Subscription Goal":"subscriptionStats","Bits Goal":"bitsStats","Donation Goal":"donationStats"};
+    let cur=current, g=goal;
+    if(goalType==="Donation Goal"){
+        cur=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(current);
+        g=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(goal);
+    }
+    document.getElementById(map[goalType]).textContent = `${goalType}: ${cur} / ${g}`;
+}
+
+// ----------------- CANVAS -----------------
+function drawCameraCircle(x,y,radius,alpha){
+    ctx.save(); ctx.globalAlpha=alpha;
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(cameraImage,x-radius,y-radius,radius*2,radius*2);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
+}
+
+function drawDonut(x,y,radius,width,percentage,color){
+    if(percentage<=0) return;
+    const endAngle = Math.PI*2*percentage-Math.PI/2;
+    ctx.beginPath(); ctx.arc(x,y,radius,-Math.PI/2,endAngle); ctx.lineWidth=width; ctx.strokeStyle=color; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,radius+width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle=color; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,radius-width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle='black'; ctx.stroke();
+}
+
+function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
+    const padding=10, fontSize=80;
+    ctx.font=`bold ${fontSize}px Arial`;
+    const textWidth=ctx.measureText(label).width;
+    const labelWidth=textWidth+padding*2;
+    const labelHeight=fontSize+padding*2;
+
+    // --- FORCE TOP-LEFT START ---
+    // labelX = 100px from left edge
+    // labelY = 100px from top, plus height for each index
+    const labelX = 100;
+    const labelY = 100 + (index * (labelHeight + 20)); 
+
+    const angle = -Math.PI/2 + Math.PI*2*percentage;
+    const startX = x + radius * Math.cos(angle);
+    const startY = y + radius * Math.sin(angle);
+
+    // Draw Line
+    ctx.beginPath(); 
+    ctx.moveTo(startX,startY); 
+    ctx.lineTo(labelX + labelWidth, labelY + labelHeight/2); 
+    ctx.strokeStyle = lineColor; 
+    ctx.lineWidth = 4; 
+    ctx.stroke();
+
+    // Draw Box
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 10; 
+    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
+    ctx.fillStyle = '#0000007F'; 
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+
+    // Draw Text
+    ctx.fillStyle = 'white'; 
+    ctx.textAlign = 'left'; 
+    ctx.fillText(label, labelX + padding, labelY + fontSize + padding/2);
+}
+
+
+function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
+function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
+const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
+
+
+function drawAll() {
+    removeExpiredTimers();
+
+    // --- 1. Canvas + bounds ---
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
+
+    const ringZoneStart = cameraRadius + 20;
+    const canvasOuterEdge = (canvas.width / 2) - 40;
+
+    const outerSpace = canvasOuterEdge - ringZoneStart;
+    const innerSpace = ringZoneStart - cameraRadius;
+
+    // --- 2. Build DATA ---
+    const nowSec = Date.now() / 1000;
+    const t = (Math.sin(nowSec) + 1) / 2;
+    const colorHex = rgbToHex(lerpColor(red, blue, t));
+    const hypeHex  = rgbToHex(lerpColor(red, gold, t));
+
+    let data = [
+        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex, allowOut:true, allowIn:true },
+        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex, allowOut:true, allowIn:true },
+        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex, allowOut:true, allowIn:true },
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex, allowOut:true, allowIn:true }
+    ];
+
+    timers.forEach(timer => {
+        const tRem = getTimeRemaining(timer);
+        const isGoingLive = timer.name.includes("GoingLive");
+
+        data.push({
+            label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
+            percentage: tRem.percentage,
+            color: isGoingLive ? '#00FFFF' : colorHex,
+            allowOut: !isGoingLive,
+            allowIn: true,
+            noLabel: isGoingLive
+        });
+    });
+
+    if (hypeTrainData?.hypeTrainActive) {
+        const cur = Number(hypeTrainData.currentLevel) || 0;
+        const goal = Number(hypeTrainData.goalLevel) || 1;
+        data.push({
+            label:`Hype Train ${cur}/${goal}`,
+            percentage: Math.min(1, cur / goal),
+            color: hypeHex,
+            allowOut:true,
+            allowIn:true
+        });
+    }
+
+    // --- 3. GLOBAL SORT ---
+    data.sort((a, b) => b.percentage - a.percentage);
+
+    // --- 4. PLACEMENT SIMULATION ---
+    let outward = [];
+    let inward  = [];
+
+    data.forEach(item => {
+        if (item.allowOut && outward.length * 1 <= outerSpace) {
+            outward.push(item);
+        } else if (item.allowIn) {
+            inward.push(item);
+        }
+    });
+
+    // --- 5. SCALING ---
+    const outerUnit = outerSpace / Math.max(1, outward.length);
+    const innerUnit = innerSpace / Math.max(1, inward.length);
+
+    const unit = Math.min(outerUnit, innerUnit);
+
+    const donutWidth   = Math.max(12, unit * 0.8);
+    const donutSpacing = Math.max(6, unit * 0.2);
+    const step = donutWidth + donutSpacing;
+
+    // --- 6. DRAW OUTWARD ---
+    outward.forEach((item, i) => {
+        const r = ringZoneStart + (i * step) + donutWidth / 2;
+        item.finalRadius = r;
+        drawDonut(centerX, centerY, r, donutWidth, item.percentage, item.color);
+    });
+
+    // --- 7. DRAW INWARD ---
+    inward.forEach((item, i) => {
+        const r = ringZoneStart - (i * step) - donutWidth / 2;
+        item.finalRadius = r;
+        if (r > donutWidth / 2) {
+            drawDonut(centerX, centerY, r, donutWidth, item.percentage, item.color);
+        }
+    });
+
+    // --- 8. LABELS ---
+    [...outward, ...inward].forEach((item, i, arr) => {
+        if (item.noLabel) return;
+        if (!item.finalRadius) return;
+
+        const bottomUpIndex = (arr.length - 1) - i;
+        drawLabelWithLine(
+            item.label,
+            centerX,
+            centerY,
+            item.finalRadius,
+            item.percentage,
+            bottomUpIndex,
+            arr.length,
+            '#FF0000CC',
+            'black',
+            'black'
+        );
+    });
+
+    requestAnimationFrame(drawAll);
+}
+
+
+
+// ----------------- PERIODIC REFRESH -----------------
+async function refreshDataPeriodically(){
+    setInterval(async ()=>{
+        const now = new Date();
+        document.getElementById("refreshTracker").textContent=`Refreshing data at: ${now.toLocaleTimeString()}`;
+        await getUpdatedTimerData();
+        await fetchAllGoalData();
+        await fetchHypeTrainData(); // <--- add this
+    },5000);
+}
+
+
+// ----------------- INIT -----------------
+cameraImage.onload = ()=>{drawAll();}
+async function init(){await loadInitialData(); drawAll(); refreshDataPeriodically();}
+init();
+
+</script>
+</body>
+</html>
