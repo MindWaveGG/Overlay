@@ -312,7 +312,7 @@ function drawAll() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
-    let ringZoneStart = cameraRadius + 20;
+    const ringZoneStart = cameraRadius + 20;
     const canvasOuterEdge = (canvas.width / 2) - 40;
     const outerSpace = canvasOuterEdge - ringZoneStart;
     const innerSpace = ringZoneStart - cameraRadius;
@@ -346,7 +346,7 @@ function drawAll() {
             allowIn: true,
             noLabel: isGoingLive,
             goingLive: isGoingLive,
-            ccw: isGoingLive ? (idx % 2 === 0) : false // ✅ Back to alternating
+            ccw: isGoingLive ? (idx % 2 === 0) : false
         };
 
         if (isGoingLive) goingLiveTimers.push(item);
@@ -371,49 +371,83 @@ function drawAll() {
     data.sort((a,b)=>b.percentage - a.percentage);
     goingLiveTimers.sort((a,b)=>b.percentage - a.percentage);
 
-    // 7️⃣ Separate outward/inward stacks
+    // 7️⃣ Constants for ring sizing
+    const BASE_WIDTH = 60;
+    const BASE_SPACING = 15;
+    const MIN_WIDTH = 3;
+    const MAX_OUTER_RINGS = 5;
+    const MAX_INNER_RINGS = 8;
+
+    // 8️⃣ Separate outward/inward stacks
     let outward = data.filter(d=>d.allowOut);
     let inward = [];
 
-    const donutWidthOut = Math.max(3, (outerSpace / Math.max(1, outward.length)) * 0.8);
-    const donutSpacingOut = Math.max(6, (outerSpace / Math.max(1, outward.length)) * 0.2);
+    // ✅ Calculate outer ring sizing
+    let donutWidthOut, donutSpacingOut;
+    if (outward.length <= MAX_OUTER_RINGS) {
+        donutWidthOut = BASE_WIDTH;
+        donutSpacingOut = BASE_SPACING;
+    } else {
+        donutWidthOut = Math.max(MIN_WIDTH, (outerSpace / outward.length) * 0.8);
+        donutSpacingOut = Math.max(MIN_WIDTH, (outerSpace / outward.length) * 0.2);
+    }
+    
     const stepOut = donutWidthOut + donutSpacingOut;
 
+    // ✅ Determine which items spill inward
     outward.forEach((item,i)=>{
         const r = ringZoneStart + (i*stepOut) + donutWidthOut/2;
-        if(r + donutWidthOut/2 > canvasOuterEdge) inward.push(item);
-        else item.finalRadius = r;
+        if(r + donutWidthOut/2 > canvasOuterEdge) {
+            inward.push(item);
+            item.finalRadius = null; // Mark as not placed yet
+        } else {
+            item.finalRadius = r;
+        }
     });
-	ringZoneStart = cameraRadius - 2
-    const inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
-    const donutWidthIn = Math.max(3, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
-    const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.2);
-    const stepIn = donutWidthIn + donutSpacingIn;
 
+    // ✅ Remove spillover items from outward array
+    outward = outward.filter(item => item.finalRadius !== null);
+
+    // ✅ NOW calculate inner ring sizing with TOTAL count (spillover + GoingLive)
+    const totalInnerItems = inward.length + goingLiveTimers.length;
+    
+    let donutWidthIn, donutSpacingIn;
+    if (totalInnerItems <= MAX_INNER_RINGS) {
+        donutWidthIn = BASE_WIDTH;
+        donutSpacingIn = BASE_SPACING;
+    } else {
+        donutWidthIn = Math.max(MIN_WIDTH, (innerSpace / totalInnerItems) * 0.8);
+        donutSpacingIn = Math.max(MIN_WIDTH, (innerSpace / totalInnerItems) * 0.2);
+    }
+    
+    const stepIn = donutWidthIn + donutSpacingIn;
+    const inwardStart = ringZoneStart - stepIn;
+
+    // ✅ Position spillover items inward
     inward.forEach((item,i)=>{
         item.finalRadius = inwardStart - i*stepIn - donutWidthIn/2;
     });
 
-    // ✅ UPDATED: Set start angle offset based on direction
+    // ✅ Position GoingLive timers after spillover items
     goingLiveTimers.forEach((item,i)=>{
         item.finalRadius = inwardStart - (inward.length + i)*stepIn - donutWidthIn/2;
-        // If counter-clockwise (ccw=true), add +15°; if clockwise (ccw=false), add -15°
         item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
     });
 
-    // 8️⃣ Draw all donuts
+    // 9️⃣ Draw all donuts
     [...outward, ...inward].forEach(item=>{
         if(!item.finalRadius) return;
-        drawDonut(centerX, centerY, item.finalRadius, donutWidthOut, item.percentage, item.color, item.ccw || false);
+        // ✅ Use appropriate width - outward items use donutWidthOut, inward use donutWidthIn
+        const width = item.allowOut && outward.includes(item) ? donutWidthOut : donutWidthIn;
+        drawDonut(centerX, centerY, item.finalRadius, width, item.percentage, item.color, item.ccw || false);
     });
 
-    // Draw GoingLive timers separately with start angle offsets
     goingLiveTimers.forEach(item=>{
         if(!item.finalRadius) return;
         drawDonut(centerX, centerY, item.finalRadius, donutWidthIn, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
     });
 
-    // 9️⃣ Draw labels dynamically
+    // 🔟 Draw labels dynamically
     function drawItemLabel(item, idx, total, color='#FF0000CC'){
         if(item.noLabel || !item.finalRadius) return;
 
