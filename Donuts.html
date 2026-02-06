@@ -242,19 +242,40 @@ function drawDonut(x,y,radius,width,percentage,color){
 function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
     const padding=10, fontSize=80;
     ctx.font=`bold ${fontSize}px Arial`;
-    ctx.fillStyle='white';
     const textWidth=ctx.measureText(label).width;
     const labelWidth=textWidth+padding*2;
     const labelHeight=fontSize+padding*2;
-    const reversedIndex=totalLabels-index-1;
-    const labelX=100,labelY=100+reversedIndex*(labelHeight+10);
-    const angle=-Math.PI/2+Math.PI*2*percentage;
-    const startX=x+radius*Math.cos(angle), startY=y+radius*Math.sin(angle);
-    ctx.beginPath(); ctx.moveTo(startX,startY); ctx.lineTo(labelX+labelWidth,labelY+labelHeight/2); ctx.strokeStyle=lineColor; ctx.lineWidth=4; ctx.stroke();
-    ctx.strokeStyle=borderColor; ctx.lineWidth=10; ctx.strokeRect(labelX,labelY,labelWidth,labelHeight);
-    ctx.fillStyle='#0000007F'; ctx.fillRect(labelX,labelY,labelWidth,labelHeight);
-    ctx.fillStyle='white'; ctx.textAlign='left'; ctx.fillText(label,labelX+padding,labelY+fontSize+padding/2);
+
+    // --- FORCE TOP-LEFT START ---
+    // labelX = 100px from left edge
+    // labelY = 100px from top, plus height for each index
+    const labelX = 100;
+    const labelY = 100 + (index * (labelHeight + 20)); 
+
+    const angle = -Math.PI/2 + Math.PI*2*percentage;
+    const startX = x + radius * Math.cos(angle);
+    const startY = y + radius * Math.sin(angle);
+
+    // Draw Line
+    ctx.beginPath(); 
+    ctx.moveTo(startX,startY); 
+    ctx.lineTo(labelX + labelWidth, labelY + labelHeight/2); 
+    ctx.strokeStyle = lineColor; 
+    ctx.lineWidth = 4; 
+    ctx.stroke();
+
+    // Draw Box
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 10; 
+    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
+    ctx.fillStyle = '#0000007F'; 
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+
+    // Draw Text
+    ctx.fillStyle = 'white'; 
+    ctx.textAlign = 'left'; 
+    ctx.fillText(label, labelX + padding, labelY + fontSize + padding/2);
 }
+
 
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
