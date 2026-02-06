@@ -272,7 +272,7 @@ function drawAll(){
     // 2. Dynamic Scaling with a "Hard Floor"
     // We shrink rings until they hit 12px. If they still don't fit, we go inward.
     let unitSize = outerSpace / totalrings;
-    donutWidth = Math.max(12, unitSize * 0.8);
+    donutWidth = Math.max(5, unitSize * 0.8);
     donutSpacing = Math.max(6, unitSize * 0.2);
 
     // 3. Setup Canvas and Colors
