@@ -328,11 +328,13 @@ function drawAll() {
         { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true }
     ];
 
+    let goingLiveTimers = [];
+
     timers.forEach((timer, idx) => {
         const tRem = getTimeRemaining(timer);
         const isGoingLive = timer.name.includes("GoingLive");
 
-        data.push({
+        const item = {
             label: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`,
             percentage: tRem.percentage,
             color: isGoingLive ? '#00FFFF' : colorHex,
@@ -340,8 +342,11 @@ function drawAll() {
             allowIn: true,
             noLabel: isGoingLive,
             goingLive: isGoingLive,
-            ccw: isGoingLive ? (idx % 2 === 0) : false // alternate CW/CCW for GoingLive timers
-        });
+            ccw: isGoingLive ? (idx % 2 === 0) : false // alternate CW/CCW
+        };
+
+        if (isGoingLive) goingLiveTimers.push(item);
+        else data.push(item);
     });
 
     if (hypeTrainData?.hypeTrainActive) {
@@ -359,62 +364,55 @@ function drawAll() {
     // --- 3. GLOBAL SORT ---
     data.sort((a, b) => b.percentage - a.percentage);
 
-    // --- 4. PLACEMENT SIMULATION (Outward / Inward) ---
-    let outward = [];
-    let inward  = [];
+    // --- 4. SEPARATE OUTWARD / INWARD STACKS ---
+    let outward = data.filter(d => d.allowOut);
+    let inward = []; // will be for spillover
 
-    const maxOuterRings = Math.floor(outerSpace / 60); // 60px initial target width
-    const baseWidth = 60; // start width for first 4 goal rings
-
-    data.forEach(item => {
-        // goals always attempt outward first, regular timers try outward then inward if space runs out
-        if (item.allowOut && outward.length < maxOuterRings) {
-            outward.push(item);
-        } else if (item.allowIn) {
-            inward.push(item);
-        }
-    });
-
-    // --- 5. SCALING ---
-    // Outward scaling: start with 60px width for first 4, then scale down if more rings
-    const outerCount = outward.length;
-    let donutWidthOut = 60;
-    if (outerCount > 4) {
-        donutWidthOut = Math.max(12, outerSpace / outerCount * 0.8);
-    }
-    const donutSpacingOut = Math.max(6, outerSpace / outerCount * 0.2);
+    // --- 5. DYNAMIC OUTWARD SCALING ---
+    let donutWidthOut = Math.max(12, outerSpace / Math.max(1, outward.length) * 0.8);
+    const donutSpacingOut = Math.max(6, outerSpace / Math.max(1, outward.length) * 0.2);
     const stepOut = donutWidthOut + donutSpacingOut;
 
-    // Inward scaling
-    const innerCount = inward.length;
-    const donutWidthIn = Math.max(12, innerSpace / Math.max(1, innerCount) * 0.8);
-    const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, innerCount) * 0.2);
-    const stepIn = donutWidthIn + donutSpacingIn;
-
-    // --- 6. DRAW OUTWARD ---
+    // --- 6. PLACE OUTWARD ---
     outward.forEach((item, i) => {
         const r = ringZoneStart + (i * stepOut) + donutWidthOut / 2;
-        item.finalRadius = r;
-        drawDonut(centerX, centerY, r, donutWidthOut, item.percentage, item.color, item.ccw || false);
-    });
-
-    // --- 7. DRAW INWARD ---
-    inward.forEach((item, i) => {
-        const r = ringZoneStart - (i * stepIn) - donutWidthIn / 2;
-        item.finalRadius = r;
-        if (r > donutWidthIn / 2) {
-            drawDonut(centerX, centerY, r, donutWidthIn, item.percentage, item.color, item.ccw || false);
+        // if radius exceeds outerSpace, push to inward
+        if (r + donutWidthOut/2 > canvasOuterEdge) {
+            inward.push(item);
+        } else {
+            item.finalRadius = r;
         }
     });
 
-    // --- 8. LABELS ---
-    // Outward labels
+    // --- 7. PLACE INWARD (spillover + GoingLive) ---
+    // calculate starting radius for inward stack to avoid overlap
+    let inwardStart = ringZoneStart - (inward.length ? (donutWidthOut + donutSpacingOut) : 0);
+    const donutWidthIn = Math.max(12, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.8);
+    const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, inward.length + goingLiveTimers.length) * 0.2);
+    const stepIn = donutWidthIn + donutSpacingIn;
+
+    inward.forEach((item, i) => {
+        item.finalRadius = inwardStart - i * stepIn - donutWidthIn/2;
+    });
+
+    // GoingLive timers stacked further inward
+    goingLiveTimers.forEach((item, i) => {
+        item.finalRadius = inwardStart - (inward.length + i) * stepIn - donutWidthIn/2;
+        inward.push(item);
+    });
+
+    // --- 8. DRAW ALL DONUTS ---
+    [...outward, ...inward].forEach(item => {
+        if (!item.finalRadius) return;
+        drawDonut(centerX, centerY, item.finalRadius, item.goingLive ? donutWidthIn : donutWidthOut, item.percentage, item.color, item.ccw || false);
+    });
+
+    // --- 9. LABELS ---
     outward.forEach((item, i) => {
         if (item.noLabel || !item.finalRadius) return;
         drawLabelWithLine(item.label, centerX, centerY, item.finalRadius, item.percentage,
             (outward.length - 1) - i, outward.length, '#FF0000CC','black','black');
     });
-    // Inward labels
     inward.forEach((item, i) => {
         if (item.noLabel || !item.finalRadius) return;
         drawLabelWithLine(item.label, centerX, centerY, item.finalRadius, item.percentage,
@@ -423,7 +421,6 @@ function drawAll() {
 
     requestAnimationFrame(drawAll);
 }
-
 
 
 
