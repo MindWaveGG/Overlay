@@ -231,13 +231,34 @@ function drawCameraCircle(x,y,radius,alpha){
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
 }
 
-function drawDonut(x,y,radius,width,percentage,color){
-    if(percentage<=0) return;
-    const endAngle = Math.PI*2*percentage-Math.PI/2;
-    ctx.beginPath(); ctx.arc(x,y,radius,-Math.PI/2,endAngle); ctx.lineWidth=width; ctx.strokeStyle=color; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,radius+width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle=color; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x,y,radius-width/2,-Math.PI/2,endAngle); ctx.lineWidth=5; ctx.strokeStyle='black'; ctx.stroke();
+function drawDonut(x, y, radius, width, percentage, color, ccw = false) {
+    if (percentage <= 0) return;
+
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + (ccw ? -1 : 1) * (Math.PI * 2 * percentage);
+
+    // Main ring
+    ctx.beginPath();
+    ctx.arc(x, y, radius, startAngle, endAngle, ccw);
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    // Outer glow / highlight
+    ctx.beginPath();
+    ctx.arc(x, y, radius + width / 2, startAngle, endAngle, ccw);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    // Inner black edge
+    ctx.beginPath();
+    ctx.arc(x, y, radius - width / 2, startAngle, endAngle, ccw);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
 }
+
 
 function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
     const padding=10, fontSize=80;
@@ -281,7 +302,6 @@ function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.roun
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
-
 function drawAll() {
     removeExpiredTimers();
 
@@ -302,13 +322,13 @@ function drawAll() {
     const hypeHex  = rgbToHex(lerpColor(red, gold, t));
 
     let data = [
-        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex, allowOut:true, allowIn:true },
-        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex, allowOut:true, allowIn:true },
-        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex, allowOut:true, allowIn:true },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex, allowOut:true, allowIn:true }
+        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex, allowOut:true, allowIn:true, isGoal:true }
     ];
 
-    timers.forEach(timer => {
+    timers.forEach((timer, idx) => {
         const tRem = getTimeRemaining(timer);
         const isGoingLive = timer.name.includes("GoingLive");
 
@@ -318,7 +338,9 @@ function drawAll() {
             color: isGoingLive ? '#00FFFF' : colorHex,
             allowOut: !isGoingLive,
             allowIn: true,
-            noLabel: isGoingLive
+            noLabel: isGoingLive,
+            goingLive: isGoingLive,
+            ccw: isGoingLive ? (idx % 2 === 0) : false // alternate CW/CCW for GoingLive timers
         });
     });
 
@@ -337,12 +359,16 @@ function drawAll() {
     // --- 3. GLOBAL SORT ---
     data.sort((a, b) => b.percentage - a.percentage);
 
-    // --- 4. PLACEMENT SIMULATION ---
+    // --- 4. PLACEMENT SIMULATION (Outward / Inward) ---
     let outward = [];
     let inward  = [];
 
+    const maxOuterRings = Math.floor(outerSpace / 60); // 60px initial target width
+    const baseWidth = 60; // start width for first 4 goal rings
+
     data.forEach(item => {
-        if (item.allowOut && outward.length * 1 <= outerSpace) {
+        // goals always attempt outward first, regular timers try outward then inward if space runs out
+        if (item.allowOut && outward.length < maxOuterRings) {
             outward.push(item);
         } else if (item.allowIn) {
             inward.push(item);
@@ -350,53 +376,54 @@ function drawAll() {
     });
 
     // --- 5. SCALING ---
-    const outerUnit = outerSpace / Math.max(1, outward.length);
-    const innerUnit = innerSpace / Math.max(1, inward.length);
+    // Outward scaling: start with 60px width for first 4, then scale down if more rings
+    const outerCount = outward.length;
+    let donutWidthOut = 60;
+    if (outerCount > 4) {
+        donutWidthOut = Math.max(12, outerSpace / outerCount * 0.8);
+    }
+    const donutSpacingOut = Math.max(6, outerSpace / outerCount * 0.2);
+    const stepOut = donutWidthOut + donutSpacingOut;
 
-    const unit = Math.min(outerUnit, innerUnit);
-
-    const donutWidth   = Math.max(12, unit * 0.8);
-    const donutSpacing = Math.max(6, unit * 0.2);
-    const step = donutWidth + donutSpacing;
+    // Inward scaling
+    const innerCount = inward.length;
+    const donutWidthIn = Math.max(12, innerSpace / Math.max(1, innerCount) * 0.8);
+    const donutSpacingIn = Math.max(6, innerSpace / Math.max(1, innerCount) * 0.2);
+    const stepIn = donutWidthIn + donutSpacingIn;
 
     // --- 6. DRAW OUTWARD ---
     outward.forEach((item, i) => {
-        const r = ringZoneStart + (i * step) + donutWidth / 2;
+        const r = ringZoneStart + (i * stepOut) + donutWidthOut / 2;
         item.finalRadius = r;
-        drawDonut(centerX, centerY, r, donutWidth, item.percentage, item.color);
+        drawDonut(centerX, centerY, r, donutWidthOut, item.percentage, item.color, item.ccw || false);
     });
 
     // --- 7. DRAW INWARD ---
     inward.forEach((item, i) => {
-        const r = ringZoneStart - (i * step) - donutWidth / 2;
+        const r = ringZoneStart - (i * stepIn) - donutWidthIn / 2;
         item.finalRadius = r;
-        if (r > donutWidth / 2) {
-            drawDonut(centerX, centerY, r, donutWidth, item.percentage, item.color);
+        if (r > donutWidthIn / 2) {
+            drawDonut(centerX, centerY, r, donutWidthIn, item.percentage, item.color, item.ccw || false);
         }
     });
 
     // --- 8. LABELS ---
-    [...outward, ...inward].forEach((item, i, arr) => {
-        if (item.noLabel) return;
-        if (!item.finalRadius) return;
-
-        const bottomUpIndex = (arr.length - 1) - i;
-        drawLabelWithLine(
-            item.label,
-            centerX,
-            centerY,
-            item.finalRadius,
-            item.percentage,
-            bottomUpIndex,
-            arr.length,
-            '#FF0000CC',
-            'black',
-            'black'
-        );
+    // Outward labels
+    outward.forEach((item, i) => {
+        if (item.noLabel || !item.finalRadius) return;
+        drawLabelWithLine(item.label, centerX, centerY, item.finalRadius, item.percentage,
+            (outward.length - 1) - i, outward.length, '#FF0000CC','black','black');
+    });
+    // Inward labels
+    inward.forEach((item, i) => {
+        if (item.noLabel || !item.finalRadius) return;
+        drawLabelWithLine(item.label, centerX, centerY, item.finalRadius, item.percentage,
+            (inward.length - 1) - i, inward.length, '#FF0000CC','black','black');
     });
 
     requestAnimationFrame(drawAll);
 }
+
 
 
 
