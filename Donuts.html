@@ -281,40 +281,28 @@ function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.roun
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
-
 function drawAll() {
     removeExpiredTimers();
-    const totalrings = getTotalRings();
 
-    // 1. Define Boundaries
-    const ringZoneStart = cameraRadius + 20; // 690px
-    const canvasOuterEdge = (canvas.width / 2) - 40; // 1060px (safe boundary)
-    const outerSpaceAvailable = canvasOuterEdge - ringZoneStart;
-    
-    // 2. Dynamic Scaling Logic (Shrinks ALL rings to fit the space if needed)
-    let unitSize = outerSpaceAvailable / totalrings;
-    // Set donutWidth/Spacing dynamically based on the available space per ring
-    donutWidth = Math.max(12, unitSize * 0.8);
-    donutSpacing = Math.max(6, unitSize * 0.2);
-    const effectiveRingSize = donutWidth + donutSpacing;
-
-    // Calculate exactly how many rings fit in the outer zone with this new dynamic size
-    const maxOuterRings = Math.floor(outerSpaceAvailable / effectiveRingSize);
-
-    // 3. Setup Canvas, Colors, and Data (Same as before)
+    // Clear canvas first
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw faint camera background
     drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
 
+    // ────────────────────────────────────────────────
+    //  Prepare data (goals + timers + possibly hype train)
+    // ────────────────────────────────────────────────
     const nowSec = Date.now() / 1000;
     const t = (Math.sin(nowSec) + 1) / 2;
-    const colorHex = rgbToHex(lerpColor(red, blue, t));
-    const HypecolorHex = rgbToHex(lerpColor(red, gold, t));
+    const colorHex      = rgbToHex(lerpColor(red, blue, t));
+    const HypecolorHex  = rgbToHex(lerpColor(red, gold, t));
 
     const data = [
-        { label:`Followers: ${followerCurrent}/${followerGoal}`, percentage:followerGoal?followerCurrent/followerGoal:0, color:colorHex },
-        { label:`Subs: ${subCurrent}/${subGoal}`, percentage:subGoal?subCurrent/subGoal:0, color:colorHex },
-        { label:`Donations: $${donationCurrent}/$${donationGoal}`, percentage:donationGoal?donationCurrent/donationGoal:0, color:colorHex },
-        { label:`Bits: ${bitsCurrent}/${bitsGoal}`, percentage:bitsGoal?bitsCurrent/bitsGoal:0, color:colorHex }
+        { label: `Followers: ${followerCurrent}/${followerGoal}`,     percentage: followerGoal ? followerCurrent/followerGoal : 0, color: colorHex },
+        { label: `Subs: ${subCurrent}/${subGoal}`,                   percentage: subGoal      ? subCurrent/subGoal      : 0, color: colorHex },
+        { label: `Donations: $${donationCurrent}/$${donationGoal}`,  percentage: donationGoal ? donationCurrent/donationGoal : 0, color: colorHex },
+        { label: `Bits: ${bitsCurrent}/${bitsGoal}`,                 percentage: bitsGoal     ? bitsCurrent/bitsGoal     : 0, color: colorHex }
     ];
 
     timers.forEach(timer => {
@@ -326,62 +314,88 @@ function drawAll() {
         });
     });
 
-    if(hypeTrainData && hypeTrainData.hypeTrainActive){
+    if (hypeTrainData && hypeTrainData.hypeTrainActive) {
         const current = Number(hypeTrainData.currentLevel) || 0;
-        const goal = Number(hypeTrainData.goalLevel) || 0;
+        const goal    = Number(hypeTrainData.goalLevel)    || 0;
         const percentage = goal > 0 ? Math.min(1, current / goal) : 0;
         data.push({
             label: `Hype Train Level: ${current}/${goal}`,
-            percentage: percentage,
-            color: HypecolorHex 
+            percentage,
+            color: HypecolorHex
         });
     }
 
-    data.sort((a,b)=>b.percentage-a.percentage);
+    // Highest % → outermost ring
+    data.sort((a, b) => b.percentage - a.percentage);
 
-    // --- 4. FIRST PASS: Draw ALL Donut Rings (Two continuous stacks) ---
-    data.forEach((item, index) => {
-        let finalRadius;
+    // ────────────────────────────────────────────────
+    //  Determine space and dynamic ring size
+    // ────────────────────────────────────────────────
+    const safeOuterRadius = (canvas.width / 2) - 50;           // keep margin from canvas edge
+    const minSafeRadius   = cameraRadius + donutWidth + 15;    // don't overlap camera + small gap
 
-        // If the index is within the max outer rings count, draw outside
-        if (index < maxOuterRings) {
-            // Stack 1 (Outside): Draw outward with shrinking scale
-            finalRadius = ringZoneStart + (index * effectiveRingSize) + (donutWidth / 2);
-        } else {
-            // Stack 2 (Inside): Draw inward from the camera (seamless transition)
-            const inwardIndex = index - maxOuterRings;
-            // The first inward ring sits exactly where the camera boundary is
-            finalRadius = (cameraRadius + 20) - (inwardIndex * effectiveRingSize) - (donutWidth / 2);
+    const availableSpace = safeOuterRadius - minSafeRadius;
+    const totalItems     = data.length;
+
+    // Dynamic sizing — try to fit everything, but don't get ridiculously small
+    let unitSize = availableSpace / Math.max(totalItems, 4);   // avoid division by very small numbers
+    donutWidth   = Math.max(20, Math.min(75, unitSize * 0.75));
+    donutSpacing = Math.max(8,  Math.min(30, unitSize * 0.25));
+
+    const effectiveRingSize = donutWidth + donutSpacing;
+
+    // ────────────────────────────────────────────────
+    //  Draw rings — starting from outside → going inward
+    // ────────────────────────────────────────────────
+    let currentRadius = safeOuterRadius - (donutWidth / 2);   // center of outermost ring
+
+    const drawnRings = [];
+
+    for (const item of data) {
+        if (currentRadius < minSafeRadius) {
+            break; // no more space — stop
         }
 
-        item.finalRadius = finalRadius;
+        drawDonut(
+            centerX, centerY,
+            currentRadius,
+            donutWidth,
+            item.percentage,
+            item.color
+        );
 
-        if (finalRadius > (donutWidth / 2) && finalRadius < canvasOuterEdge) {
-            drawDonut(centerX, centerY, finalRadius, donutWidth, item.percentage, item.color);
-        }
-    });
+        drawnRings.push({
+            ...item,
+            finalRadius: currentRadius
+        });
 
-    // --- 5. SECOND PASS: Draw ALL Labels (High % at Bottom of stack) ---
-    const visibleItems = data.filter(item => item.finalRadius > cameraRadius); 
-    visibleItems.forEach((item, index) => {
-        const bottomUpIndex = (visibleItems.length - 1) - index;
+        // Move inward for next ring
+        currentRadius -= effectiveRingSize;
+    }
+
+    // ────────────────────────────────────────────────
+    //  Draw labels — highest % at bottom of label list
+    // ────────────────────────────────────────────────
+    drawnRings.forEach((item, idx) => {
+        const reverseIndex = drawnRings.length - 1 - idx;   // highest % gets bottom position
 
         drawLabelWithLine(
-            item.label, 
-            centerX, 
-            centerY, 
-            item.finalRadius, 
-            item.percentage, 
-            bottomUpIndex, 
-            visibleItems.length, 
-            '#FF0000CC', 
-            'black', 
-            'black'
+            item.label,
+            centerX,
+            centerY,
+            item.finalRadius,
+            item.percentage,
+            reverseIndex,
+            drawnRings.length,
+            '#FF0000CC',    // text color
+            '#333333',      // line color
+            '#222222'       // border color
         );
-    });
+    }
+
+    // Keep animating (color cycling)
     requestAnimationFrame(drawAll);
 }
-
 
 // ----------------- PERIODIC REFRESH -----------------
 async function refreshDataPeriodically(){
