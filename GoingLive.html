@@ -496,7 +496,7 @@ function drawAll() {
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
     
     // ============================================================
-    // Position GoingLive timers with cascading rotation
+    // Position GoingLive timers with cascading spiral rotation
     // ============================================================
     if (goingLiveTimers.length > 0) {
         goingLiveTimers.forEach((item, i) => {
@@ -508,29 +508,35 @@ function drawAll() {
             
             if (i === 0) {
                 // Ring 1 (index 0): starts at 0° and counts down counter-clockwise
-                // As it counts down, its filled arc rotates backwards
-                startAngleOffset = -(360 * (1 - item.percentage));
+                startAngleOffset = 0;
                 item.ccw = true;
             } else if (i === 1) {
                 // Ring 2 (index 1): starts at 180° and counts down clockwise
-                // As it counts down, its filled arc rotates forwards
-                startAngleOffset = 180 + (360 * (1 - item.percentage));
+                startAngleOffset = 180;
                 item.ccw = false;
             } else if (i % 2 === 0) {
-                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): follow previous odd ring
+                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): start where previous odd ring's arc ENDS
                 const prevOddIndex = i - 2;
                 const prevOddItem = goingLiveTimers[prevOddIndex];
-                // Start where the previous odd ring's filled portion currently ends
-                // Previous ring is counter-clockwise, so we follow its rotation
-                startAngleOffset = -(360 * (1 - prevOddItem.percentage));
+                
+                // Previous ring is counter-clockwise:
+                // - Starts at its startAngleOffset
+                // - Arc goes counter-clockwise (backwards) for (percentage * 360) degrees
+                // - So the END of the arc is at: startAngleOffset - (percentage * 360)
+                const prevArcDegrees = prevOddItem.percentage * 360;
+                startAngleOffset = prevOddItem.startAngleOffset - prevArcDegrees;
                 item.ccw = true;
             } else {
-                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): follow previous even ring
+                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): start where previous even ring's arc ENDS
                 const prevEvenIndex = i - 2;
                 const prevEvenItem = goingLiveTimers[prevEvenIndex];
-                // Start where the previous even ring's filled portion currently ends
-                // Previous ring is clockwise from 180°, so we follow its rotation
-                startAngleOffset = 180 + (360 * (1 - prevEvenItem.percentage));
+                
+                // Previous ring is clockwise:
+                // - Starts at its startAngleOffset
+                // - Arc goes clockwise (forwards) for (percentage * 360) degrees
+                // - So the END of the arc is at: startAngleOffset + (percentage * 360)
+                const prevArcDegrees = prevEvenItem.percentage * 360;
+                startAngleOffset = prevEvenItem.startAngleOffset + prevArcDegrees;
                 item.ccw = false;
             }
             
