@@ -304,7 +304,6 @@ function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).sl
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
 
-
 function drawAll() {
     // 1️⃣ Remove expired timers first
     removeExpiredTimers();
@@ -427,43 +426,42 @@ function drawAll() {
 
     const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
 
-    // ✅ Position spillover items inward
-    let spilloverEnd = ringZoneStart; // Start from ring zone
+    // ✅ FIXED: Calculate where GoingLive should start
+    let goingLiveStartPoint = ringZoneStart;
     
     if (inward.length > 0) {
+        // Position spillover items
         const spilloverStart = ringZoneStart - stepSpillover;
         inward.forEach((item,i)=>{
             item.finalRadius = spilloverStart - i*stepSpillover - donutWidthSpillover/2;
         });
         
-        // Calculate where spillover ends (inner edge of last spillover ring)
+        // GoingLive starts after the last spillover ring
         const lastSpilloverCenter = spilloverStart - (inward.length - 1)*stepSpillover - donutWidthSpillover/2;
-        spilloverEnd = lastSpilloverCenter - donutWidthSpillover/2;
+        goingLiveStartPoint = lastSpilloverCenter - donutWidthSpillover/2;
     }
 
-    // ✅ Calculate remaining space from spillover end to camera circle edge
-    const remainingInnerSpace = spilloverEnd - cameraRadius;
+    // ✅ FIXED: Calculate space from goingLiveStartPoint to camera circle
+    const availableSpaceForGoingLive = goingLiveStartPoint - cameraRadius;
 
-    // ✅ FIXED: GoingLive timers ALWAYS scale linearly to fill remaining space
+    // ✅ GoingLive timers scale to fill ALL remaining space
     let donutWidthGoingLive, donutSpacingGoingLive;
     if (goingLiveTimers.length === 0) {
         donutWidthGoingLive = BASE_WIDTH;
         donutSpacingGoingLive = BASE_SPACING;
     } else {
-        // Always divide remaining space equally among all GoingLive timers
-        const spacePerRing = remainingInnerSpace / goingLiveTimers.length;
+        // Divide ALL remaining space by number of timers
+        const spacePerRing = availableSpaceForGoingLive / goingLiveTimers.length;
         donutWidthGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
         donutSpacingGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
     }
 
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
 
-    // ✅ Start GoingLive from where spillover ends (or from ringZoneStart if no spillover)
-    const goingLiveStart = spilloverEnd - stepGoingLive;
-
-    // ✅ Position GoingLive timers in remaining space
+    // ✅ FIXED: Position GoingLive timers to fill to camera circle
     goingLiveTimers.forEach((item,i)=>{
-        item.finalRadius = goingLiveStart - i*stepGoingLive - donutWidthGoingLive/2;
+        // Start from goingLiveStartPoint and work inward
+        item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive/2;
         item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
     });
 
@@ -510,7 +508,6 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
-
 
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
