@@ -561,7 +561,29 @@ function drawAll() {
         goingLiveTimers.forEach((item, i) => {
             // Start from goingLiveStartPoint and work inward toward camera
             item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive / 2;
-            item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
+            
+            // Calculate rotating start angle based on odd/even
+            let startAngleOffset = 0;
+            
+            if (i === 0) {
+                // Ring 1 (index 0): starts at 0°, counter-clockwise
+                startAngleOffset = 0;
+            } else if (i === 1) {
+                // Ring 2 (index 1): starts at 180°, clockwise
+                startAngleOffset = 180;
+            } else if (i % 2 === 0) {
+                // Odd rings (index 2, 4, 6...): follow ring 1's current position
+                const ring1Percentage = goingLiveTimers[0].percentage;
+                // Ring 1 is counter-clockwise, so it progresses from 0° backwards
+                startAngleOffset = -(360 * (1 - ring1Percentage));
+            } else {
+                // Even rings (index 3, 5, 7...): follow ring 2's current position
+                const ring2Percentage = goingLiveTimers[1].percentage;
+                // Ring 2 is clockwise from 180°, so it progresses forward
+                startAngleOffset = 180 + (360 * (1 - ring2Percentage));
+            }
+            
+            item.startAngleOffset = startAngleOffset;
         });
     }
 
