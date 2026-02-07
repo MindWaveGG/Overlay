@@ -303,7 +303,6 @@ function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.roun
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
-
 function drawAll() {
     // 1️⃣ Remove expired timers first
     removeExpiredTimers();
@@ -455,9 +454,10 @@ function drawAll() {
             item.finalRadius = ringZoneStart - (i * stepSpillover) - donutWidthSpillover / 2;
         });
         
-        // Calculate where the last spillover ring ends
-        const lastSpilloverRadius = ringZoneStart - ((inward.length - 1) * stepSpillover) - donutWidthSpillover / 2;
-        goingLiveStartPoint = lastSpilloverRadius - donutWidthSpillover / 2;
+        // Calculate where the last spillover ring ends (outer edge)
+        const lastSpilloverCenter = ringZoneStart - ((inward.length - 1) * stepSpillover) - donutWidthSpillover / 2;
+        const lastSpilloverOuterEdge = lastSpilloverCenter - donutWidthSpillover / 2;
+        goingLiveStartPoint = lastSpilloverOuterEdge;
     }
 
     // ============================================================
@@ -469,22 +469,24 @@ function drawAll() {
         donutWidthGoingLive = BASE_WIDTH;
         donutSpacingGoingLive = BASE_SPACING;
     } else {
-        // Calculate ACTUAL available space from goingLiveStartPoint to camera circle
+        // Calculate ACTUAL available space from goingLiveStartPoint to camera circle edge
         const availableSpaceForGoingLive = goingLiveStartPoint - cameraRadius;
         
-        // Calculate how many rings fit at base size
-        const baseStepGoingLive = BASE_WIDTH + BASE_SPACING;
-        const maxGoingLiveAtBaseSize = Math.floor(availableSpaceForGoingLive / baseStepGoingLive);
+        // Use FIXED spacing, calculate width from remaining space
+        donutSpacingGoingLive = BASE_SPACING;
         
-        if (goingLiveTimers.length <= maxGoingLiveAtBaseSize) {
-            // Can use base size
-            donutWidthGoingLive = BASE_WIDTH;
-            donutSpacingGoingLive = BASE_SPACING;
-        } else {
-            // Scale to fill ALL available space
-            const totalSpacePerRing = availableSpaceForGoingLive / goingLiveTimers.length;
-            donutWidthGoingLive = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
-            donutSpacingGoingLive = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
+        // Total space per ring = available / count
+        const totalSpacePerRing = availableSpaceForGoingLive / goingLiveTimers.length;
+        
+        // Width = total space minus spacing, clamped to min/max
+        const calculatedWidth = totalSpacePerRing - donutSpacingGoingLive;
+        donutWidthGoingLive = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(calculatedWidth)));
+        
+        // If calculated width hits minimum, we may need to reduce spacing too
+        if (calculatedWidth < MIN_WIDTH) {
+            // Recalculate with proportional spacing
+            donutWidthGoingLive = MIN_WIDTH;
+            donutSpacingGoingLive = Math.max(0, Math.floor(totalSpacePerRing - MIN_WIDTH));
         }
     }
     
@@ -493,6 +495,7 @@ function drawAll() {
     // Position GoingLive timers to fill to camera circle
     if (goingLiveTimers.length > 0) {
         goingLiveTimers.forEach((item, i) => {
+            // Start from goingLiveStartPoint and work inward toward camera
             item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive / 2;
             item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
         });
