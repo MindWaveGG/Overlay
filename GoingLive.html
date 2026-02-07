@@ -507,26 +507,30 @@ function drawAll() {
             let startAngleOffset = 0;
             
             if (i === 0) {
-                // Ring 1 (index 0): rotates continuously counter-clockwise based on elapsed time
-                const elapsed = item.timer.startTime ? (Date.now() - item.timer.startTime) / 1000 : 0;
-                const rotationSpeed = 0.1; // degrees per second (adjust for faster/slower rotation)
-                startAngleOffset = -(elapsed * rotationSpeed) % 360;
+                // Ring 1 (index 0): starts at 0° and counts down counter-clockwise
+                // As it counts down, its filled arc rotates backwards
+                startAngleOffset = -(360 * (1 - item.percentage));
                 item.ccw = true;
             } else if (i === 1) {
-                // Ring 2 (index 1): rotates continuously clockwise from 180°
-                const elapsed = item.timer.startTime ? (Date.now() - item.timer.startTime) / 1000 : 0;
-                const rotationSpeed = 0.1;
-                startAngleOffset = 180 + (elapsed * rotationSpeed) % 360;
+                // Ring 2 (index 1): starts at 180° and counts down clockwise
+                // As it counts down, its filled arc rotates forwards
+                startAngleOffset = 180 + (360 * (1 - item.percentage));
                 item.ccw = false;
             } else if (i % 2 === 0) {
-                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): follow previous odd ring's rotation
+                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): follow previous odd ring
                 const prevOddIndex = i - 2;
-                startAngleOffset = goingLiveTimers[prevOddIndex].startAngleOffset;
+                const prevOddItem = goingLiveTimers[prevOddIndex];
+                // Start where the previous odd ring's filled portion currently ends
+                // Previous ring is counter-clockwise, so we follow its rotation
+                startAngleOffset = -(360 * (1 - prevOddItem.percentage));
                 item.ccw = true;
             } else {
-                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): follow previous even ring's rotation
+                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): follow previous even ring
                 const prevEvenIndex = i - 2;
-                startAngleOffset = goingLiveTimers[prevEvenIndex].startAngleOffset;
+                const prevEvenItem = goingLiveTimers[prevEvenIndex];
+                // Start where the previous even ring's filled portion currently ends
+                // Previous ring is clockwise from 180°, so we follow its rotation
+                startAngleOffset = 180 + (360 * (1 - prevEvenItem.percentage));
                 item.ccw = false;
             }
             
