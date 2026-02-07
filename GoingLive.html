@@ -491,23 +491,26 @@ function drawAll() {
     
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
     
-    // 🐛 DEBUG LOGGING
-    console.log('GoingLive Debug:');
-    console.log('- Available space:', goingLiveStartPoint - cameraRadius);
-    console.log('- Ring count:', goingLiveTimers.length);
-    console.log('- Width:', donutWidthGoingLive);
-    console.log('- Spacing:', donutSpacingGoingLive);
-    console.log('- Step (width+spacing):', stepGoingLive);
-    console.log('- Start point:', goingLiveStartPoint);
-    console.log('- Camera radius:', cameraRadius);
-    if (goingLiveTimers.length > 0) {
-        const lastRingCenter = goingLiveStartPoint - ((goingLiveTimers.length - 1) * stepGoingLive) - donutWidthGoingLive / 2;
-        const lastRingInnerEdge = lastRingCenter - donutWidthGoingLive / 2;
-        console.log('- Last ring center will be at:', lastRingCenter);
-        console.log('- Last ring inner edge will be at:', lastRingInnerEdge);
-        console.log('- Distance from last ring inner edge to camera:', lastRingInnerEdge - cameraRadius);
+    // 🐛 DEBUG LOGGING - only run once initially and when ring count changes
+    if (!window.lastGoingLiveCount || window.lastGoingLiveCount !== goingLiveTimers.length) {
+        console.log('GoingLive Debug:');
+        console.log('- Available space:', goingLiveStartPoint - cameraRadius);
+        console.log('- Ring count:', goingLiveTimers.length);
+        console.log('- Width:', donutWidthGoingLive);
+        console.log('- Spacing:', donutSpacingGoingLive);
+        console.log('- Step (width+spacing):', stepGoingLive);
+        console.log('- Start point:', goingLiveStartPoint);
+        console.log('- Camera radius:', cameraRadius);
+        if (goingLiveTimers.length > 0) {
+            const lastRingCenter = goingLiveStartPoint - ((goingLiveTimers.length - 1) * stepGoingLive) - donutWidthGoingLive / 2;
+            const lastRingInnerEdge = lastRingCenter - donutWidthGoingLive / 2;
+            console.log('- Last ring center will be at:', lastRingCenter);
+            console.log('- Last ring inner edge will be at:', lastRingInnerEdge);
+            console.log('- Distance from last ring inner edge to camera:', lastRingInnerEdge - cameraRadius);
+        }
+        console.log('---');
+        window.lastGoingLiveCount = goingLiveTimers.length;
     }
-    console.log('---');
     
     // Position GoingLive timers to fill to camera circle
     if (goingLiveTimers.length > 0) {
