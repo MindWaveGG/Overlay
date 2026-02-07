@@ -304,6 +304,7 @@ function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).sl
 const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 
 
+
 function drawAll() {
     // 1️⃣ Remove expired timers first
     removeExpiredTimers();
@@ -440,16 +441,16 @@ function drawAll() {
         spilloverEnd = lastSpilloverCenter - donutWidthSpillover/2;
     }
 
-    // ✅ FIXED: Calculate remaining space from spillover end to camera circle edge
+    // ✅ Calculate remaining space from spillover end to camera circle edge
     const remainingInnerSpace = spilloverEnd - cameraRadius;
 
-    // ✅ Calculate sizing for GoingLive timers based on REMAINING space
+    // ✅ FIXED: GoingLive timers ALWAYS scale linearly to fill remaining space
     let donutWidthGoingLive, donutSpacingGoingLive;
     if (goingLiveTimers.length === 0) {
         donutWidthGoingLive = BASE_WIDTH;
         donutSpacingGoingLive = BASE_SPACING;
     } else {
-        // Always scale GoingLive timers to fit remaining space
+        // Always divide remaining space equally among all GoingLive timers
         const spacePerRing = remainingInnerSpace / goingLiveTimers.length;
         donutWidthGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
         donutSpacingGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
@@ -457,7 +458,7 @@ function drawAll() {
 
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
 
-    // ✅ FIXED: Start GoingLive from where spillover ends (or from ringZoneStart if no spillover)
+    // ✅ Start GoingLive from where spillover ends (or from ringZoneStart if no spillover)
     const goingLiveStart = spilloverEnd - stepGoingLive;
 
     // ✅ Position GoingLive timers in remaining space
