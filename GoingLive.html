@@ -472,21 +472,20 @@ function drawAll() {
         // Calculate ACTUAL available space from goingLiveStartPoint to camera circle edge
         const availableSpaceForGoingLive = goingLiveStartPoint - cameraRadius;
         
-        // Use FIXED spacing, calculate width from remaining space
+        // Your exact formula: floor(availableSpace / ringCount) - spacing
+        const totalSpacePerRing = Math.floor(availableSpaceForGoingLive / goingLiveTimers.length);
         donutSpacingGoingLive = BASE_SPACING;
-        
-        // Total space per ring = available / count
-        const totalSpacePerRing = availableSpaceForGoingLive / goingLiveTimers.length;
-        
-        // Width = total space minus spacing, clamped to min/max
         const calculatedWidth = totalSpacePerRing - donutSpacingGoingLive;
-        donutWidthGoingLive = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(calculatedWidth)));
         
-        // If calculated width hits minimum, we may need to reduce spacing too
-        if (calculatedWidth < MIN_WIDTH) {
-            // Recalculate with proportional spacing
+        // Clamp to min/max and handle edge case where width would be negative
+        if (calculatedWidth >= MIN_WIDTH && calculatedWidth <= MAX_WIDTH) {
+            donutWidthGoingLive = calculatedWidth;
+        } else if (calculatedWidth > MAX_WIDTH) {
+            donutWidthGoingLive = MAX_WIDTH;
+        } else {
+            // calculatedWidth < MIN_WIDTH - need to reduce spacing too
             donutWidthGoingLive = MIN_WIDTH;
-            donutSpacingGoingLive = Math.max(0, Math.floor(totalSpacePerRing - MIN_WIDTH));
+            donutSpacingGoingLive = Math.max(0, totalSpacePerRing - MIN_WIDTH);
         }
     }
     
