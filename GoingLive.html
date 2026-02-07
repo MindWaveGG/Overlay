@@ -315,7 +315,7 @@ function drawAll() {
     const ringZoneStart = cameraRadius + 20;
     const canvasOuterEdge = (canvas.width / 2) - 40;
     const outerSpace = canvasOuterEdge - ringZoneStart;
-    const innerSpace = ringZoneStart - cameraRadius;
+    const innerSpace = ringZoneStart - cameraRadius; // Space from ring zone to camera center
 
     // 3️⃣ Dynamic colors based on current time
     const nowSec = Date.now() / 1000;
@@ -375,139 +375,210 @@ function drawAll() {
     const BASE_WIDTH = 60;
     const BASE_SPACING = 15;
     const MIN_WIDTH = 3;
-    const MAX_OUTER_RINGS = 5;
-    const MAX_SPILLOVER_RINGS = 8;
+    const MAX_WIDTH = 60;
 
-    // 8️⃣ Separate outward/inward stacks
-    let outward = data.filter(d=>d.allowOut);
-    let inward = [];
-
-    // ✅ Calculate outer ring sizing
+    // ============================================================
+    // STEP 1: Handle OUTWARD rings (Goals & Regular Timers)
+    // ============================================================
+    let outward = data.filter(d => d.allowOut);
+    
+    // Calculate how many rings can fit in outer space at base size
+    const baseStepOut = BASE_WIDTH + BASE_SPACING;
+    const maxOuterRingsAtBaseSize = Math.floor(outerSpace / baseStepOut);
+    
     let donutWidthOut, donutSpacingOut;
-    if (outward.length <= MAX_OUTER_RINGS) {
+    
+    if (outward.length <= maxOuterRingsAtBaseSize) {
+        // All rings fit at base size
         donutWidthOut = BASE_WIDTH;
         donutSpacingOut = BASE_SPACING;
     } else {
-        const spacePerRing = outerSpace / outward.length;
-        donutWidthOut = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
-        donutSpacingOut = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+        // Need to scale down to fit all rings
+        const totalSpacePerRing = outerSpace / outward.length;
+        donutWidthOut = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
+        donutSpacingOut = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
     }
     
     const stepOut = donutWidthOut + donutSpacingOut;
-
-    // ✅ Determine which items spill inward
-    outward.forEach((item,i)=>{
-        const r = ringZoneStart + (i*stepOut) + donutWidthOut/2;
-        if(r + donutWidthOut/2 > canvasOuterEdge) {
+    
+    // Position outward rings and determine spillover
+    let inward = [];
+    outward.forEach((item, i) => {
+        const r = ringZoneStart + (i * stepOut) + donutWidthOut / 2;
+        if (r + donutWidthOut / 2 > canvasOuterEdge) {
+            // This ring spills over - move to inward
             inward.push(item);
             item.finalRadius = null;
         } else {
             item.finalRadius = r;
         }
     });
-
-    // ✅ Remove spillover items from outward array
+    
+    // Remove spillover items from outward array
     outward = outward.filter(item => item.finalRadius !== null);
 
-    // ✅ Calculate sizing for SPILLOVER items only
-    let donutWidthSpillover = BASE_WIDTH;
-    let donutSpacingSpillover = BASE_SPACING;
+    // ============================================================
+    // STEP 2: Handle SPILLOVER rings (draw inward from ringZoneStart)
+    // ============================================================
+    let donutWidthSpillover, donutSpacingSpillover;
     
-    if (inward.length > 0) {
-        if (inward.length > MAX_SPILLOVER_RINGS) {
-            const spilloverSpace = inward.length * (BASE_WIDTH + BASE_SPACING);
-            if (spilloverSpace > innerSpace) {
-                const spacePerRing = innerSpace / inward.length;
-                donutWidthSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
-                donutSpacingSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+    if (inward.length === 0) {
+        donutWidthSpillover = BASE_WIDTH;
+        donutSpacingSpillover = BASE_SPACING;
+    } else {
+        // Calculate how many rings fit at base size
+        const baseStepSpillover = BASE_WIDTH + BASE_SPACING;
+        const maxSpilloverAtBaseSize = Math.floor(innerSpace / baseStepSpillover);
+        
+        if (inward.length <= maxSpilloverAtBaseSize) {
+            // Can use base size
+            donutWidthSpillover = BASE_WIDTH;
+            donutSpacingSpillover = BASE_SPACING;
+        } else {
+            // Need to calculate scaled size for spillover rings
+            // Available space is from ringZoneStart down to where GoingLive will start
+            // We need to reserve space for GoingLive timers
+            
+            // Calculate space needed if GoingLive uses base size
+            const goingLiveCount = goingLiveTimers.length;
+            const baseGoingLiveSpace = goingLiveCount * (BASE_WIDTH + BASE_SPACING);
+            
+            // Space available for spillover
+            let spilloverAvailableSpace = innerSpace;
+            
+            // If there are GoingLive timers, we need to share the space
+            if (goingLiveCount > 0) {
+                // Total inner rings (spillover + goingLive)
+                const totalInnerRings = inward.length + goingLiveCount;
+                
+                // Calculate if we need to scale
+                const totalSpaceNeeded = totalInnerRings * (BASE_WIDTH + BASE_SPACING);
+                
+                if (totalSpaceNeeded > innerSpace) {
+                    // Need to scale - distribute space proportionally
+                    const totalSpacePerRing = innerSpace / totalInnerRings;
+                    donutWidthSpillover = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
+                    donutSpacingSpillover = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
+                } else {
+                    donutWidthSpillover = BASE_WIDTH;
+                    donutSpacingSpillover = BASE_SPACING;
+                }
+            } else {
+                // No GoingLive timers, spillover gets all inner space
+                const totalSpacePerRing = innerSpace / inward.length;
+                donutWidthSpillover = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
+                donutSpacingSpillover = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
             }
         }
     }
-
+    
     const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
 
-    // ✅ FIXED: Calculate where GoingLive should start
-    let goingLiveStartPoint = ringZoneStart;
-    
-    if (inward.length > 0) {
-        // Position spillover items
-        const spilloverStart = ringZoneStart - stepSpillover;
-        inward.forEach((item,i)=>{
-            item.finalRadius = spilloverStart - i*stepSpillover - donutWidthSpillover/2;
-        });
-        
-        // GoingLive starts after the last spillover ring
-        const lastSpilloverCenter = spilloverStart - (inward.length - 1)*stepSpillover - donutWidthSpillover/2;
-        goingLiveStartPoint = lastSpilloverCenter - donutWidthSpillover/2;
-    }
-
-    // ✅ FIXED: Calculate space from goingLiveStartPoint to camera circle
-    const availableSpaceForGoingLive = goingLiveStartPoint - cameraRadius;
-
-    // ✅ GoingLive timers scale to fill ALL remaining space
+    // ============================================================
+    // STEP 3: Handle GOING LIVE timers (inward from camera circle)
+    // ============================================================
     let donutWidthGoingLive, donutSpacingGoingLive;
+    
     if (goingLiveTimers.length === 0) {
         donutWidthGoingLive = BASE_WIDTH;
         donutSpacingGoingLive = BASE_SPACING;
     } else {
-        // Divide ALL remaining space by number of timers
-        const spacePerRing = availableSpaceForGoingLive / goingLiveTimers.length;
-        donutWidthGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
-        donutSpacingGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+        // Total inner rings
+        const totalInnerRings = inward.length + goingLiveTimers.length;
+        
+        // Calculate scaling based on total inner space
+        const totalSpaceNeeded = totalInnerRings * (BASE_WIDTH + BASE_SPACING);
+        
+        if (totalSpaceNeeded > innerSpace) {
+            // Need to scale
+            const totalSpacePerRing = innerSpace / totalInnerRings;
+            donutWidthGoingLive = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
+            donutSpacingGoingLive = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
+        } else {
+            donutWidthGoingLive = BASE_WIDTH;
+            donutSpacingGoingLive = BASE_SPACING;
+        }
     }
-
+    
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
 
-    // ✅ FIXED: Position GoingLive timers to fill to camera circle
-    goingLiveTimers.forEach((item,i)=>{
-        // Start from goingLiveStartPoint and work inward
-        item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive/2;
-        item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
-    });
+    // ============================================================
+    // STEP 4: Position all rings
+    // ============================================================
+    
+    // Position spillover rings (from ringZoneStart going inward)
+    if (inward.length > 0) {
+        inward.forEach((item, i) => {
+            item.finalRadius = ringZoneStart - (i * stepSpillover) - donutWidthSpillover / 2;
+        });
+    }
+    
+    // Position GoingLive timers (from end of spillover or ringZoneStart, going toward camera)
+    if (goingLiveTimers.length > 0) {
+        let goingLiveStart;
+        
+        if (inward.length > 0) {
+            // Start after last spillover ring
+            const lastSpilloverRadius = ringZoneStart - ((inward.length - 1) * stepSpillover) - donutWidthSpillover / 2;
+            goingLiveStart = lastSpilloverRadius - donutWidthSpillover / 2 - donutSpacingGoingLive;
+        } else {
+            // No spillover, start from ringZoneStart
+            goingLiveStart = ringZoneStart - donutSpacingGoingLive;
+        }
+        
+        goingLiveTimers.forEach((item, i) => {
+            item.finalRadius = goingLiveStart - (i * stepGoingLive) - donutWidthGoingLive / 2;
+            item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
+        });
+    }
 
+    // ============================================================
     // 9️⃣ Draw all donuts
-    [...outward].forEach(item=>{
-        if(!item.finalRadius) return;
+    // ============================================================
+    outward.forEach(item => {
+        if (!item.finalRadius) return;
         drawDonut(centerX, centerY, item.finalRadius, donutWidthOut, item.percentage, item.color, item.ccw || false);
     });
 
-    [...inward].forEach(item=>{
-        if(!item.finalRadius) return;
+    inward.forEach(item => {
+        if (!item.finalRadius) return;
         drawDonut(centerX, centerY, item.finalRadius, donutWidthSpillover, item.percentage, item.color, item.ccw || false);
     });
 
-    goingLiveTimers.forEach(item=>{
-        if(!item.finalRadius) return;
+    goingLiveTimers.forEach(item => {
+        if (!item.finalRadius) return;
         drawDonut(centerX, centerY, item.finalRadius, donutWidthGoingLive, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
     });
 
     // 🔟 Draw labels dynamically
-    function drawItemLabel(item, idx, total, color='#FF0000CC'){
-        if(item.noLabel || !item.finalRadius) return;
+    function drawItemLabel(item, idx, total, color = '#FF0000CC') {
+        if (item.noLabel || !item.finalRadius) return;
 
-        let label='';
-        if(item.isGoal){
-            switch(item.label){
-                case 'Followers': label=`Followers: ${followerCurrent}/${followerGoal}`; break;
-                case 'Subs': label=`Subs: ${subCurrent}/${subGoal}`; break;
-                case 'Donations': label=`Donations: $${donationCurrent}/$${donationGoal}`; break;
-                case 'Bits': label=`Bits: ${bitsCurrent}/${bitsGoal}`; break;
-                default: label=item.label;
+        let label = '';
+        if (item.isGoal) {
+            switch (item.label) {
+                case 'Followers': label = `Followers: ${followerCurrent}/${followerGoal}`; break;
+                case 'Subs': label = `Subs: ${subCurrent}/${subGoal}`; break;
+                case 'Donations': label = `Donations: $${donationCurrent}/$${donationGoal}`; break;
+                case 'Bits': label = `Bits: ${bitsCurrent}/${bitsGoal}`; break;
+                default: label = item.label;
             }
-        } else if(item.timer){
+        } else if (item.timer) {
             const tRem = getTimeRemaining(item.timer);
-            label=`${item.timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`;
-        } else label=item.label;
+            label = `${item.timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`;
+        } else label = item.label;
 
-        drawLabelWithLine(label, centerX, centerY, item.finalRadius, item.percentage, idx, total, color, 'black','black');
+        drawLabelWithLine(label, centerX, centerY, item.finalRadius, item.percentage, idx, total, color, 'black', 'black');
     }
 
-    outward.forEach((item,i)=>drawItemLabel(item, (outward.length-1)-i, outward.length));
-    inward.forEach((item,i)=>drawItemLabel(item, (inward.length-1)-i, inward.length));
+    outward.forEach((item, i) => drawItemLabel(item, (outward.length - 1) - i, outward.length));
+    inward.forEach((item, i) => drawItemLabel(item, (inward.length - 1) - i, inward.length));
 
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
+
+
 
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
