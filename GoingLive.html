@@ -307,6 +307,9 @@ const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
 let debugRunCount = 0;
 const MAX_GOING_LIVE_RINGS = 60; // Expected maximum
 
+// Add this global flag before drawAll function
+let debugRunCount = 0;
+
 function drawAll() {
     // 1️⃣ Remove expired timers first
     removeExpiredTimers();
@@ -495,62 +498,65 @@ function drawAll() {
     
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
     
-    // 🐛 DEBUG LOGGING - only run 3 times total:
-    // Run 1: Initial (debugRunCount = 0)
-    // Run 2: First GoingLive ring added (debugRunCount = 1, goingLiveTimers.length = 1)
-    // Run 3: Last GoingLive ring added (goingLiveTimers.length = MAX_GOING_LIVE_RINGS)
+    // 🐛 DEBUG LOGGING - run at specific intervals
     let shouldDebug = false;
     
     if (debugRunCount === 0) {
-        // First run ever
+        // First run ever (no GoingLive rings yet)
         shouldDebug = true;
         debugRunCount = 1;
-    } 
-	
-	if (shouldDebug = true && goingLiveTimers.length === 1) {
+    } else if (debugRunCount === 1 && goingLiveTimers.length === 1) {
         // First GoingLive ring added
         shouldDebug = true;
         debugRunCount = 2;
-    } else if (shouldDebug = true && goingLiveTimers.length === 15) {
-        // First GoingLive ring added
+    } else if (debugRunCount === 2 && goingLiveTimers.length === 15) {
+        // 15 rings
         shouldDebug = true;
         debugRunCount = 3;
-    } else if (shouldDebug = true && goingLiveTimers.length === 30) {
-        // First GoingLive ring added
+    } else if (debugRunCount === 3 && goingLiveTimers.length === 30) {
+        // 30 rings
         shouldDebug = true;
         debugRunCount = 4;
-    }  else if (shouldDebug = true && goingLiveTimers.length === 45) {
-        // First GoingLive ring added
+    } else if (debugRunCount === 4 && goingLiveTimers.length === 45) {
+        // 45 rings
         shouldDebug = true;
         debugRunCount = 5;
-    }  else if (shouldDebug = true && goingLiveTimers.length === 60) {
-        // First GoingLive ring added
+    } else if (debugRunCount === 5 && goingLiveTimers.length === 60) {
+        // 60 rings
         shouldDebug = true;
         debugRunCount = 6;
-    } else if (shouldDebug = true && goingLiveTimers.length === 61) {
-        // First GoingLive ring added
+    } else if (debugRunCount === 6 && goingLiveTimers.length === 61) {
+        // 61 rings (one over max)
         shouldDebug = true;
         debugRunCount = 7;
-    } 
+    }
     
-    if (item.timer, shouldDebug) {
-		console.log(`Timer Name:`, item.timer);
-        console.log(`GoingLive Debug (Run #${debugRunCount}):`);
-        console.log('- Available space:', goingLiveStartPoint - cameraRadius);
-        console.log('- Ring count:', goingLiveTimers.length);
-        console.log('- Width:', donutWidthGoingLive);
-        console.log('- Spacing:', donutSpacingGoingLive);
-        console.log('- Step (width+spacing):', stepGoingLive);
-        console.log('- Start point:', goingLiveStartPoint);
-        console.log('- Camera radius:', cameraRadius);
+    if (shouldDebug) {
+        console.log(`\n==== GoingLive Debug (Run #${debugRunCount}) ====`);
+        
+        // Log all GoingLive timer names
+        if (goingLiveTimers.length > 0) {
+            console.log('Timer names:', goingLiveTimers.map(t => t.timer.name).join(', '));
+        } else {
+            console.log('Timer names: (none yet)');
+        }
+        
+        console.log('Available space:', goingLiveStartPoint - cameraRadius);
+        console.log('Ring count:', goingLiveTimers.length);
+        console.log('Width:', donutWidthGoingLive);
+        console.log('Spacing:', donutSpacingGoingLive);
+        console.log('Step (width+spacing):', stepGoingLive);
+        console.log('Start point:', goingLiveStartPoint);
+        console.log('Camera radius:', cameraRadius);
+        
         if (goingLiveTimers.length > 0) {
             const lastRingCenter = goingLiveStartPoint - ((goingLiveTimers.length - 1) * stepGoingLive) - donutWidthGoingLive / 2;
             const lastRingInnerEdge = lastRingCenter - donutWidthGoingLive / 2;
-            console.log('- Last ring center will be at:', lastRingCenter);
-            console.log('- Last ring inner edge will be at:', lastRingInnerEdge);
-            console.log('- Distance from last ring inner edge to camera:', lastRingInnerEdge - cameraRadius);
+            console.log('Last ring center will be at:', lastRingCenter);
+            console.log('Last ring inner edge will be at:', lastRingInnerEdge);
+            console.log('Distance from last ring inner edge to camera:', lastRingInnerEdge - cameraRadius);
         }
-        console.log('---');
+        console.log('=====================================\n');
     }
     
     // Position GoingLive timers to fill to camera circle
@@ -607,6 +613,7 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
+
 
 
 
