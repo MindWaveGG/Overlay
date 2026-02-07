@@ -495,32 +495,39 @@ function drawAll() {
     
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
     
-       
-    // Position GoingLive timers to fill to camera circle
+    // ============================================================
+    // Position GoingLive timers with cascading rotation
+    // ============================================================
     if (goingLiveTimers.length > 0) {
         goingLiveTimers.forEach((item, i) => {
             // Start from goingLiveStartPoint and work inward toward camera
             item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive / 2;
             
-            // Calculate rotating start angle based on odd/even
+            // Calculate rotating start angle based on cascading pattern
             let startAngleOffset = 0;
             
             if (i === 0) {
                 // Ring 1 (index 0): starts at 0°, counter-clockwise
                 startAngleOffset = 0;
+                item.ccw = true;
             } else if (i === 1) {
                 // Ring 2 (index 1): starts at 180°, clockwise
                 startAngleOffset = 180;
+                item.ccw = false;
             } else if (i % 2 === 0) {
-                // Odd rings (index 2, 4, 6...): follow ring 1's current position
-                const ring1Percentage = goingLiveTimers[0].percentage;
-                // Ring 1 is counter-clockwise, so it progresses from 0° backwards
-                startAngleOffset = -(360 * (1 - ring1Percentage));
+                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): follow previous odd ring
+                const prevOddIndex = i - 2;
+                const prevOddPercentage = goingLiveTimers[prevOddIndex].percentage;
+                // Counter-clockwise rings progress backwards from their start position
+                startAngleOffset = -(360 * (1 - prevOddPercentage));
+                item.ccw = true;
             } else {
-                // Even rings (index 3, 5, 7...): follow ring 2's current position
-                const ring2Percentage = goingLiveTimers[1].percentage;
-                // Ring 2 is clockwise from 180°, so it progresses forward
-                startAngleOffset = 180 + (360 * (1 - ring2Percentage));
+                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): follow previous even ring
+                const prevEvenIndex = i - 2;
+                const prevEvenPercentage = goingLiveTimers[prevEvenIndex].percentage;
+                // Clockwise rings progress forward from 180°
+                startAngleOffset = 180 + (360 * (1 - prevEvenPercentage));
+                item.ccw = false;
             }
             
             item.startAngleOffset = startAngleOffset;
