@@ -497,31 +497,32 @@ function drawAll() {
     // 🐛 DEBUG LOGGING - run at specific intervals
     let shouldDebug = false;
     
+    // Check if we should debug based on GoingLive ring count milestones
     if (debugRunCount === 0) {
         // First run ever (no GoingLive rings yet)
         shouldDebug = true;
         debugRunCount = 1;
-    } else if (debugRunCount === 1 && goingLiveTimers.length === 1) {
+    } else if (goingLiveTimers.length >= 1 && debugRunCount < 2) {
         // First GoingLive ring added
         shouldDebug = true;
         debugRunCount = 2;
-    } else if (debugRunCount === 2 && goingLiveTimers.length === 15) {
+    } else if (goingLiveTimers.length >= 15 && debugRunCount < 3) {
         // 15 rings
         shouldDebug = true;
         debugRunCount = 3;
-    } else if (debugRunCount === 3 && goingLiveTimers.length === 30) {
+    } else if (goingLiveTimers.length >= 30 && debugRunCount < 4) {
         // 30 rings
         shouldDebug = true;
         debugRunCount = 4;
-    } else if (debugRunCount === 4 && goingLiveTimers.length === 45) {
+    } else if (goingLiveTimers.length >= 45 && debugRunCount < 5) {
         // 45 rings
         shouldDebug = true;
         debugRunCount = 5;
-    } else if (debugRunCount === 5 && goingLiveTimers.length === 60) {
+    } else if (goingLiveTimers.length >= 60 && debugRunCount < 6) {
         // 60 rings
         shouldDebug = true;
         debugRunCount = 6;
-    } else if (debugRunCount === 6 && goingLiveTimers.length === 61) {
+    } else if (goingLiveTimers.length >= 61 && debugRunCount < 7) {
         // 61 rings (one over max)
         shouldDebug = true;
         debugRunCount = 7;
@@ -609,8 +610,6 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
-
-
 
 
 
