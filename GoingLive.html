@@ -457,14 +457,14 @@ function drawAll() {
             item.finalRadius = ringZoneStart - (i * stepSpillover) - donutWidthSpillover / 2;
         });
         
-        // Calculate where the last spillover ring ends (outer edge)
+        // Calculate where the last spillover ring ends (inner edge, not outer edge!)
         const lastSpilloverCenter = ringZoneStart - ((inward.length - 1) * stepSpillover) - donutWidthSpillover / 2;
-        const lastSpilloverOuterEdge = lastSpilloverCenter - donutWidthSpillover / 2;
-        goingLiveStartPoint = lastSpilloverOuterEdge;
+        const lastSpilloverInnerEdge = lastSpilloverCenter - donutWidthSpillover / 2;
+        goingLiveStartPoint = lastSpilloverInnerEdge;
     }
 
     // ============================================================
-    // STEP 4: Handle GOING LIVE timers - fill remaining space to camera
+    // STEP 4: Handle GOING LIVE timers - fill remaining space to CENTER
     // ============================================================
     let donutWidthGoingLive, donutSpacingGoingLive;
     
@@ -472,8 +472,8 @@ function drawAll() {
         donutWidthGoingLive = BASE_WIDTH;
         donutSpacingGoingLive = BASE_SPACING;
     } else {
-        // Calculate ACTUAL available space from goingLiveStartPoint to camera circle edge
-        const availableSpaceForGoingLive = goingLiveStartPoint - cameraRadius;
+        // Calculate ACTUAL available space from goingLiveStartPoint to CENTER (0)
+        const availableSpaceForGoingLive = goingLiveStartPoint - 0; // Fill to center!
         
         // Your exact formula: floor(availableSpace / ringCount) - spacing
         const totalSpacePerRing = Math.floor(availableSpaceForGoingLive / goingLiveTimers.length);
@@ -538,20 +538,20 @@ function drawAll() {
             console.log('Timer names: (none yet)');
         }
         
-        console.log('Available space:', goingLiveStartPoint - cameraRadius);
+        console.log('Available space (to center):', goingLiveStartPoint - 0);
         console.log('Ring count:', goingLiveTimers.length);
         console.log('Width:', donutWidthGoingLive);
         console.log('Spacing:', donutSpacingGoingLive);
         console.log('Step (width+spacing):', stepGoingLive);
         console.log('Start point:', goingLiveStartPoint);
-        console.log('Camera radius:', cameraRadius);
+        console.log('Target (center):', 0);
         
         if (goingLiveTimers.length > 0) {
             const lastRingCenter = goingLiveStartPoint - ((goingLiveTimers.length - 1) * stepGoingLive) - donutWidthGoingLive / 2;
             const lastRingInnerEdge = lastRingCenter - donutWidthGoingLive / 2;
             console.log('Last ring center will be at:', lastRingCenter);
             console.log('Last ring inner edge will be at:', lastRingInnerEdge);
-            console.log('Distance from last ring inner edge to camera:', lastRingInnerEdge - cameraRadius);
+            console.log('Distance from last ring inner edge to center:', lastRingInnerEdge - 0);
         }
         console.log('=====================================\n');
     }
