@@ -507,26 +507,26 @@ function drawAll() {
             let startAngleOffset = 0;
             
             if (i === 0) {
-                // Ring 1 (index 0): starts at 0°, counter-clockwise
-                startAngleOffset = 0;
+                // Ring 1 (index 0): rotates continuously counter-clockwise based on elapsed time
+                const elapsed = item.timer.startTime ? (Date.now() - item.timer.startTime) / 1000 : 0;
+                const rotationSpeed = 0.1; // degrees per second (adjust for faster/slower rotation)
+                startAngleOffset = -(elapsed * rotationSpeed) % 360;
                 item.ccw = true;
             } else if (i === 1) {
-                // Ring 2 (index 1): starts at 180°, clockwise
-                startAngleOffset = 180;
+                // Ring 2 (index 1): rotates continuously clockwise from 180°
+                const elapsed = item.timer.startTime ? (Date.now() - item.timer.startTime) / 1000 : 0;
+                const rotationSpeed = 0.1;
+                startAngleOffset = 180 + (elapsed * rotationSpeed) % 360;
                 item.ccw = false;
             } else if (i % 2 === 0) {
-                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): follow previous odd ring
+                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): follow previous odd ring's rotation
                 const prevOddIndex = i - 2;
-                const prevOddPercentage = goingLiveTimers[prevOddIndex].percentage;
-                // Counter-clockwise rings progress backwards from their start position
-                startAngleOffset = -(360 * (1 - prevOddPercentage));
+                startAngleOffset = goingLiveTimers[prevOddIndex].startAngleOffset;
                 item.ccw = true;
             } else {
-                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): follow previous even ring
+                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): follow previous even ring's rotation
                 const prevEvenIndex = i - 2;
-                const prevEvenPercentage = goingLiveTimers[prevEvenIndex].percentage;
-                // Clockwise rings progress forward from 180°
-                startAngleOffset = 180 + (360 * (1 - prevEvenPercentage));
+                startAngleOffset = goingLiveTimers[prevEvenIndex].startAngleOffset;
                 item.ccw = false;
             }
             
