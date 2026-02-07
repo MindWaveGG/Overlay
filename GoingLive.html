@@ -301,7 +301,7 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55};
+const red={r:255,g:0,b:0}, blue={r:0,g:0,b:255}; gold={r:211,g:175,b:55}; black={r:0,g:0,b:0};
 
 // Add this global flag before drawAll function
 let debugRunCount = 0;
@@ -324,6 +324,7 @@ function drawAll() {
     const t = (Math.sin(nowSec) + 1) / 2;
     const colorHex = rgbToHex(lerpColor(red, blue, t));
     const hypeHex  = rgbToHex(lerpColor(red, gold, t));
+    const goliveHex  = rgbToHex(lerpColor(black, red, t));
 
     // 4️⃣ Build data array with updated percentages
     let data = [
@@ -343,7 +344,7 @@ function drawAll() {
         const item = {
             timer: timer,
             percentage: tRem.percentage,
-            color: isGoingLive ? '#00FFFF' : colorHex,
+            color: isGoingLive ? goliveHex : colorHex,
             allowOut: !isGoingLive,
             allowIn: true,
             noLabel: isGoingLive,
@@ -494,68 +495,7 @@ function drawAll() {
     
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
     
-    // 🐛 DEBUG LOGGING - run at specific intervals
-    let shouldDebug = false;
-    
-    // Check if we should debug based on GoingLive ring count milestones
-    if (debugRunCount === 0) {
-        // First run ever (no GoingLive rings yet)
-        shouldDebug = true;
-        debugRunCount = 1;
-    } else if (goingLiveTimers.length >= 1 && debugRunCount < 2) {
-        // First GoingLive ring added
-        shouldDebug = true;
-        debugRunCount = 2;
-    } else if (goingLiveTimers.length >= 15 && debugRunCount < 3) {
-        // 15 rings
-        shouldDebug = true;
-        debugRunCount = 3;
-    } else if (goingLiveTimers.length >= 30 && debugRunCount < 4) {
-        // 30 rings
-        shouldDebug = true;
-        debugRunCount = 4;
-    } else if (goingLiveTimers.length >= 45 && debugRunCount < 5) {
-        // 45 rings
-        shouldDebug = true;
-        debugRunCount = 5;
-    } else if (goingLiveTimers.length >= 60 && debugRunCount < 6) {
-        // 60 rings
-        shouldDebug = true;
-        debugRunCount = 6;
-    } else if (goingLiveTimers.length >= 61 && debugRunCount < 7) {
-        // 61 rings (one over max)
-        shouldDebug = true;
-        debugRunCount = 7;
-    }
-    
-    if (shouldDebug) {
-        console.log(`\n==== GoingLive Debug (Run #${debugRunCount}) ====`);
-        
-        // Log all GoingLive timer names
-        if (goingLiveTimers.length > 0) {
-            console.log('Timer names:', goingLiveTimers.map(t => t.timer.name).join(', '));
-        } else {
-            console.log('Timer names: (none yet)');
-        }
-        
-        console.log('Available space (to center):', goingLiveStartPoint - 0);
-        console.log('Ring count:', goingLiveTimers.length);
-        console.log('Width:', donutWidthGoingLive);
-        console.log('Spacing:', donutSpacingGoingLive);
-        console.log('Step (width+spacing):', stepGoingLive);
-        console.log('Start point:', goingLiveStartPoint);
-        console.log('Target (center):', 0);
-        
-        if (goingLiveTimers.length > 0) {
-            const lastRingCenter = goingLiveStartPoint - ((goingLiveTimers.length - 1) * stepGoingLive) - donutWidthGoingLive / 2;
-            const lastRingInnerEdge = lastRingCenter - donutWidthGoingLive / 2;
-            console.log('Last ring center will be at:', lastRingCenter);
-            console.log('Last ring inner edge will be at:', lastRingInnerEdge);
-            console.log('Distance from last ring inner edge to center:', lastRingInnerEdge - 0);
-        }
-        console.log('=====================================\n');
-    }
-    
+       
     // Position GoingLive timers to fill to camera circle
     if (goingLiveTimers.length > 0) {
         goingLiveTimers.forEach((item, i) => {
