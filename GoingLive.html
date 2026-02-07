@@ -376,7 +376,7 @@ function drawAll() {
     const BASE_SPACING = 15;
     const MIN_WIDTH = 3;
     const MAX_OUTER_RINGS = 5;
-    const MAX_INNER_RINGS = 8;
+    const MAX_SPILLOVER_RINGS = 8; // ✅ Renamed for clarity
 
     // 8️⃣ Separate outward/inward stacks
     let outward = data.filter(d=>d.allowOut);
@@ -388,7 +388,6 @@ function drawAll() {
         donutWidthOut = BASE_WIDTH;
         donutSpacingOut = BASE_SPACING;
     } else {
-        // Calculate total space per ring and maintain 80/20 ratio
         const spacePerRing = outerSpace / outward.length;
         donutWidthOut = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
         donutSpacingOut = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
@@ -401,7 +400,7 @@ function drawAll() {
         const r = ringZoneStart + (i*stepOut) + donutWidthOut/2;
         if(r + donutWidthOut/2 > canvasOuterEdge) {
             inward.push(item);
-            item.finalRadius = null; // Mark as not placed yet
+            item.finalRadius = null;
         } else {
             item.finalRadius = r;
         }
@@ -410,48 +409,75 @@ function drawAll() {
     // ✅ Remove spillover items from outward array
     outward = outward.filter(item => item.finalRadius !== null);
 
-    // ✅ Calculate inner ring sizing with TOTAL count (spillover + GoingLive)
-    const totalInnerItems = inward.length + goingLiveTimers.length;
-    
-    let donutWidthIn, donutSpacingIn;
-    if (totalInnerItems === 0) {
-        donutWidthIn = BASE_WIDTH;
-        donutSpacingIn = BASE_SPACING;
-    } else if (totalInnerItems <= MAX_INNER_RINGS) {
-        donutWidthIn = BASE_WIDTH;
-        donutSpacingIn = BASE_SPACING;
+    // ✅ Calculate sizing for SPILLOVER items only (goals/timers that didn't fit outside)
+    let donutWidthSpillover, donutSpacingSpillover;
+    if (inward.length === 0) {
+        donutWidthSpillover = BASE_WIDTH;
+        donutSpacingSpillover = BASE_SPACING;
+    } else if (inward.length <= MAX_SPILLOVER_RINGS) {
+        donutWidthSpillover = BASE_WIDTH;
+        donutSpacingSpillover = BASE_SPACING;
     } else {
-        // ✅ FIXED: Calculate how much space each ring gets, maintaining ratio
-        const spacePerRing = innerSpace / totalInnerItems;
-        donutWidthIn = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
-        donutSpacingIn = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+        // Calculate space needed for spillover items
+        const spilloverSpace = inward.length * (BASE_WIDTH + BASE_SPACING);
+        if (spilloverSpace > innerSpace) {
+            // Need to scale down
+            const spacePerRing = innerSpace / inward.length;
+            donutWidthSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
+            donutSpacingSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+        } else {
+            donutWidthSpillover = BASE_WIDTH;
+            donutSpacingSpillover = BASE_SPACING;
+        }
     }
-    
-    const stepIn = donutWidthIn + donutSpacingIn;
-    const inwardStart = ringZoneStart - stepIn;
+
+    const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
+    const spilloverStart = ringZoneStart - stepSpillover;
 
     // ✅ Position spillover items inward
     inward.forEach((item,i)=>{
-        item.finalRadius = inwardStart - i*stepIn - donutWidthIn/2;
+        item.finalRadius = spilloverStart - i*stepSpillover - donutWidthSpillover/2;
     });
 
-    // ✅ Position GoingLive timers after spillover items
+    // ✅ Calculate remaining space for GoingLive timers
+    const spilloverUsedSpace = inward.length * stepSpillover;
+    const remainingInnerSpace = innerSpace - spilloverUsedSpace;
+
+    // ✅ Calculate sizing for GoingLive timers based on REMAINING space
+    let donutWidthGoingLive, donutSpacingGoingLive;
+    if (goingLiveTimers.length === 0) {
+        donutWidthGoingLive = BASE_WIDTH;
+        donutSpacingGoingLive = BASE_SPACING;
+    } else {
+        // Always scale GoingLive timers to fit remaining space
+        const spacePerRing = remainingInnerSpace / goingLiveTimers.length;
+        donutWidthGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
+        donutSpacingGoingLive = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+    }
+
+    const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
+    const goingLiveStart = spilloverStart - spilloverUsedSpace;
+
+    // ✅ Position GoingLive timers in remaining space
     goingLiveTimers.forEach((item,i)=>{
-        item.finalRadius = inwardStart - (inward.length + i)*stepIn - donutWidthIn/2;
+        item.finalRadius = goingLiveStart - i*stepGoingLive - donutWidthGoingLive/2;
         item.startAngleOffset = i * 15 * (item.ccw ? 1 : -1);
     });
 
     // 9️⃣ Draw all donuts
-    [...outward, ...inward].forEach(item=>{
+    [...outward].forEach(item=>{
         if(!item.finalRadius) return;
-        // ✅ Use appropriate width - outward items use donutWidthOut, inward use donutWidthIn
-        const width = item.allowOut && outward.includes(item) ? donutWidthOut : donutWidthIn;
-        drawDonut(centerX, centerY, item.finalRadius, width, item.percentage, item.color, item.ccw || false);
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthOut, item.percentage, item.color, item.ccw || false);
+    });
+
+    [...inward].forEach(item=>{
+        if(!item.finalRadius) return;
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthSpillover, item.percentage, item.color, item.ccw || false);
     });
 
     goingLiveTimers.forEach(item=>{
         if(!item.finalRadius) return;
-        drawDonut(centerX, centerY, item.finalRadius, donutWidthIn, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthGoingLive, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
     });
 
     // 🔟 Draw labels dynamically
@@ -481,6 +507,7 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
+
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
         const now = new Date();
