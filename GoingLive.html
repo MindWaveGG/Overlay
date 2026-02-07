@@ -376,7 +376,7 @@ function drawAll() {
     const BASE_SPACING = 15;
     const MIN_WIDTH = 3;
     const MAX_OUTER_RINGS = 5;
-    const MAX_SPILLOVER_RINGS = 8; // ✅ Renamed for clarity
+    const MAX_SPILLOVER_RINGS = 8;
 
     // 8️⃣ Separate outward/inward stacks
     let outward = data.filter(d=>d.allowOut);
@@ -409,7 +409,7 @@ function drawAll() {
     // ✅ Remove spillover items from outward array
     outward = outward.filter(item => item.finalRadius !== null);
 
-    // ✅ Calculate sizing for SPILLOVER items only (goals/timers that didn't fit outside)
+    // ✅ Calculate sizing for SPILLOVER items only
     let donutWidthSpillover, donutSpacingSpillover;
     if (inward.length === 0) {
         donutWidthSpillover = BASE_WIDTH;
@@ -418,10 +418,8 @@ function drawAll() {
         donutWidthSpillover = BASE_WIDTH;
         donutSpacingSpillover = BASE_SPACING;
     } else {
-        // Calculate space needed for spillover items
         const spilloverSpace = inward.length * (BASE_WIDTH + BASE_SPACING);
         if (spilloverSpace > innerSpace) {
-            // Need to scale down
             const spacePerRing = innerSpace / inward.length;
             donutWidthSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
             donutSpacingSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
@@ -439,9 +437,16 @@ function drawAll() {
         item.finalRadius = spilloverStart - i*stepSpillover - donutWidthSpillover/2;
     });
 
-    // ✅ Calculate remaining space for GoingLive timers
-    const spilloverUsedSpace = inward.length * stepSpillover;
-    const remainingInnerSpace = innerSpace - spilloverUsedSpace;
+    // ✅ FIXED: Calculate the innermost spillover position
+    let spilloverEnd = spilloverStart;
+    if (inward.length > 0) {
+        // The last spillover item's inner edge
+        const lastSpilloverRadius = spilloverStart - (inward.length - 1)*stepSpillover - donutWidthSpillover/2;
+        spilloverEnd = lastSpilloverRadius - donutWidthSpillover/2 - donutSpacingSpillover;
+    }
+
+    // ✅ FIXED: Calculate remaining space from spillover end to camera circle
+    const remainingInnerSpace = spilloverEnd - cameraRadius;
 
     // ✅ Calculate sizing for GoingLive timers based on REMAINING space
     let donutWidthGoingLive, donutSpacingGoingLive;
@@ -456,7 +461,7 @@ function drawAll() {
     }
 
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
-    const goingLiveStart = spilloverStart - spilloverUsedSpace;
+    const goingLiveStart = spilloverEnd - stepGoingLive;
 
     // ✅ Position GoingLive timers in remaining space
     goingLiveTimers.forEach((item,i)=>{
@@ -507,6 +512,7 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
+
 
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
