@@ -388,8 +388,10 @@ function drawAll() {
         donutWidthOut = BASE_WIDTH;
         donutSpacingOut = BASE_SPACING;
     } else {
-        donutWidthOut = Math.max(MIN_WIDTH, (outerSpace / outward.length) * 0.8);
-        donutSpacingOut = Math.max(MIN_WIDTH, (outerSpace / outward.length) * 0.2);
+        // Calculate total space per ring and maintain 80/20 ratio
+        const spacePerRing = outerSpace / outward.length;
+        donutWidthOut = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
+        donutSpacingOut = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
     }
     
     const stepOut = donutWidthOut + donutSpacingOut;
@@ -408,16 +410,21 @@ function drawAll() {
     // ✅ Remove spillover items from outward array
     outward = outward.filter(item => item.finalRadius !== null);
 
-    // ✅ NOW calculate inner ring sizing with TOTAL count (spillover + GoingLive)
+    // ✅ Calculate inner ring sizing with TOTAL count (spillover + GoingLive)
     const totalInnerItems = inward.length + goingLiveTimers.length;
     
     let donutWidthIn, donutSpacingIn;
-    if (totalInnerItems <= MAX_INNER_RINGS) {
+    if (totalInnerItems === 0) {
+        donutWidthIn = BASE_WIDTH;
+        donutSpacingIn = BASE_SPACING;
+    } else if (totalInnerItems <= MAX_INNER_RINGS) {
         donutWidthIn = BASE_WIDTH;
         donutSpacingIn = BASE_SPACING;
     } else {
-        donutWidthIn = Math.max(MIN_WIDTH, (innerSpace / totalInnerItems) * 0.8);
-        donutSpacingIn = Math.max(MIN_WIDTH, (innerSpace / totalInnerItems) * 0.2);
+        // ✅ FIXED: Calculate how much space each ring gets, maintaining ratio
+        const spacePerRing = innerSpace / totalInnerItems;
+        donutWidthIn = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
+        donutSpacingIn = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
     }
     
     const stepIn = donutWidthIn + donutSpacingIn;
@@ -474,8 +481,6 @@ function drawAll() {
     // 🔄 Loop animation
     requestAnimationFrame(drawAll);
 }
-
-
 async function refreshDataPeriodically(){
     setInterval(async ()=>{
         const now = new Date();
