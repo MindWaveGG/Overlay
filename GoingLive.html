@@ -410,42 +410,37 @@ function drawAll() {
     outward = outward.filter(item => item.finalRadius !== null);
 
     // ✅ Calculate sizing for SPILLOVER items only
-    let donutWidthSpillover, donutSpacingSpillover;
-    if (inward.length === 0) {
-        donutWidthSpillover = BASE_WIDTH;
-        donutSpacingSpillover = BASE_SPACING;
-    } else if (inward.length <= MAX_SPILLOVER_RINGS) {
-        donutWidthSpillover = BASE_WIDTH;
-        donutSpacingSpillover = BASE_SPACING;
-    } else {
-        const spilloverSpace = inward.length * (BASE_WIDTH + BASE_SPACING);
-        if (spilloverSpace > innerSpace) {
-            const spacePerRing = innerSpace / inward.length;
-            donutWidthSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
-            donutSpacingSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
-        } else {
-            donutWidthSpillover = BASE_WIDTH;
-            donutSpacingSpillover = BASE_SPACING;
+    let donutWidthSpillover = BASE_WIDTH;
+    let donutSpacingSpillover = BASE_SPACING;
+    
+    if (inward.length > 0) {
+        if (inward.length > MAX_SPILLOVER_RINGS) {
+            const spilloverSpace = inward.length * (BASE_WIDTH + BASE_SPACING);
+            if (spilloverSpace > innerSpace) {
+                const spacePerRing = innerSpace / inward.length;
+                donutWidthSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.8));
+                donutSpacingSpillover = Math.max(MIN_WIDTH, Math.floor(spacePerRing * 0.2));
+            }
         }
     }
 
     const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
-    const spilloverStart = ringZoneStart - stepSpillover;
 
     // ✅ Position spillover items inward
-    inward.forEach((item,i)=>{
-        item.finalRadius = spilloverStart - i*stepSpillover - donutWidthSpillover/2;
-    });
-
-    // ✅ FIXED: Calculate the innermost spillover position
-    let spilloverEnd = spilloverStart;
+    let spilloverEnd = ringZoneStart; // Start from ring zone
+    
     if (inward.length > 0) {
-        // The last spillover item's inner edge
-        const lastSpilloverRadius = spilloverStart - (inward.length - 1)*stepSpillover - donutWidthSpillover/2;
-        spilloverEnd = lastSpilloverRadius - donutWidthSpillover/2 - donutSpacingSpillover;
+        const spilloverStart = ringZoneStart - stepSpillover;
+        inward.forEach((item,i)=>{
+            item.finalRadius = spilloverStart - i*stepSpillover - donutWidthSpillover/2;
+        });
+        
+        // Calculate where spillover ends (inner edge of last spillover ring)
+        const lastSpilloverCenter = spilloverStart - (inward.length - 1)*stepSpillover - donutWidthSpillover/2;
+        spilloverEnd = lastSpilloverCenter - donutWidthSpillover/2;
     }
 
-    // ✅ FIXED: Calculate remaining space from spillover end to camera circle
+    // ✅ FIXED: Calculate remaining space from spillover end to camera circle edge
     const remainingInnerSpace = spilloverEnd - cameraRadius;
 
     // ✅ Calculate sizing for GoingLive timers based on REMAINING space
@@ -461,6 +456,8 @@ function drawAll() {
     }
 
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
+
+    // ✅ FIXED: Start GoingLive from where spillover ends (or from ringZoneStart if no spillover)
     const goingLiveStart = spilloverEnd - stepGoingLive;
 
     // ✅ Position GoingLive timers in remaining space
