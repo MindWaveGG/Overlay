@@ -471,7 +471,7 @@ function drawAll() {
     
     if (goingLiveTimers.length === 0) {
         donutWidthGoingLive = BASE_WIDTH;
-        donutSpacingGoingLive = BASE_SPACING;
+        donutSpacingGoingLive = BASE_SPACING -10;
     } else {
         // Calculate ACTUAL available space from goingLiveStartPoint to CENTER (0)
         const availableSpaceForGoingLive = goingLiveStartPoint - 0; // Fill to center!
