@@ -375,10 +375,10 @@ function drawAll() {
     goingLiveTimers.sort((a,b)=>b.percentage - a.percentage);
 
     // 7️⃣ Constants for ring sizing
-    const BASE_WIDTH = 60;
+    const BASE_WIDTH = cameraRadius - 20;
     const BASE_SPACING = 15;
     const MIN_WIDTH = 3;
-    const MAX_WIDTH = 60;
+    const MAX_WIDTH = cameraRadius - 20;
 
     // ============================================================
     // STEP 1: Handle OUTWARD rings (Goals & Regular Timers)
