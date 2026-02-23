@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timer and Goal Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<style>
+    body { font-family: Arial, sans-serif; margin:0; padding:20px; }
+    h1 { text-align:center; }
+    .container { display:flex; justify-content:space-around; flex-wrap:wrap; }
+    .chart-container { width:300px; height:300px; margin:20px; }
+    .stats { text-align:center; margin-top:10px; }
+    #countdownTimer { font-size:1.5em; font-weight:bold; }
+    #timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
+</style>
+</head>
+<body>
+<canvas id="myCanvas"></canvas>
+<h1>Timer and Goal Tracker</h1>
+<div id="errorMessage" style="color:red;"></div>
+
+<div id="countdownTimer"></div>
+<div id="timerStats"></div>
+<div id="targetDateDisplay"></div>
+
+<div class="container">
+    <div class="chart-container"><canvas id="timerChart"></canvas></div>
+    <div class="chart-container"><canvas id="followerChart"></canvas><div id="followerStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="subscriptionChart"></canvas><div id="subscriptionStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="bitsChart"></canvas><div id="bitsStats" class="stats"></div></div>
+    <div class="chart-container"><canvas id="donationChart"></canvas><div id="donationStats" class="stats"></div></div>
+    <div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">Last refresh: N/A</div>
+</div>
+
+<script>
+let initiationComplete = false;
+let timerChart = null;
+const goalCharts = {};
+let timers = []; // <-- store all active timers
+let totalrings = 4;
+let followerCurrent=0, followerGoal=0;
+let subCurrent=0, subGoal=0;
+let donationCurrent=0, donationGoal=0;
+let bitsCurrent=0, bitsGoal=0;
+
+const canvas = document.getElementById('myCanvas');
+const ctx = canvas.getContext('2d');
+const canvasSize = 2200;
+canvas.width = canvasSize; canvas.height = canvasSize;
+const centerX = canvas.width/2, centerY = canvas.height/2;
+let donutWidth = 67.5; 
+let donutSpacing = 15, cameraRadius = 670, baseRadius = cameraRadius + donutSpacing + donutWidth;
+
+const cameraImage = new Image();
+cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
+
+// ----------------- UTILITY FETCH -----------------
+async function fetchData(url) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Network error");
+        return await response.json();
+    } catch (error) {
+        console.error("Fetch error:", error);
+        document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
+        return null;
+    }
+}
+
+function getTotalRings() {
+    let count = 4 + timers.length;
+    if(hypeTrainData && hypeTrainData.hypeTrainActive) count += 1;
+    return count;
+}
+
+
+
+// ----------------- TIMER & GOALS -----------------
+async function loadInitialData() {
+    await getUpdatedTimerData();
+    await fetchAllGoalData();
+    initiationComplete = true;
+}
+
+// ----------------- MULTI-TIMER -----------------
+async function getUpdatedTimerData() {
+    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getTimers";
+    const timerDataArray = await fetchData(url);
+    if(timerDataArray && timerDataArray.length>0){
+        timers = timerDataArray.map(t => ({
+            name: t.timerName,
+            startTime: new Date(t.startDateTime),
+            endTime: new Date(t.endDateTime)
+        }));
+		
+		document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
+            `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
+        ).join('<br>');
+    } else {
+        timers = [];
+        document.getElementById("targetDateDisplay").textContent = "No active timers";
+    }
+ if(timers.length > 0) {
+	totalrings = 4 + timers.length;
+ }
+}
+
+function getTimeRemaining(timer){
+    const now = new Date().getTime();
+    const timeLeft = timer.endTime - now;
+    const totalDuration = timer.endTime - timer.startTime;
+
+    // Change this line:
+    const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
+
+    return {
+        countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
+        countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
+        countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
+        countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
+        percentage // Now 1.0 at start, 0.0 at finish
+    };
+}
+
+
+async function removeExpiredTimers() {
+    const now = new Date().getTime();
+
+    for (let i = timers.length - 1; i >= 0; i--) { // iterate backwards to safely remove
+        const timer = timers[i];
+        if (timer.endTime <= now) {
+            console.log(`Timer expired: ${timer.name}`);
+
+            // Call Google Apps Script to delete timer
+            const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+            fetch(url).then(r => r.json()).then(res => {
+                console.log('Deleted timer response:', res);
+            }).catch(err => console.error('Error deleting timer:', err));
+
+            // Remove from local array so it disappears from canvas immediately
+            timers.splice(i, 1);
+        }
+		
+    }
+}
+
+
+// ----------------- GOALS -----------------
+async function fetchAllGoalData() {
+    const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
+    await Promise.all(goalTypes.map(fetchGoalData));
+}
+
+async function fetchGoalData(goalType) {
+    const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const goalData = await fetchData(url);
+    if(goalData){
+        const current = goalData.CurrentCount;
+        const goal = goalData.goalValue;
+        if(current!==undefined && goal!==undefined){
+            updateGoalChart(goalType,current,goal);
+            updateGoalStats(goalType,current,goal);
+        }
+    }
+}
+
+let hypeTrainData = null;
+
+async function fetchHypeTrainData() {
+    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=gethypetrain";
+    const data = await fetchData(url);
+    if(data){
+        hypeTrainData = data;
+    } else {
+        hypeTrainData = null;
+    }
+}
+
+
+
+
+function updateGoalChart(goalType,current,goal){
+    const map = {"Follower Goal":"followerChart","Subscription Goal":"subscriptionChart","Bits Goal":"bitsChart","Donation Goal":"donationChart"};
+    const ctxGoal = document.getElementById(map[goalType])?.getContext('2d');
+    if(!ctxGoal) return;
+
+    const progress = goal>0?Math.min(100,(current/goal)*100):0;
+    const remaining = 100-progress;
+
+    if(!goalCharts[goalType]){
+        goalCharts[goalType] = new Chart(ctxGoal,{
+            type:'doughnut',
+            data:{labels:["Progress","Remaining"], datasets:[{data:[progress,remaining], backgroundColor:["#4caf50","#ddd"]}]},
+            options:{responsive:true, maintainAspectRatio:false,
+                plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>{
+                    const total = ctx.chart.data.datasets[0].data[0]+ctx.chart.data.datasets[0].data[1];
+                    const pct = Math.round(ctx.chart.data.datasets[0].data[0]/total*100);
+                    return ctx.dataset.data[0]===v?`${pct}%`:`${100-pct}%`;
+                }}}}, plugins:[ChartDataLabels]
+        });
+    } else {
+        goalCharts[goalType].data.datasets[0].data = [progress,remaining];
+        goalCharts[goalType].update();
+    }
+
+    // Save globals
+    if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
+    if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
+    if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
+    if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
+}
+
+function updateGoalStats(goalType,current,goal){
+    const map = {"Follower Goal":"followerStats","Subscription Goal":"subscriptionStats","Bits Goal":"bitsStats","Donation Goal":"donationStats"};
+    let cur=current, g=goal;
+    if(goalType==="Donation Goal"){
+        cur=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(current);
+        g=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(goal);
+    }
+    document.getElementById(map[goalType]).textContent = `${goalType}: ${cur} / ${g}`;
+}
+
+// ----------------- CANVAS -----------------
+function drawCameraCircle(x,y,radius,alpha){
+    ctx.save(); ctx.globalAlpha=alpha;
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(cameraImage,x-radius,y-radius,radius*2,radius*2);
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
+}
+
+function drawDonut(x, y, radius, width, percentage, color, ccw = false, startAngleOffset = 0) {
+    if (percentage <= 0) return;
+    
+    // Convert offset from degrees to radians and add to base start angle
+    const startAngle = -Math.PI / 2 + (startAngleOffset * Math.PI / 180);
+    const endAngle = startAngle + (ccw ? -1 : 1) * (Math.PI * 2 * percentage);
+    
+    // Main ring
+    ctx.beginPath();
+    ctx.arc(x, y, radius, startAngle, endAngle, ccw);
+    ctx.lineWidth = width;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    
+    // Outer glow / highlight
+    ctx.beginPath();
+    ctx.arc(x, y, radius + width / 2, startAngle, endAngle, ccw);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    
+    // Inner black edge
+    ctx.beginPath();
+    ctx.arc(x, y, radius - width / 2, startAngle, endAngle, ccw);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+}
+
+
+function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
+    const padding=10, fontSize=80;
+    ctx.font=`bold ${fontSize}px Arial`;
+    const textWidth=ctx.measureText(label).width;
+    const labelWidth=textWidth+padding*2;
+    const labelHeight=fontSize+padding*2;
+
+    // --- FORCE TOP-LEFT START ---
+    // labelX = 100px from left edge
+    // labelY = 100px from top, plus height for each index
+    const labelX = 100;
+    const labelY = 100 + (index * (labelHeight + 20)); 
+
+    const angle = -Math.PI/2 + Math.PI*2*percentage;
+    const startX = x + radius * Math.cos(angle);
+    const startY = y + radius * Math.sin(angle);
+
+    // Draw Line
+    ctx.beginPath(); 
+    ctx.moveTo(startX,startY); 
+    ctx.lineTo(labelX + labelWidth, labelY + labelHeight/2); 
+    ctx.strokeStyle = lineColor; 
+    ctx.lineWidth = 4; 
+    ctx.stroke();
+
+    // Draw Box
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 10; 
+    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
+    ctx.fillStyle = '#0000007F'; 
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+
+    // Draw Text
+    ctx.fillStyle = 'white'; 
+    ctx.textAlign = 'left'; 
+    ctx.fillText(label, labelX + padding, labelY + fontSize + padding/2);
+}
+
+
+function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
+function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
+const red={r:255,g:0,b:0}, blue={r:0,g:0,b:0}; gold={r:211,g:175,b:55}; black={r:0,g:0,b:0};
+
+// Add this global flag before drawAll function
+let debugRunCount = 0;
+
+function drawAll() {
+    // 1️⃣ Remove expired timers first
+    removeExpiredTimers();
+
+    // 2️⃣ Clear canvas and draw camera circle
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
+
+    const ringZoneStart = cameraRadius + 20;
+    const canvasOuterEdge = (canvas.width / 2) - 40;
+    const outerSpace = canvasOuterEdge - ringZoneStart;
+    const innerSpace = ringZoneStart - cameraRadius; // Space from ring zone to camera center
+
+    // 3️⃣ Dynamic colors based on current time
+    const nowSec = Date.now() / 1000;
+    const t = (Math.sin(nowSec) + 1) / 2;
+    const colorHex = rgbToHex(lerpColor(red, blue, t));
+    const hypeHex  = rgbToHex(lerpColor(red, gold, t));
+    const goliveHex  = rgbToHex(lerpColor(black, red, t));
+
+    // 4️⃣ Build data array with updated percentages
+    let data = [
+        { label:'Followers', percentage:followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:'Subs', percentage:subGoal ? subCurrent/subGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:'Donations', percentage:donationGoal ? donationCurrent/donationGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
+        { label:'Bits', percentage:bitsGoal ? bitsCurrent/bitsGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true }
+    ];
+
+    let goingLiveTimers = [];
+
+    timers.forEach((timer, idx) => {
+        const tRem = getTimeRemaining(timer); // ✅ recalc each frame
+        timer.percentage = tRem.percentage;
+
+        const isGoingLive = timer.name.includes("GoingLive");
+        const item = {
+            timer: timer,
+            percentage: tRem.percentage,
+            color: isGoingLive ? goliveHex : colorHex,
+            allowOut: !isGoingLive,
+            allowIn: true,
+            noLabel: isGoingLive,
+            goingLive: isGoingLive,
+            ccw: isGoingLive ? (idx % 2 === 0) : false
+        };
+
+        if (isGoingLive) goingLiveTimers.push(item);
+        else data.push(item);
+    });
+
+    // 5️⃣ Hype train data
+    if (hypeTrainData?.hypeTrainActive) {
+        const cur = Number(hypeTrainData.currentLevel) || 0;
+        const goal = Number(hypeTrainData.goalLevel) || 1;
+        data.push({
+            label:'Hype Train',
+            percentage: Math.min(1, cur / goal),
+            color: hypeHex,
+            allowOut:true,
+            allowIn:true,
+            isGoal:true
+        });
+    }
+
+    // 6️⃣ Sort by percentage descending
+    data.sort((a,b)=>b.percentage - a.percentage);
+    goingLiveTimers.sort((a,b)=>b.percentage - a.percentage);
+
+    // 7️⃣ Constants for ring sizing
+    const BASE_WIDTH = cameraRadius - 20;
+    const BASE_SPACING = 15;
+    const MIN_WIDTH = 3;
+    const MAX_WIDTH = cameraRadius - 20;
+
+    // ============================================================
+    // STEP 1: Handle OUTWARD rings (Goals & Regular Timers)
+    // ============================================================
+    let outward = data.filter(d => d.allowOut);
+    
+    // Calculate how many rings can fit in outer space at base size
+    const baseStepOut = BASE_WIDTH + BASE_SPACING;
+    const maxOuterRingsAtBaseSize = Math.floor(outerSpace / baseStepOut);
+    
+    let donutWidthOut, donutSpacingOut;
+    
+    if (outward.length <= maxOuterRingsAtBaseSize) {
+        // All rings fit at base size
+        donutWidthOut = BASE_WIDTH;
+        donutSpacingOut = BASE_SPACING;
+    } else {
+        // Need to scale down to fit all rings
+        const totalSpacePerRing = outerSpace / outward.length;
+        donutWidthOut = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
+        donutSpacingOut = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
+    }
+    
+    const stepOut = donutWidthOut + donutSpacingOut;
+    
+    // Position outward rings and determine spillover
+    let inward = [];
+    outward.forEach((item, i) => {
+        const r = ringZoneStart + (i * stepOut) + donutWidthOut / 2;
+        if (r + donutWidthOut / 2 > canvasOuterEdge) {
+            // This ring spills over - move to inward
+            inward.push(item);
+            item.finalRadius = null;
+        } else {
+            item.finalRadius = r;
+        }
+    });
+    
+    // Remove spillover items from outward array
+    outward = outward.filter(item => item.finalRadius !== null);
+
+    // ============================================================
+    // STEP 2: Handle SPILLOVER rings (draw inward from ringZoneStart)
+    // ============================================================
+    let donutWidthSpillover, donutSpacingSpillover;
+    
+    if (inward.length === 0) {
+        donutWidthSpillover = BASE_WIDTH;
+        donutSpacingSpillover = BASE_SPACING;
+    } else {
+        // Calculate how many rings fit at base size in inner space
+        const baseStepSpillover = BASE_WIDTH + BASE_SPACING;
+        const maxSpilloverAtBaseSize = Math.floor(innerSpace / baseStepSpillover);
+        
+        if (inward.length <= maxSpilloverAtBaseSize) {
+            // Can use base size
+            donutWidthSpillover = BASE_WIDTH;
+            donutSpacingSpillover = BASE_SPACING;
+        } else {
+            // Scale spillover to fit in inner space
+            const totalSpacePerRing = innerSpace / inward.length;
+            donutWidthSpillover = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
+            donutSpacingSpillover = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
+        }
+    }
+    
+    const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
+
+    // ============================================================
+    // STEP 3: Calculate where spillover ends (if any)
+    // ============================================================
+    let goingLiveStartPoint = ringZoneStart;
+    
+    // Position spillover rings first to determine where GoingLive starts
+    if (inward.length > 0) {
+        inward.forEach((item, i) => {
+            item.finalRadius = ringZoneStart - (i * stepSpillover) - donutWidthSpillover / 2;
+        });
+        
+        // Calculate where the last spillover ring ends (inner edge, not outer edge!)
+        const lastSpilloverCenter = ringZoneStart - ((inward.length - 1) * stepSpillover) - donutWidthSpillover / 2;
+        const lastSpilloverInnerEdge = lastSpilloverCenter - donutWidthSpillover / 2;
+        goingLiveStartPoint = lastSpilloverInnerEdge;
+    }
+
+    // ============================================================
+    // STEP 4: Handle GOING LIVE timers - fill remaining space to CENTER
+    // ============================================================
+    let donutWidthGoingLive, donutSpacingGoingLive;
+    
+    if (goingLiveTimers.length === 0) {
+        donutWidthGoingLive = BASE_WIDTH;
+        donutSpacingGoingLive = 2;
+    } else {
+        // Calculate ACTUAL available space from goingLiveStartPoint to CENTER (0)
+        const availableSpaceForGoingLive = goingLiveStartPoint - 0; // Fill to center!
+        
+        // Your exact formula: floor(availableSpace / ringCount) - spacing
+        const totalSpacePerRing = Math.floor(availableSpaceForGoingLive / goingLiveTimers.length);
+        donutSpacingGoingLive = BASE_SPACING;
+        const calculatedWidth = totalSpacePerRing - donutSpacingGoingLive;
+        
+        // Clamp to min/max and handle edge case where width would be negative
+        if (calculatedWidth >= MIN_WIDTH && calculatedWidth <= MAX_WIDTH) {
+            donutWidthGoingLive = calculatedWidth;
+        } else if (calculatedWidth > MAX_WIDTH) {
+            donutWidthGoingLive = MAX_WIDTH;
+        } else {
+            // calculatedWidth < MIN_WIDTH - need to reduce spacing too
+            donutWidthGoingLive = MIN_WIDTH;
+            donutSpacingGoingLive = Math.max(0, totalSpacePerRing - MIN_WIDTH);
+        }
+    }
+    
+    const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
+    
+    // ============================================================
+    // Position GoingLive timers with cascading spiral rotation
+    // ============================================================
+    if (goingLiveTimers.length > 0) {
+        goingLiveTimers.forEach((item, i) => {
+            // Start from goingLiveStartPoint and work inward toward camera
+            item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive / 2;
+            
+            // Calculate rotating start angle based on cascading pattern
+            let startAngleOffset = 0;
+            
+            if (i === 0) {
+                // Ring 1 (index 0): starts at 0° and counts down counter-clockwise
+                startAngleOffset = 0;
+                item.ccw = true;
+            } else if (i === 1) {
+                // Ring 2 (index 1): starts at 180° and counts down clockwise
+                startAngleOffset = 180;
+                item.ccw = false;
+            } else if (i % 2 === 0) {
+                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): start where previous odd ring's arc ENDS
+                const prevOddIndex = i - 2;
+                const prevOddItem = goingLiveTimers[prevOddIndex];
+                
+                // Previous ring is counter-clockwise:
+                // - Starts at its startAngleOffset
+                // - Arc goes counter-clockwise (backwards) for (percentage * 360) degrees
+                // - So the END of the arc is at: startAngleOffset - (percentage * 360)
+                const prevArcDegrees = prevOddItem.percentage * 360;
+                startAngleOffset = prevOddItem.startAngleOffset - prevArcDegrees;
+                item.ccw = true;
+            } else {
+                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): start where previous even ring's arc ENDS
+                const prevEvenIndex = i - 2;
+                const prevEvenItem = goingLiveTimers[prevEvenIndex];
+                
+                // Previous ring is clockwise:
+                // - Starts at its startAngleOffset
+                // - Arc goes clockwise (forwards) for (percentage * 360) degrees
+                // - So the END of the arc is at: startAngleOffset + (percentage * 360)
+                const prevArcDegrees = prevEvenItem.percentage * 360;
+                startAngleOffset = prevEvenItem.startAngleOffset + prevArcDegrees;
+                item.ccw = false;
+            }
+            
+            item.startAngleOffset = startAngleOffset;
+        });
+    }
+
+    // ============================================================
+    // 9️⃣ Draw all donuts
+    // ============================================================
+    outward.forEach(item => {
+        if (!item.finalRadius) return;
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthOut, item.percentage, item.color, item.ccw || false);
+    });
+
+    inward.forEach(item => {
+        if (!item.finalRadius) return;
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthSpillover, item.percentage, item.color, item.ccw || false);
+    });
+
+    goingLiveTimers.forEach(item => {
+        if (!item.finalRadius) return;
+        drawDonut(centerX, centerY, item.finalRadius, donutWidthGoingLive, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
+    });
+
+    // 🔟 Draw labels dynamically
+    function drawItemLabel(item, idx, total, color = '#FF0000CC') {
+        if (item.noLabel || !item.finalRadius) return;
+
+        let label = '';
+        if (item.isGoal) {
+            switch (item.label) {
+                case 'Followers': label = `Followers: ${followerCurrent}/${followerGoal}`; break;
+                case 'Subs': label = `Subs: ${subCurrent}/${subGoal}`; break;
+                case 'Donations': label = `Donations: $${donationCurrent}/$${donationGoal}`; break;
+                case 'Bits': label = `Bits: ${bitsCurrent}/${bitsGoal}`; break;
+                default: label = item.label;
+            }
+        } else if (item.timer) {
+            const tRem = getTimeRemaining(item.timer);
+            label = `${item.timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`;
+        } else label = item.label;
+
+        drawLabelWithLine(label, centerX, centerY, item.finalRadius, item.percentage, idx, total, color, 'black', 'black');
+    }
+
+    outward.forEach((item, i) => drawItemLabel(item, (outward.length - 1) - i, outward.length));
+    inward.forEach((item, i) => drawItemLabel(item, (inward.length - 1) - i, inward.length));
+
+    // 🔄 Loop animation
+    requestAnimationFrame(drawAll);
+}
+
+
+
+async function refreshDataPeriodically(){
+    setInterval(async ()=>{
+        const now = new Date();
+        document.getElementById("refreshTracker").textContent=`Refreshing data at: ${now.toLocaleTimeString()}`;
+        await getUpdatedTimerData();
+        await fetchAllGoalData();
+        await fetchHypeTrainData(); // <--- add this
+    },5000);
+}
+
+
+// ----------------- INIT -----------------
+cameraImage.onload = ()=>{drawAll();}
+async function init(){await loadInitialData(); drawAll(); refreshDataPeriodically();}
+init();
+
+</script>
+</body>
+</html>
