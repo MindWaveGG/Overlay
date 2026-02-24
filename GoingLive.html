@@ -228,7 +228,7 @@ function drawCameraCircle(x,y,radius,alpha){
     ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
     ctx.drawImage(cameraImage,x-radius,y-radius,radius*2,radius*2);
     ctx.restore();
-    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#FF0000CC'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#D3D3D3CC'; ctx.stroke();
 }
 
 function drawDonut(x, y, radius, width, percentage, color, ccw = false, startAngleOffset = 0) {
@@ -301,7 +301,7 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-const red={r:156,g:0,b:39}, blue={r:214,g:181,b:136}; gold={r:211,g:175,b:55}; black={r:214,g:181,b:136};
+const red={r:211,g:211,b:211}, blue={r:169,g:169,b:169}; gold={r:211,g:175,b:55}; black={r:169,g:169,b:169};
 
 // Add this global flag before drawAll function
 let debugRunCount = 0;
@@ -563,7 +563,7 @@ function drawAll() {
     });
 
     // 🔟 Draw labels dynamically
-    function drawItemLabel(item, idx, total, color = '#FF0000CC') {
+    function drawItemLabel(item, idx, total, color = '#D3D3D3CC') {
         if (item.noLabel || !item.finalRadius) return;
 
         let label = '';
