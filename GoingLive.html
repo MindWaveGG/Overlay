@@ -303,9 +303,7 @@ function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.roun
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 // White ring + subtle gray distinctions
 const red   = {r:255, g:255, b:255}  // white
-const blue  = {r:210, g:210, b:215}  // cool light gray
-      gold  = {r:235, g:235, b:230}  // warm light gray
-      black = {r:170, g:170, b:175}  // medium gray
+const red={r:255,g:255,b:255}, blue={r:54,g:69,b:79}; gold={r:255,g:175,b:55}; black={r:255,g:124,b:10};
 
 // Add this global flag before drawAll function
 let debugRunCount = 0;
