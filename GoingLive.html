@@ -301,10 +301,11 @@ function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textCol
 
 function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
 function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-const red   = {r:255, g:255, b:255}  // bright white
-const blue  = {r:200, g:200, b:200}  // light gray
-      gold  = {r:180, g:180, b:180}  // mid gray
-      black = {r:140, g:140, b:140}  // darker gray
+// White ring + subtle gray distinctions
+const red   = {r:255, g:255, b:255}  // white
+const blue  = {r:210, g:210, b:215}  // cool light gray
+      gold  = {r:235, g:235, b:230}  // warm light gray
+      black = {r:170, g:170, b:175}  // medium gray
 
 // Add this global flag before drawAll function
 let debugRunCount = 0;
