@@ -604,9 +604,109 @@ async function refreshDataPeriodically(){
 }
 
 
+// ----------------- STREAMELEMENTS WEBSOCKET -----------------
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec";
+const SE_JWT_TOKEN = '__SE_JWT_TOKEN__';
+const SE_CHANNEL_ID = '__SE_CHANNEL_ID__';
+
+let seSocket = null;
+let seReconnectToken = null;
+let seReconnectAttempts = 0;
+
+function connectSEWebSocket() {
+    const wsUrl = seReconnectToken
+        ? `wss://astro.streamelements.com/?reconnect_token=${seReconnectToken}`
+        : 'wss://astro.streamelements.com/';
+
+    seSocket = new WebSocket(wsUrl);
+
+    seSocket.addEventListener('open', () => {
+        console.log('✅ SE WebSocket connected');
+        seReconnectAttempts = 0;
+    });
+
+    seSocket.addEventListener('message', (event) => {
+        const msg = JSON.parse(event.data);
+
+        switch (msg.type) {
+            case 'welcome':
+                seReconnectToken = null;
+                seSocket.send(JSON.stringify({
+                    type: 'subscribe',
+                    nonce: crypto.randomUUID(),
+                    data: {
+                        topic: 'channel.tips',
+                        room: SE_CHANNEL_ID,
+                        token: SE_JWT_TOKEN,
+                        token_type: 'jwt'
+                    }
+                }));
+                break;
+
+            case 'response':
+                if (msg.error) {
+                    console.error('❌ SE subscription error:', msg.error, msg.data?.message);
+                } else {
+                    console.log('✅ SE subscribed:', msg.data?.message);
+                }
+                break;
+
+            case 'message':
+                if (msg.topic !== 'channel.tips') return;
+                if (msg.data?.status !== 'success' || msg.data?.approved !== 'allowed') return;
+
+                const donation = msg.data.donation;
+                const tipPayload = {
+                    type: 'tip',
+                    event: {
+                        _id: msg.data._id,
+                        user: donation?.user?.username || 'Anonymous',
+                        amount: donation?.amount || 0,
+                        currency: donation?.currency || 'USD',
+                        message: donation?.message || ''
+                    }
+                };
+
+                console.log(`💰 Tip: ${tipPayload.event.user} → $${tipPayload.event.amount}`);
+
+                fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(tipPayload)
+                })
+                .then(r => r.text())
+                .then(res => console.log('📤 Forwarded to Apps Script:', res))
+                .catch(err => console.error('❌ Forward failed:', err));
+                break;
+
+            case 'reconnect':
+                console.log('🔄 SE graceful reconnect');
+                seReconnectToken = msg.data?.reconnect_token || null;
+                seSocket.close();
+                break;
+        }
+    });
+
+    seSocket.addEventListener('close', (e) => {
+        const delay = Math.min(1000 * Math.pow(2, seReconnectAttempts), 30000);
+        seReconnectAttempts++;
+        console.warn(`🔌 SE disconnected (${e.code}) — reconnecting in ${delay}ms`);
+        setTimeout(connectSEWebSocket, delay);
+    });
+
+    seSocket.addEventListener('error', (err) => {
+        console.error('SE WebSocket error:', err);
+    });
+}
+
 // ----------------- INIT -----------------
 cameraImage.onload = ()=>{drawAll();}
-async function init(){await loadInitialData(); drawAll(); refreshDataPeriodically();}
+async function init(){
+    await loadInitialData();
+    drawAll();
+    refreshDataPeriodically();
+    connectSEWebSocket();
+}
 init();
 
 </script>
