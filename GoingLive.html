@@ -669,14 +669,14 @@ function connectSEWebSocket() {
 
                 console.log(`💰 Tip: ${tipPayload.event.user} → $${tipPayload.event.amount}`);
 
-                fetch(APPS_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(tipPayload)
-                })
-                .then(r => r.text())
-                .then(res => console.log('📤 Forwarded to Apps Script:', res))
-                .catch(err => console.error('❌ Forward failed:', err));
+fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(tipPayload)
+})
+.then(() => console.log('📤 Tip forwarded to Apps Script'))
+.catch(err => console.error('❌ Forward failed:', err));
                 break;
 
             case 'reconnect':
