@@ -251,6 +251,12 @@
   </div>
 
   <div class="row">
+    <div id="camDebugLog" style="font-family:'Consolas',monospace; font-size:10.5px; color:var(--text-dim);
+      background:var(--bg); border:1px solid var(--panel-border); border-radius:6px; padding:6px 8px;
+      max-height:110px; overflow-y:auto; white-space:pre-wrap; line-height:1.5;">Camera log will appear here — click Enable above.</div>
+  </div>
+
+  <div class="row">
     <label>Camera device</label>
     <select id="camDevice" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
       <option value="">— click Enable, then pick —</option>
@@ -530,9 +536,19 @@
   let camMirrorOn = true;
   let camDiscLockOn = true; // true = billboarded, screen-locked HUD disc (the fix); false = world-locked, will appear to rotate/hide as you orbit
 
+  function camLog(msg){
+    const el = document.getElementById('camDebugLog');
+    const time = new Date().toLocaleTimeString();
+    if(el.textContent === 'Camera log will appear here — click Enable above.') el.textContent = '';
+    el.textContent += (el.textContent ? '\n' : '') + `[${time}] ${msg}`;
+    el.scrollTop = el.scrollHeight;
+    console.log('[cam]', msg);
+  }
+
   function populateCameraList(){
     navigator.mediaDevices.enumerateDevices().then(devices=>{
       const cams = devices.filter(d=>d.kind === 'videoinput');
+      camLog(`Found ${cams.length} camera device(s): ${cams.map(c=>c.label||'(unlabeled)').join(', ') || 'none'}`);
       const sel = document.getElementById('camDevice');
       sel.innerHTML = '';
       if(cams.length === 0){
@@ -547,26 +563,46 @@
       });
       startCamera(cams[0].deviceId);
     }).catch(err=>{
-      console.error('enumerateDevices failed', err);
+      camLog(`enumerateDevices FAILED: ${err.name}: ${err.message}`);
     });
   }
 
   function requestCameraAccess(){
+    camLog('Enable Camera Access clicked.');
+    // If this page isn't a secure context (https:// or http://localhost), the
+    // browser removes navigator.mediaDevices entirely — accessing .getUserMedia
+    // on it then throws a plain TypeError immediately, which is NOT caught by a
+    // promise .catch() and shows no dialog at all. That silent-failure signature
+    // is exactly "clicked, nothing happened" — this check turns it into a clear
+    // message instead of a swallowed exception.
+    if(!window.isSecureContext){
+      camLog('BLOCKED: window.isSecureContext is false. This page is not considered secure by this browser instance — getUserMedia is unavailable entirely, no prompt will ever appear. Double-check you are loading the actual https:// GitHub Pages URL (not a raw.githubusercontent.com link, and not a file:// path).');
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      camLog('BLOCKED: navigator.mediaDevices.getUserMedia does not exist in this browser instance, even though isSecureContext is true. This usually means camera/mic media features are disabled at the CEF level — confirm --enable-media-stream is actually being applied (check OBS\u2019s own log file for the launch command it received).');
+      return;
+    }
     // A throwaway getUserMedia call is the standard way to unlock labeled device
     // enumeration (browsers hide device labels until permission is granted at
     // least once) and to trigger the permission prompt itself.
+    camLog('Requesting camera permission via getUserMedia...');
     navigator.mediaDevices.getUserMedia({video:true}).then(stream=>{
+      camLog(`Permission granted (${stream.getVideoTracks().length} video track(s)).`);
       stream.getTracks().forEach(t=>t.stop()); // only needed it for the permission grant
       populateCameraList();
     }).catch(err=>{
+      camLog(`getUserMedia FAILED: ${err.name}: ${err.message}`);
       alert('Camera access was blocked or unavailable: ' + err.message +
         '\n\nIf this is running as an OBS Browser Source, right-click it in OBS → Interact, grant camera access there, then try again.');
     });
   }
 
   function startCamera(deviceId){
+    camLog(`Starting camera stream for device: ${deviceId || '(default)'}`);
     const constraints = deviceId ? {video:{deviceId:{exact:deviceId}}} : {video:true};
     navigator.mediaDevices.getUserMedia(constraints).then(stream=>{
+      camLog('Camera stream started successfully.');
       if(camStream){ camStream.getTracks().forEach(t=>t.stop()); }
       camStream = stream;
       videoEl.srcObject = stream;
@@ -581,7 +617,7 @@
       buildWebcamDisc(); // build the dedicated webcam mesh now that a texture exists
       buildRings(); // also rebuilds the center sphere's presence now that videoTexture exists
     }).catch(err=>{
-      console.error('startCamera failed', err);
+      camLog(`startCamera FAILED: ${err.name}: ${err.message}`);
     });
   }
 
