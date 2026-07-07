@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3D Rings — Precession Prototype</title>
+<style>
+  :root{
+    --bg: #0b0c10;
+    --panel: #15171c;
+    --panel-border: #262a33;
+    --gold: #d4a95a;
+    --gold-bright: #f0cd8a;
+    --text: #e8e6e1;
+    --text-dim: #8b8f99;
+    --accent: #c96a3e;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:var(--bg); color:var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow:hidden;
+  }
+  #scene{position:absolute; inset:0;}
+  #scene canvas{display:block;}
+
+  #panel{
+    position:absolute; top:16px; left:16px; width:280px;
+    background: rgba(21,23,28,0.88);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:18px 18px 14px;
+    backdrop-filter: blur(8px);
+    font-size:13px;
+    max-height: calc(100vh - 32px);
+    overflow-y:auto;
+  }
+  #panelHeader{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:2px;
+  }
+  #collapseBtn{
+    background:transparent; border:1px solid var(--panel-border); color:var(--text-dim);
+    border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;
+    flex-shrink:0; line-height:1;
+  }
+  #collapseBtn:hover{border-color:var(--gold); color:var(--gold-bright);}
+  #panelBody.collapsed{display:none;}
+  #panel h1{
+    font-size:15px; margin:0 0 2px; letter-spacing:0.03em;
+    color:var(--gold-bright); font-weight:600;
+  }
+  #panel .sub{
+    color:var(--text-dim); font-size:11.5px; margin:0 0 16px;
+    line-height:1.4;
+  }
+  .row{margin-bottom:14px;}
+  .row label{
+    display:flex; justify-content:space-between;
+    color:var(--text-dim); font-size:11.5px; margin-bottom:5px;
+    text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .row label span.val{color:var(--gold-bright); font-family:'Consolas',monospace;}
+  input[type=range]{
+    width:100%; -webkit-appearance:none; height:3px;
+    background:var(--panel-border); border-radius:2px; outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--gold); cursor:pointer; border:2px solid var(--bg);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%;
+    background:var(--gold); cursor:pointer; border:2px solid var(--bg);
+  }
+  input[type=number]{
+    width:100%; background:var(--bg); border:1px solid var(--panel-border);
+    color:var(--gold-bright); padding:7px 8px; border-radius:6px; outline:none;
+    font-family:'Consolas',monospace; font-size:13px;
+  }
+  input[type=number]:focus{border-color:var(--gold);}
+  input[type=color]{
+    width:42px; height:30px; border:1px solid var(--panel-border); border-radius:6px;
+    background:none; cursor:pointer; padding:2px; flex-shrink:0;
+  }
+  .color-row{display:flex; gap:10px; align-items:center;}
+  .color-row input[type=range]{flex:1;}
+  .toggles{display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;}
+  .toggles button{
+    flex:1; min-width:80px;
+    background:transparent; border:1px solid var(--panel-border);
+    color:var(--text-dim); padding:7px 8px; border-radius:6px;
+    font-size:11.5px; cursor:pointer; transition:all 0.15s;
+    text-transform:uppercase; letter-spacing:0.03em;
+  }
+  .toggles button.active{
+    border-color:var(--gold); color:var(--gold-bright);
+    background:rgba(212,169,90,0.08);
+  }
+  .toggles button:hover{border-color:var(--gold);}
+  hr{border:none; border-top:1px solid var(--panel-border); margin:14px 0;}
+  #readout{
+    font-family:'Consolas',monospace; font-size:10.5px; color:var(--text-dim);
+    line-height:1.6; white-space:pre;
+  }
+  #readout b{color:var(--gold-bright);}
+  #hint{
+    position:absolute; bottom:14px; left:16px; color:var(--text-dim);
+    font-size:11px; letter-spacing:0.02em;
+  }
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+
+<div id="panel">
+  <div id="panelHeader">
+    <h1>3D RINGS</h1>
+    <button id="collapseBtn" title="Hide/show settings">▾</button>
+  </div>
+  <div id="panelBody">
+  <p class="sub">Model A — each ring's tilt precesses by a fixed step per index, azimuth divides 360° evenly.</p>
+
+  <div class="row">
+    <label>External rings</label>
+    <div class="toggles">
+      <button data-external="on" class="active">On</button>
+      <button data-external="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Ring count (N) — no max <span class="val" id="vN">6</span></label>
+    <input type="number" id="N" min="2" step="1" value="6">
+  </div>
+
+  <div class="row">
+    <label>Precession step per ring <span class="val" id="vStep">5°</span></label>
+    <input type="range" id="step" min="0" max="40" step="1" value="5">
+  </div>
+
+  <div class="row">
+    <label>Base tilt formula <span class="val" id="vFormula">360/N − step</span></label>
+    <div class="toggles">
+      <button data-mode="a" class="active">360/N − step</button>
+      <button data-mode="b">Fixed 360/N</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Sphere radius (px, max 670) <span class="val" id="vPxRadius">670px (Ø1340px)</span></label>
+    <input type="range" id="pxRadius" min="20" max="670" step="1" value="670">
+  </div>
+
+  <div class="row">
+    <label>Ring tube thickness <span class="val" id="vTube">0.045</span></label>
+    <input type="range" id="tube" min="0.01" max="0.12" step="0.005" value="0.045">
+  </div>
+
+  <div class="row">
+    <label>Ring offset — hinge stagger <span class="val" id="vOffset">3px</span></label>
+    <input type="range" id="offset" min="0" max="20" step="1" value="3">
+  </div>
+
+  <div class="row">
+    <label>Ring diameter growth (center→outer) <span class="val" id="vGrowth">0.08</span></label>
+    <input type="range" id="growth" min="0" max="0.3" step="0.01" value="0.08">
+  </div>
+
+  <div class="row">
+    <label>Ring gap from sphere surface <span class="val" id="vSphereGap">66px</span></label>
+    <input type="range" id="sphereGap" min="0" max="300" step="1" value="66">
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>Spin (about own normal)</label>
+    <div class="toggles">
+      <button data-spin="on" class="active">On</button>
+      <button data-spin="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Spin speed <span class="val" id="vSpeed">1.0×</span></label>
+    <input type="range" id="speed" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <div class="row">
+    <label>Pitch / cartwheel (about hinge)</label>
+    <div class="toggles">
+      <button data-pitch="on" class="active">On</button>
+      <button data-pitch="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Pitch speed <span class="val" id="vPitchSpeed">1.0×</span></label>
+    <input type="range" id="pitchSpeed" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>Ring color <span class="val" id="vRingAlpha">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="ringColor" value="#c9973f">
+      <input type="range" id="ringAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Sphere color <span class="val" id="vSphereAlpha">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="sphereColor" value="#dba85a">
+      <input type="range" id="sphereAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Flat circle — a stationary flat disc fixed at dead center, facing forward. No spin, no pitch, no animation of any kind.</p>
+
+  <div class="row">
+    <label>Flat circle radius (px, max 670) <span class="val" id="vDiscRadius">670px (Ø1340px)</span></label>
+    <input type="range" id="discRadius" min="20" max="670" step="1" value="670">
+  </div>
+
+  <div class="row">
+    <label>Flat circle color <span class="val" id="vDiscAlpha">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="discColor" value="#4fa3d1">
+      <input type="range" id="discAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Webcam fill — pipes a real camera device into the flat circle. Lists physical devices on this PC (e.g. RazerCam), not OBS's internal source list — Browser Sources can't see that. Right-click this source in OBS → <b>Interact</b> to grant camera permission if the list stays empty.</p>
+
+  <div class="row">
+    <label>Webcam fill</label>
+    <div class="toggles">
+      <button data-camfill="on">On</button>
+      <button data-camfill="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="enableCamBtn" type="button" style="width:100%; background:transparent; border:1px solid var(--panel-border); color:var(--text-dim); padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px; text-transform:uppercase; letter-spacing:0.03em;">Enable Camera Access</button>
+  </div>
+
+  <div class="row">
+    <label>Camera device</label>
+    <select id="camDevice" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+      <option value="">— click Enable, then pick —</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Mirror webcam horizontally</label>
+    <div class="toggles">
+      <button data-mirror="on" class="active">On</button>
+      <button data-mirror="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Webcam disc orientation</label>
+    <div class="toggles">
+      <button data-camrotate="lock" class="active">Lock to screen</button>
+      <button data-camrotate="free">Rotate with view</button>
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Internal rings — independent set that fills inward from just under the sphere's surface toward the center.</p>
+
+  <div class="row">
+    <label>Internal rings</label>
+    <div class="toggles">
+      <button data-internal="on" class="active">On</button>
+      <button data-internal="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal ring count (N<sub>i</sub>) <span class="val" id="vNi">4</span></label>
+    <input type="number" id="Ni" min="1" step="1" value="4">
+  </div>
+
+  <div class="row">
+    <label>Internal tube thickness <span class="val" id="vTubeI">auto</span></label>
+    <p class="sub" style="margin:2px 0 0; font-size:11px;">Computed automatically: 670px sphere interior ÷ ring count, so it always fills to center with no overlap.</p>
+  </div>
+
+  <div class="row">
+    <label>Internal precession step per ring <span class="val" id="vStepI">5°</span></label>
+    <input type="range" id="stepI" min="0" max="40" step="1" value="5">
+  </div>
+
+  <div class="row">
+    <label>Internal hinge stagger <span class="val" id="vOffsetI">2px</span></label>
+    <input type="range" id="offsetI" min="0" max="20" step="1" value="2">
+  </div>
+
+  <div class="row">
+    <label>Internal spin</label>
+    <div class="toggles">
+      <button data-ispin="on" class="active">On</button>
+      <button data-ispin="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal spin speed <span class="val" id="vSpeedI">1.0×</span></label>
+    <input type="range" id="speedI" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <div class="row">
+    <label>Internal pitch / cartwheel</label>
+    <div class="toggles">
+      <button data-ipitch="on" class="active">On</button>
+      <button data-ipitch="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal pitch speed <span class="val" id="vPitchSpeedI">1.0×</span></label>
+    <input type="range" id="pitchSpeedI" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <div class="row">
+    <label>Internal ring color <span class="val" id="vRingAlphaI">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="ringColorI" value="#3fc9b8">
+      <input type="range" id="ringAlphaI" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>Settings file</label>
+    <div class="toggles">
+      <button id="saveSettingsBtn" type="button">Save</button>
+      <button id="loadSettingsBtn" type="button">Load</button>
+    </div>
+    <input type="file" id="loadSettingsFile" accept="application/json" style="display:none">
+  </div>
+
+  <hr>
+  <div id="readout"></div>
+  </div>
+</div>
+
+<div id="hint">Drag to orbit · scroll to zoom</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  const container = document.getElementById('scene');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0c10);
+  scene.fog = new THREE.FogExp2(0x0b0c10, 0.05);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.6, 6.5);
+
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  container.appendChild(renderer.domElement);
+
+  // Lighting — warm key + cool rim + soft ambient, for a gold-metal look
+  scene.add(new THREE.AmbientLight(0x404050, 0.7));
+  const key = new THREE.DirectionalLight(0xfff1d0, 2.4);
+  key.position.set(5, 8, 6);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 1;
+  key.shadow.camera.far = 20;
+  key.shadow.camera.left = -4;
+  key.shadow.camera.right = 4;
+  key.shadow.camera.top = 4;
+  key.shadow.camera.bottom = -4;
+  key.shadow.bias = -0.001;
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x6699ff, 0.9);
+  rim.position.set(-6, -3, -5);
+  scene.add(rim);
+  const fill = new THREE.PointLight(0xffd8a0, 0.9, 20);
+  fill.position.set(-3, 2, 4);
+  scene.add(fill);
+
+  // --- Simple orbit-style controls (no external OrbitControls needed) ---
+  let camTheta = 0.6, camPhi = 1.15, camDist = 6.5;
+  let isDragging = false, lastX=0, lastY=0;
+  renderer.domElement.addEventListener('pointerdown', e=>{isDragging=true; lastX=e.clientX; lastY=e.clientY;});
+  window.addEventListener('pointerup', ()=>isDragging=false);
+  window.addEventListener('pointermove', e=>{
+    if(!isDragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    camTheta -= dx * 0.005;
+    camPhi = Math.min(Math.max(camPhi - dy*0.005, 0.15), Math.PI-0.15);
+  });
+  renderer.domElement.addEventListener('wheel', e=>{
+    camDist = Math.min(Math.max(camDist + e.deltaY*0.003, 2.5), 16);
+    e.preventDefault();
+  }, {passive:false});
+  function updateCamera(){
+    camera.position.set(
+      camDist*Math.sin(camPhi)*Math.sin(camTheta),
+      camDist*Math.cos(camPhi),
+      camDist*Math.sin(camPhi)*Math.cos(camTheta)
+    );
+    camera.lookAt(0,0,0);
+  }
+
+  // --- Materials ---
+  function goldMaterial(index){
+    // subtle per-ring tonal variation so overlapping rings don't visually merge into one mass
+    const hueShift = ((index % 5) - 2) * 0.008;
+    const ringColorHex = document.getElementById('ringColor').value;
+    const ringAlpha = parseFloat(document.getElementById('ringAlpha').value);
+    const base = new THREE.Color(ringColorHex);
+    const hsl = {h:0,s:0,l:0};
+    base.getHSL(hsl);
+    const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      metalness: 0.9,
+      roughness: 0.24 + (index % 4)*0.02,
+      emissive: 0x2a1a05,
+      emissiveIntensity: 0.12,
+      transparent: ringAlpha < 0.999,
+      opacity: ringAlpha,
+      depthWrite: ringAlpha >= 0.999
+    });
+  }
+  function sphereMaterial(){
+    const sphereColorHex = document.getElementById('sphereColor').value;
+    const sphereAlpha = parseFloat(document.getElementById('sphereAlpha').value);
+    return new THREE.MeshStandardMaterial({
+      color: sphereColorHex,
+      metalness: 0.85,
+      roughness: 0.35,
+      transparent: sphereAlpha < 0.999,
+      opacity: sphereAlpha,
+      depthWrite: sphereAlpha >= 0.999
+    });
+  }
+  function innerMaterial(index){
+    // same per-ring tonal variation trick as goldMaterial, but keyed off the
+    // internal ring's own color/alpha controls so it's fully independent
+    const hueShift = ((index % 5) - 2) * 0.008;
+    const colorHex = document.getElementById('ringColorI').value;
+    const alpha = parseFloat(document.getElementById('ringAlphaI').value);
+    const base = new THREE.Color(colorHex);
+    const hsl = {h:0,s:0,l:0};
+    base.getHSL(hsl);
+    const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      metalness: 0.7,
+      roughness: 0.3 + (index % 4)*0.02,
+      emissive: 0x0a2a28,
+      emissiveIntensity: 0.15,
+      transparent: alpha < 0.999,
+      opacity: alpha,
+      depthWrite: alpha >= 0.999
+    });
+  }
+  function discMaterial(){
+    // color disc only — no webcam logic here at all anymore. Keeping this
+    // mesh's behavior completely unaffected by the webcam feature was the
+    // whole point of splitting them into two separate meshes.
+    const colorHex = document.getElementById('discColor').value;
+    const alpha = parseFloat(document.getElementById('discAlpha').value);
+    return new THREE.MeshStandardMaterial({
+      color: colorHex,
+      metalness: 0.1,
+      roughness: 0.6,
+      transparent: alpha < 0.999,
+      opacity: alpha,
+      depthWrite: alpha >= 0.999,
+      side: THREE.DoubleSide // camera can orbit fully around it, so both faces must render
+    });
+  }
+
+  function webcamMaterial(){
+    // Unlit on purpose: MeshBasicMaterial isn't affected by scene lights, so the
+    // warm key / blue rim lights can't tint the video. toneMapped:false skips the
+    // renderer's ACES filmic curve for this material specifically — that curve
+    // compresses/desaturates highlights, which was the other haze contributor.
+    // Always fully opaque — there's no alpha slider for this one; when it's not
+    // wanted, the mesh simply isn't built at all (see buildWebcamDisc).
+    return new THREE.MeshBasicMaterial({
+      map: videoTexture,
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true, // normal depth testing — see buildWebcamDisc for why this now works correctly
+      toneMapped: false
+    });
+  }
+
+  // Shared by buildRings() and the webcam functions below, so both agree on the
+  // same px↔world-unit scale without duplicating the constant.
+  const PX_PER_WORLD_UNIT = 670;
+
+  // --- Webcam (for OBS overlay use) ---
+  // See the panel's explanatory text: this talks to the OS camera device directly
+  // via getUserMedia, NOT to OBS's internal source list (no public API exists for
+  // a Browser Source to read that). "RazerCam" shows up here as the raw device.
+  const videoEl = document.createElement('video');
+  videoEl.autoplay = true;
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+  let camStream = null;
+  let videoTexture = null;
+  let camMirrorOn = true;
+  let camDiscLockOn = true; // true = billboarded, screen-locked HUD disc (the fix); false = world-locked, will appear to rotate/hide as you orbit
+
+  function populateCameraList(){
+    navigator.mediaDevices.enumerateDevices().then(devices=>{
+      const cams = devices.filter(d=>d.kind === 'videoinput');
+      const sel = document.getElementById('camDevice');
+      sel.innerHTML = '';
+      if(cams.length === 0){
+        sel.innerHTML = '<option value="">No cameras found</option>';
+        return;
+      }
+      cams.forEach((d,i)=>{
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ('Camera ' + (i+1));
+        sel.appendChild(opt);
+      });
+      startCamera(cams[0].deviceId);
+    }).catch(err=>{
+      console.error('enumerateDevices failed', err);
+    });
+  }
+
+  function requestCameraAccess(){
+    // A throwaway getUserMedia call is the standard way to unlock labeled device
+    // enumeration (browsers hide device labels until permission is granted at
+    // least once) and to trigger the permission prompt itself.
+    navigator.mediaDevices.getUserMedia({video:true}).then(stream=>{
+      stream.getTracks().forEach(t=>t.stop()); // only needed it for the permission grant
+      populateCameraList();
+    }).catch(err=>{
+      alert('Camera access was blocked or unavailable: ' + err.message +
+        '\n\nIf this is running as an OBS Browser Source, right-click it in OBS → Interact, grant camera access there, then try again.');
+    });
+  }
+
+  function startCamera(deviceId){
+    const constraints = deviceId ? {video:{deviceId:{exact:deviceId}}} : {video:true};
+    navigator.mediaDevices.getUserMedia(constraints).then(stream=>{
+      if(camStream){ camStream.getTracks().forEach(t=>t.stop()); }
+      camStream = stream;
+      videoEl.srcObject = stream;
+      videoEl.play();
+      videoTexture = new THREE.VideoTexture(videoEl);
+      videoTexture.encoding = THREE.sRGBEncoding; // matches renderer.outputEncoding elsewhere in this file
+      // Aspect-ratio correction needs videoWidth/videoHeight, which aren't
+      // populated until the browser has loaded the stream's metadata — hook
+      // that event rather than assuming it's already available right here.
+      videoEl.addEventListener('loadedmetadata', updateVideoTransform, {once:true});
+      updateVideoTransform(); // also try immediately in case metadata is already ready
+      buildWebcamDisc(); // build the dedicated webcam mesh now that a texture exists
+      buildRings(); // also rebuilds the center sphere's presence now that videoTexture exists
+    }).catch(err=>{
+      console.error('startCamera failed', err);
+    });
+  }
+
+  function updateVideoTransform(){
+    if(!videoTexture) return;
+    // ClampToEdgeWrapping, not RepeatWrapping — webcam video textures are almost
+    // always non-power-of-two dimensions (e.g. 1280×720), and REPEAT wrapping on
+    // an NPOT texture is a known spot where some WebGL contexts just silently
+    // fail to display the texture at all. The math below (offset + negative
+    // repeat for the mirror flip) never actually samples outside [0,1], so clamp
+    // mode works fine here and sidesteps that whole class of bug.
+    videoTexture.wrapS = THREE.ClampToEdgeWrapping;
+    videoTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+    // CircleGeometry's UV space is a square 0..1 box mapped onto the circle —
+    // if the video's real aspect ratio isn't 1:1 (webcams are almost always
+    // 16:9 or 4:3), mapping it directly stretches the image unevenly. This is
+    // the actual cause of the "skewing." Fix: compute a center-crop window
+    // (same idea as CSS object-fit:cover) so the video fills the square
+    // without distortion, just cropping the excess on whichever axis is longer.
+    let rx = 1, ry = 1, ox = 0, oy = 0;
+    if(videoEl.videoWidth && videoEl.videoHeight){
+      const videoAspect = videoEl.videoWidth / videoEl.videoHeight;
+      if(videoAspect > 1){
+        rx = 1 / videoAspect; ry = 1;
+        ox = (1 - rx) / 2; oy = 0;
+      } else {
+        rx = 1; ry = videoAspect;
+        ox = 0; oy = (1 - ry) / 2;
+      }
+    }
+
+    // Mirroring composes with the aspect-crop window above: flipping a cropped
+    // window in place means negating its repeat and shifting the offset by that
+    // same amount — this still stays within [0,1], no wraparound needed.
+    if(camMirrorOn){
+      ox = ox + rx;
+      rx = -rx;
+    }
+
+    videoTexture.repeat.set(rx, ry);
+    videoTexture.offset.set(ox, oy);
+    videoTexture.needsUpdate = true;
+  }
+
+  function applyCameraMirror(){
+    // kept as a thin wrapper so existing call sites (mirror toggle handler)
+    // don't need to change — the real logic now lives in updateVideoTransform
+    // so it can compose correctly with the aspect-ratio crop.
+    updateVideoTransform();
+  }
+
+  // --- Group holding the whole assembly ---
+  let assembly = new THREE.Group();
+  scene.add(assembly);
+  let ringData = []; // {mesh, normal (THREE.Vector3), pivot (THREE.Group)}
+  let innerRingData = []; // same shape, fully independent internal-ring set
+  let centerSphere = null;
+  let currentVisibleSphereR = 0.55; // kept in sync with buildRings()'s visibleSphereR
+
+  // The flat circle is added directly to `scene`, never to `assembly` — assembly
+  // gets a slow turntable spin in animate() (assembly.rotation.y += ...) and every
+  // ring animates on top of that. Attaching the disc there would drag it along for
+  // the ride, breaking "completely stationary." Tracked separately so rebuilds can
+  // remove just this one mesh without touching the rest of the scene graph.
+  let flatCircle = null;
+  function clearFlatCircle(){
+    if(flatCircle){ scene.remove(flatCircle); flatCircle = null; }
+  }
+
+  // The webcam disc is a SEPARATE mesh from flatCircle, added directly to `scene`
+  // for the same "never inherit assembly's spin" reason. It exists ONLY while
+  // webcam fill is on and a video texture is ready — otherwise it's simply not
+  // built, which is what makes it "transparent" when off (nothing there to draw,
+  // rather than a mesh with alpha applied). It's also NOT positioned at dead
+  // center like flatCircle: a flat plane through the exact middle of a solid,
+  // opaque sphere is geometrically behind the sphere's near surface from every
+  // viewing angle, so it gets correctly depth-tested away — that was the actual
+  // "not showing at all" bug. Every frame in animate(), this mesh gets repositioned
+  // just outside the sphere's visible surface, straight toward the camera, so
+  // normal depth testing keeps it visible without needing to disable depth test
+  // (which would have broken correct occlusion against the rings instead).
+  let flatCircleWebcam = null;
+  function clearWebcamDisc(){
+    if(flatCircleWebcam){ scene.remove(flatCircleWebcam); flatCircleWebcam = null; }
+  }
+  function buildWebcamDisc(){
+    clearWebcamDisc();
+    const useCam = document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on';
+    if(!useCam || !videoTexture) return; // stays absent — the "transparent when off" state
+    const discPx = parseFloat(document.getElementById('discRadius').value) || 670;
+    const discWorldR = (discPx / PX_PER_WORLD_UNIT) * 0.55; // same sizing as the color disc, so they match
+    const geo = new THREE.CircleGeometry(discWorldR, 64);
+    flatCircleWebcam = new THREE.Mesh(geo, webcamMaterial());
+    // Default pose: parked just outside the sphere's front surface, facing +Z
+    // (CircleGeometry's default orientation). This is what "Rotate with view" mode
+    // leaves untouched — orbit the camera and this disc will appear to turn/hide
+    // like any other world-space object, since nothing re-aims it after this.
+    // "Lock to screen" mode overrides both position AND orientation every frame
+    // in animate() instead, which is the actual fix for the reported bug.
+    flatCircleWebcam.position.set(0, 0, currentVisibleSphereR + 0.015);
+    scene.add(flatCircleWebcam);
+    // position/orientation get set every frame in animate() — no need to set
+    // them here since this mesh doesn't exist at all until webcam fill is on,
+    // and animate() runs continuously once it does.
+  }
+
+  function clearAssembly(){
+    scene.remove(assembly);
+    assembly = new THREE.Group();
+    scene.add(assembly);
+    ringData = [];
+    innerRingData = [];
+  }
+
+  function buildRings(){
+    clearAssembly();
+
+    const N = parseInt(document.getElementById('N').value);
+    const step = parseFloat(document.getElementById('step').value);
+    // Sphere radius is specified directly in px (max 670px) and converted to
+    // Three.js world units via the shared PX_PER_WORLD_UNIT scale factor defined
+    // above (next to the webcam code, which also needs it) — one control drives
+    // the geometry AND stays accurate for the px readout below.
+    const pxRadiusInput = parseFloat(document.getElementById('pxRadius').value) || 670;
+    const sphereR = pxRadiusInput / PX_PER_WORLD_UNIT;
+    const tube = parseFloat(document.getElementById('tube').value);
+    const offsetPx = parseFloat(document.getElementById('offset').value);
+    const OFFSET_SCALE = 0.012; // world units per "pixel" at this scene scale
+    const offsetWorld = offsetPx * OFFSET_SCALE;
+    const growth = parseFloat(document.getElementById('growth').value);
+    // Gap between the sphere's surface and the innermost ring is now its own
+    // control, specified directly in px and converted via the same fixed
+    // PX_PER_WORLD_UNIT scale used for the sphere radius — previously this was
+    // hardcoded as tube*2.2, so it silently changed any time tube thickness
+    // was adjusted instead of being independently tunable.
+    const sphereGapPx = parseFloat(document.getElementById('sphereGap').value) || 0;
+    const sphereGapWorld = sphereGapPx / PX_PER_WORLD_UNIT;
+    const mode = document.querySelector('.toggles button[data-mode].active').dataset.mode;
+
+    // The sphere MESH is drawn at sphereR*0.55, not the raw sphereR (see below) — that
+    // 0.55 factor is purely a visual scale-down and was never meant to change where the
+    // "surface" actually is for gap purposes. ringR0 previously measured its gap from the
+    // un-shrunk sphereR, which sits ~45% further out than the sphere anyone can actually
+    // see — at a 670px sphere that's ~300px of dead space even with the gap slider at 0.
+    // Using the same visibleSphereR the internal rings already rely on fixes ring 0 to
+    // sit the requested sphereGapWorld from the sphere's real, rendered surface.
+    const visibleSphereR = sphereR*0.55;
+    currentVisibleSphereR = visibleSphereR;
+    const ringR0 = visibleSphereR + sphereGapWorld; // ring 0 (center-most) sits sphereGapWorld outside the VISIBLE sphere
+
+    // Two rings of near-equal radius sharing near-equal centers are geometrically
+    // GUARANTEED to cross at 2 points regardless of tilt — that's just solid geometry.
+    // If the radius step between rings is smaller than their combined tube thickness,
+    // the solid tube volumes overlap at those crossings (not just the centerlines).
+    //
+    // IMPORTANT: the earlier version of this check assumed all rings share the exact
+    // same center, which isn't true once hinge stagger moves each ring's center outward.
+    // That positional drift eats directly into the radius-based safety margin — two
+    // rings can be pushed closer together by their offset even while their radii differ
+    // by a "safe" amount. The floor below accounts for both effects together: enough
+    // radius separation to clear the tube thickness, PLUS extra margin proportional to
+    // how far the hinge stagger can move rings toward each other (scaled up a bit
+    // further as ring count grows, since drift compounds across more rings).
+    const minGrowth = tube * 2.6 + offsetWorld * (2 + N * 0.15);
+    const effectiveGrowth = Math.max(growth, minGrowth);
+
+    // Center sphere — skipped entirely when the webcam disc is active. An opaque
+    // sphere sitting at the same center as a dead-center webcam disc would win
+    // every depth test in front of it (the disc has zero thickness, so it sits
+    // exactly at the sphere's middle, behind the sphere's own near hemisphere).
+    // The webcam disc is meant to replace the sphere visually, not sit inside it.
+    const webcamWillShow = document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on' && !!videoTexture;
+    if(!webcamWillShow){
+      const sphGeo = new THREE.SphereGeometry(sphereR*0.55, 48, 48);
+      centerSphere = new THREE.Mesh(sphGeo, sphereMaterial());
+      centerSphere.castShadow = true;
+      centerSphere.receiveShadow = true;
+      assembly.add(centerSphere);
+    }
+
+    const baseTiltDeg = mode === 'a' ? (360/N - step) : (360/N);
+
+    const externalOn = document.querySelector('.toggles button[data-external].active').dataset.external === 'on';
+
+    for(let i=0; externalOn && i<N; i++){
+      const alphaDeg = i * (360/N);              // azimuthal spacing — determines each ring's own hinge axis direction
+      const betaDeg  = i * baseTiltDeg;           // static tilt offset, animated further by pitch
+
+      const alpha = THREE.MathUtils.degToRad(alphaDeg);
+      const beta  = THREE.MathUtils.degToRad(betaDeg);
+
+      // Each ring gets its own FIXED hinge axis lying in the horizontal plane, pointed at
+      // its azimuth slot. Rotating around this single unique axis (instead of composing
+      // two Euler rotations around shared world axes) has no gimbal-lock singularity —
+      // there's no angle at which one ring's azimuth stops mattering and it collapses
+      // onto another ring's plane. Every ring sweeps its own distinct circle.
+      const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
+
+      const pivot = new THREE.Group();
+      // Hinge point shifts outward along that same axis, staggered per ring index —
+      // keeps rings from sharing a literal center point as well as a literal plane.
+      pivot.position.copy(axis).multiplyScalar(offsetWorld * i);
+      assembly.add(pivot);
+
+      const torusGeo = new THREE.TorusGeometry(ringR0 + i*effectiveGrowth, tube, 28, 128);
+      const mesh = new THREE.Mesh(torusGeo, goldMaterial(i));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      // Torus defaults to lying in XY plane (normal along Z); rotate to lie flat in XZ
+      // (normal along Y) as the shared reference "resting" plane before hinge tilt.
+      mesh.rotation.x = Math.PI/2;
+      pivot.add(mesh);
+
+      // Apply the static tilt immediately as a single axis-angle rotation about this
+      // ring's own fixed axis — pitch animation will update this quaternion each frame.
+      pivot.quaternion.setFromAxisAngle(axis, beta);
+
+      ringData.push({
+        mesh, pivot, axis: axis.clone(),
+        index: i,
+        betaBase: beta,      // static hinge tilt from layout math — pitch animates on top of this
+        pitchAngle: 0,
+        spinAngle: 0
+      });
+    }
+
+    // visibleSphereR (computed above, next to ringR0) is passed along so internal rings
+    // fill the real interior instead of floating in the gap between shell and cage.
+    // pxPerUnit is a fixed constant now (not derived per-frame from the input), since
+    // sphereR itself already came from px via PX_PER_WORLD_UNIT above. The 0.55 factor
+    // (visible mesh vs. cage radius) cancels out of pxRadiusInput/visibleSphereR, leaving
+    // this same constant regardless of the current px value.
+    const pxPerUnit = PX_PER_WORLD_UNIT / 0.55;
+
+    const innerLines = buildInnerRings(visibleSphereR, pxPerUnit);
+    buildFlatCircle(PX_PER_WORLD_UNIT);
+
+    updateReadout(N, step, baseTiltDeg, mode, offsetPx, growth, effectiveGrowth, pxRadiusInput, pxPerUnit, innerLines, externalOn);
+  }
+
+  function buildFlatCircle(PX_PER_WORLD_UNIT){
+    clearFlatCircle();
+    const discPx = parseFloat(document.getElementById('discRadius').value) || 670;
+    // Same 0.55 visual-scale factor the sphere mesh uses, so a disc radius slider
+    // value equal to the sphere's radius slider value produces a genuinely matching
+    // size (flush with the sphere's actual rendered surface) rather than just a
+    // matching raw px number that then renders differently.
+    const discWorldR = (discPx / PX_PER_WORLD_UNIT) * 0.55;
+    const geo = new THREE.CircleGeometry(discWorldR, 64);
+    flatCircle = new THREE.Mesh(geo, discMaterial());
+    // Orientation isn't set here anymore — animate() re-aims this disc at the
+    // camera every frame so it stays parallel to the screen regardless of orbit.
+    // Position is still fixed dead-center, which is the only thing "stationary"
+    // actually needs to mean for a screen-facing billboard.
+    flatCircle.position.set(0, 0, 0);
+    scene.add(flatCircle);
+  }
+
+  function buildInnerRings(visibleSphereR, pxPerUnit){
+    const internalOn = document.querySelector('.toggles button[data-internal].active').dataset.internal === 'on';
+    if(!internalOn) return []; // innerRingData stays empty; nothing to build or animate
+
+    const Ni = parseInt(document.getElementById('Ni').value);
+    const stepI = parseFloat(document.getElementById('stepI').value);
+    const offsetPxI = parseFloat(document.getElementById('offsetI').value);
+    const OFFSET_SCALE = 0.012;
+    const offsetWorldI = offsetPxI * OFFSET_SCALE;
+    const baseTiltDegI = (360/Ni - stepI);
+
+    // Divide the entire interior — from just under the visible shell down to the
+    // exact center — into Ni equal, CONTIGUOUS radial bands. Ring i owns the band
+    // [visibleSphereR - (i+1)*bandWidth, visibleSphereR - i*bandWidth]; its tube
+    // radius is sized directly from that band's width, so thickness auto-adjusts
+    // to however many rings are asked for and however much radius is available.
+    // Since visibleSphereR * pxPerUnit == the sphere's real px radius (max 670px),
+    // this is exactly "670px of interior ÷ ring count" done in world units — same
+    // math as the reference dashboard's available-space / count ring sizing, just
+    // expressed in Three.js units instead of canvas pixels. Because the bands are
+    // contiguous down to 0, the innermost ring's band always reaches true center —
+    // nothing is left unfilled, and there's no separate manual thickness control
+    // that could drift out of sync with the actual available space.
+    let geom = []; // geom[i] = { r: centerline radius, tubeR: tube radius } for ring i (0 = outermost)
+    const bandWidth = visibleSphereR / Ni;
+    const gapFrac = 0.16; // fraction of each band kept as clear air between rings
+    // hinge stagger pushes ring centers sideways, eating into the same clearance
+    // the gap above protects — fold that drift in as extra reserved radius.
+    const driftMargin = offsetWorldI * (1 + Ni*0.05);
+
+    for(let i=0; i<Ni; i++){
+      const outerEdge = visibleSphereR - i*bandWidth;
+      const innerEdge = Math.max(visibleSphereR - (i+1)*bandWidth, 0);
+      const rCenter = (outerEdge + innerEdge) / 2;
+      let tubeR = (bandWidth*(1-gapFrac))/2 - driftMargin*0.5;
+      const minTubeR = bandWidth * 0.05; // never let a ring shrink to invisible
+      const maxTubeR = bandWidth * 0.49; // never let it overrun into the next band
+      tubeR = Math.min(Math.max(tubeR, minTubeR), maxTubeR);
+      geom.push({ r: Math.max(rCenter, tubeR*0.02), tubeR });
+    }
+
+    const innerGroup = new THREE.Group();
+    assembly.add(innerGroup); // nested under the main assembly — inherits the slow overall spin
+
+    for(let i=0; i<Ni; i++){
+      const alphaDeg = i * (360/Ni);
+      const betaDeg  = i * baseTiltDegI;
+      const alpha = THREE.MathUtils.degToRad(alphaDeg);
+      const beta  = THREE.MathUtils.degToRad(betaDeg);
+      const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
+
+      const { r, tubeR } = geom[i];
+
+      const pivot = new THREE.Group();
+      pivot.position.copy(axis).multiplyScalar(offsetWorldI * i);
+      innerGroup.add(pivot);
+
+      const torusGeo = new THREE.TorusGeometry(r, tubeR, 20, 96);
+      const mesh = new THREE.Mesh(torusGeo, innerMaterial(i));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.rotation.x = Math.PI/2;
+      pivot.add(mesh);
+
+      pivot.quaternion.setFromAxisAngle(axis, beta);
+
+      innerRingData.push({
+        mesh, pivot, axis: axis.clone(),
+        index: i,
+        betaBase: beta,
+        pitchAngle: 0
+      });
+    }
+
+    // Build readout lines for this ring set, in both world units and real px
+    // (using the sphere's reference px radius so it lines up with an actual
+    // design spec, e.g. a 670px-radius sphere).
+    const lines = [];
+    lines.push(``);
+    lines.push(`Internal rings — auto-sized (670px interior ÷ ring count)`);
+    lines.push(`Ni = <b>${Ni}</b>`);
+    lines.push(`ring   r (world)   Ø tube (world)   r (px)   Ø tube (px)`);
+    for(let i=0;i<Ni;i++){
+      const { r, tubeR } = geom[i];
+      const rPx = (r*pxPerUnit).toFixed(0);
+      const dPx = (tubeR*2*pxPerUnit).toFixed(0);
+      lines.push(`${String(i).padStart(2,' ')}     ${r.toFixed(3).padStart(7,' ')}     ${(tubeR*2).toFixed(3).padStart(9,' ')}      ${String(rPx).padStart(5,' ')}    ${String(dPx).padStart(6,' ')}`);
+    }
+    return lines;
+  }
+
+  function updateReadout(N, step, baseTilt, mode, offsetPx, growth, effectiveGrowth, pxRadius, pxPerUnit, innerLines, externalOn){
+    const lines = [];
+    lines.push(`Scale ref: sphere = <b>${pxRadius}px</b> radius (Ø${pxRadius*2}px)  ·  1 world unit ≈ ${pxPerUnit.toFixed(1)}px`);
+    lines.push(``);
+    if(externalOn){
+      lines.push(`N = <b>${N}</b>   azimuth step = <b>${(360/N).toFixed(1)}°</b>`);
+      lines.push(`tilt formula = ${mode==='a' ? '360/N − step' : '360/N (fixed)'}`);
+      lines.push(`base tilt per ring = <b>${baseTilt.toFixed(1)}°</b>`);
+      lines.push(`hinge stagger = <b>${offsetPx}px</b> × ring index`);
+      if(effectiveGrowth > growth + 1e-6){
+        lines.push(`radius step = <b>${effectiveGrowth.toFixed(3)}</b> (raised from ${growth.toFixed(3)} — min gap enforced)`);
+      } else {
+        lines.push(`radius step = <b>${effectiveGrowth.toFixed(3)}</b>`);
+      }
+      lines.push(``);
+      lines.push(`ring   azimuth(α)   tilt(β)   hinge Δ`);
+      for(let i=0;i<N;i++){
+        const a = (i*(360/N)).toFixed(1);
+        const b = (i*baseTilt).toFixed(1);
+        const h = (i*offsetPx).toFixed(0);
+        lines.push(`${String(i).padStart(2,' ')}     ${a.padStart(6,' ')}°     ${b.padStart(6,' ')}°   ${h.padStart(4,' ')}px`);
+      }
+    } else {
+      lines.push(`External rings — <b>off</b>`);
+    }
+    if(innerLines && innerLines.length){
+      lines.push(...innerLines);
+    }
+    document.getElementById('readout').innerHTML = lines.join('\n');
+  }
+
+  // --- Animation ---
+  let spinOn = true;
+  let pitchOn = true;
+  let spinSpeed = 1.0;
+  let pitchSpeed = 1.0;
+  let internalSpinOn = true;
+  let internalPitchOn = true;
+  let internalSpinSpeed = 1.0;
+  let internalPitchSpeed = 1.0;
+  const clock = new THREE.Clock();
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+
+    ringData.forEach((r)=>{
+      if(spinOn){
+        // spin about the ring's own normal — flat rotation, doesn't change its plane
+        r.mesh.rotation.z += dt * spinSpeed * (0.4 + 0.08*r.index);
+      }
+      if(pitchOn){
+        // pitch/cartwheel about the ring's own fixed hinge axis — a single axis-angle
+        // rotation, so sweeping through a full 360° never causes it to collapse onto
+        // another ring's plane the way composed Euler rotations did.
+        r.pitchAngle += dt * pitchSpeed * (0.25 + 0.12*r.index);
+        r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase + r.pitchAngle);
+      }
+    });
+
+    innerRingData.forEach((r)=>{
+      if(internalSpinOn){
+        r.mesh.rotation.z += dt * internalSpinSpeed * (0.4 + 0.08*r.index);
+      }
+      if(internalPitchOn){
+        r.pitchAngle += dt * internalPitchSpeed * (0.25 + 0.12*r.index);
+        r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase + r.pitchAngle);
+      }
+    });
+
+    if(spinOn || pitchOn){
+      assembly.rotation.y += dt * spinSpeed * 0.05;
+    }
+
+    updateCamera();
+
+    // Billboard the flat disc to the camera every frame, AFTER updateCamera() so it
+    // uses this frame's fresh orientation. This is the actual fix for "shouldn't
+    // rotate as I drag" — the disc's world orientation never matched the drag
+    // gesture at all; what was changing was the camera's viewing angle onto a
+    // disc that stayed fixed to a world axis. Copying the camera's quaternion
+    // keeps the disc's plane parallel to the screen at all times, like a HUD
+    // element or a decal stuck to the glass in front of the lens.
+    if(flatCircle){
+      flatCircle.quaternion.copy(camera.quaternion);
+    }
+
+    // Webcam disc: billboard it flat to the camera and keep it at the true
+    // world center (0,0,0), exactly like the plain color disc. This only
+    // renders correctly because buildRings() skips the opaque center sphere
+    // whenever the webcam disc is active — see that comment for why a
+    // dead-center flat disc and an opaque same-center sphere can't coexist
+    // under normal depth testing. With the sphere out of the way, rings can
+    // now correctly pass in front of and behind the webcam as they spin.
+    if(flatCircleWebcam && camDiscLockOn){
+      flatCircleWebcam.position.set(0, 0, 0);
+      flatCircleWebcam.quaternion.copy(camera.quaternion);
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  // --- UI wiring ---
+  const N_in = document.getElementById('N');
+  const step_in = document.getElementById('step');
+  const pxRadius_in = document.getElementById('pxRadius');
+  const tube_in = document.getElementById('tube');
+  const offset_in = document.getElementById('offset');
+  const growth_in = document.getElementById('growth');
+  const sphereGap_in = document.getElementById('sphereGap');
+  const speed_in = document.getElementById('speed');
+  const pitchSpeed_in = document.getElementById('pitchSpeed');
+  const ringColor_in = document.getElementById('ringColor');
+  const ringAlpha_in = document.getElementById('ringAlpha');
+  const sphereColor_in = document.getElementById('sphereColor');
+  const sphereAlpha_in = document.getElementById('sphereAlpha');
+  const Ni_in = document.getElementById('Ni');
+  const stepI_in = document.getElementById('stepI');
+  const offsetI_in = document.getElementById('offsetI');
+  const speedI_in = document.getElementById('speedI');
+  const pitchSpeedI_in = document.getElementById('pitchSpeedI');
+  const ringColorI_in = document.getElementById('ringColorI');
+  const ringAlphaI_in = document.getElementById('ringAlphaI');
+  const discRadius_in = document.getElementById('discRadius');
+  const discColor_in = document.getElementById('discColor');
+  const discAlpha_in = document.getElementById('discAlpha');
+
+  function syncLabels(){
+    document.getElementById('vN').textContent = N_in.value;
+    document.getElementById('vStep').textContent = step_in.value + '°';
+    const pxR = parseFloat(pxRadius_in.value) || 0;
+    document.getElementById('vPxRadius').textContent = pxR + 'px (Ø' + (pxR*2) + 'px)';
+    document.getElementById('vTube').textContent = parseFloat(tube_in.value).toFixed(3);
+    document.getElementById('vOffset').textContent = offset_in.value + 'px';
+    document.getElementById('vGrowth').textContent = parseFloat(growth_in.value).toFixed(2);
+    document.getElementById('vSphereGap').textContent = sphereGap_in.value + 'px';
+    document.getElementById('vSpeed').textContent = parseFloat(speed_in.value).toFixed(1) + '×';
+    document.getElementById('vPitchSpeed').textContent = parseFloat(pitchSpeed_in.value).toFixed(1) + '×';
+    document.getElementById('vRingAlpha').textContent = 'alpha ' + parseFloat(ringAlpha_in.value).toFixed(2);
+    document.getElementById('vSphereAlpha').textContent = 'alpha ' + parseFloat(sphereAlpha_in.value).toFixed(2);
+    document.getElementById('vNi').textContent = Ni_in.value;
+    document.getElementById('vStepI').textContent = stepI_in.value + '°';
+    // Internal tube thickness has no input control anymore — it's always derived
+    // from 670px sphere interior ÷ Ni inside buildInnerRings, so the label just
+    // stays the static "auto" text already in the HTML markup.
+    document.getElementById('vOffsetI').textContent = offsetI_in.value + 'px';
+    document.getElementById('vSpeedI').textContent = parseFloat(speedI_in.value).toFixed(1) + '×';
+    document.getElementById('vPitchSpeedI').textContent = parseFloat(pitchSpeedI_in.value).toFixed(1) + '×';
+    document.getElementById('vRingAlphaI').textContent = 'alpha ' + parseFloat(ringAlphaI_in.value).toFixed(2);
+    const discR = parseFloat(discRadius_in.value) || 0;
+    document.getElementById('vDiscRadius').textContent = discR + 'px (Ø' + (discR*2) + 'px)';
+    document.getElementById('vDiscAlpha').textContent = 'alpha ' + parseFloat(discAlpha_in.value).toFixed(2);
+  }
+
+  [N_in, step_in, pxRadius_in, tube_in, offset_in, growth_in, sphereGap_in, ringColor_in, ringAlpha_in, sphereColor_in, sphereAlpha_in,
+   Ni_in, stepI_in, offsetI_in, ringColorI_in, ringAlphaI_in, discRadius_in, discColor_in, discAlpha_in].forEach(el=>{
+    el.addEventListener('input', ()=>{
+      if(N_in.value === '' || parseInt(N_in.value) < 2) return; // ignore mid-typing/invalid states
+      if(Ni_in.value === '' || parseInt(Ni_in.value) < 1) return; // same guard for internal count
+      syncLabels(); buildRings();
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-mode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-mode]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('vFormula').textContent = btn.textContent;
+      buildRings();
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-spin]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-spin]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      spinOn = btn.dataset.spin === 'on';
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-pitch]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-pitch]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      pitchOn = btn.dataset.pitch === 'on';
+    });
+  });
+
+  speed_in.addEventListener('input', ()=>{
+    spinSpeed = parseFloat(speed_in.value);
+    syncLabels();
+  });
+
+  pitchSpeed_in.addEventListener('input', ()=>{
+    pitchSpeed = parseFloat(pitchSpeed_in.value);
+    syncLabels();
+  });
+
+  document.querySelectorAll('.toggles button[data-internal]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-internal]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildRings(); // internal-on state is read live inside buildInnerRings, so just rebuild
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-external]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-external]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildRings(); // external-on state is read live inside buildRings, so just rebuild
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-ispin]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-ispin]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      internalSpinOn = btn.dataset.ispin === 'on';
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-ipitch]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-ipitch]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      internalPitchOn = btn.dataset.ipitch === 'on';
+    });
+  });
+
+  speedI_in.addEventListener('input', ()=>{
+    internalSpinSpeed = parseFloat(speedI_in.value);
+    syncLabels();
+  });
+
+  pitchSpeedI_in.addEventListener('input', ()=>{
+    internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
+    syncLabels();
+  });
+
+  document.getElementById('enableCamBtn').addEventListener('click', requestCameraAccess);
+
+  document.getElementById('camDevice').addEventListener('change', (e)=>{
+    startCamera(e.target.value);
+  });
+
+  document.querySelectorAll('.toggles button[data-camfill]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildFlatCircle(PX_PER_WORLD_UNIT); // camfill state is read live inside discMaterial
+      buildWebcamDisc(); // add/remove the webcam mesh itself for the new on/off state
+      buildRings(); // also updates whether the center sphere is present
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-mirror]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-mirror]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      camMirrorOn = btn.dataset.mirror === 'on';
+      applyCameraMirror();
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-camrotate]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-camrotate]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      camDiscLockOn = btn.dataset.camrotate === 'lock';
+      // Switching to "Rotate with view" should resume from a sane world pose
+      // rather than wherever the billboard math last parked it.
+      if(!camDiscLockOn && flatCircleWebcam){
+        flatCircleWebcam.position.set(0, 0, currentVisibleSphereR + 0.015);
+        flatCircleWebcam.quaternion.identity();
+      }
+    });
+  });
+
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // --- Collapsible settings panel ---
+  const collapseBtn = document.getElementById('collapseBtn');
+  const panelBody = document.getElementById('panelBody');
+  collapseBtn.addEventListener('click', ()=>{
+    const collapsed = panelBody.classList.toggle('collapsed');
+    collapseBtn.textContent = collapsed ? '▸' : '▾';
+  });
+
+  // --- Settings export / import ---
+  // Browser localStorage isn't reliable inside this preview sandbox, so persistence
+  // is handled as an explicit settings file instead — download it, then load it back
+  // any time (including in a future session) to restore every control exactly.
+  function collectSettings(){
+    return {
+      N: N_in.value,
+      step: step_in.value,
+      mode: document.querySelector('.toggles button[data-mode].active').dataset.mode,
+      pxRadius: pxRadius_in.value,
+      tube: tube_in.value,
+      offset: offset_in.value,
+      growth: growth_in.value,
+      sphereGap: sphereGap_in.value,
+      spin: spinOn,
+      spinSpeed: speed_in.value,
+      pitch: pitchOn,
+      pitchSpeed: pitchSpeed_in.value,
+      ringColor: ringColor_in.value,
+      ringAlpha: ringAlpha_in.value,
+      sphereColor: sphereColor_in.value,
+      sphereAlpha: sphereAlpha_in.value,
+      externalOn: document.querySelector('.toggles button[data-external].active').dataset.external === 'on',
+      internalOn: document.querySelector('.toggles button[data-internal].active').dataset.internal === 'on',
+      Ni: Ni_in.value,
+      stepI: stepI_in.value,
+      offsetI: offsetI_in.value,
+      internalSpin: internalSpinOn,
+      internalSpinSpeed: speedI_in.value,
+      internalPitch: internalPitchOn,
+      internalPitchSpeed: pitchSpeedI_in.value,
+      ringColorI: ringColorI_in.value,
+      ringAlphaI: ringAlphaI_in.value,
+      discRadius: discRadius_in.value,
+      discColor: discColor_in.value,
+      discAlpha: discAlpha_in.value,
+      camFillOn: document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on',
+      camMirrorOn: camMirrorOn,
+      camDiscLockOn: camDiscLockOn
+    };
+  }
+
+  function applySettings(s){
+    if(s.N != null) N_in.value = s.N;
+    if(s.step != null) step_in.value = s.step;
+    if(s.mode){
+      document.querySelectorAll('.toggles button[data-mode]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.mode === s.mode);
+      });
+      document.getElementById('vFormula').textContent = s.mode === 'a' ? '360/N − step' : 'Fixed 360/N';
+    }
+    if(s.pxRadius != null) pxRadius_in.value = s.pxRadius;
+    else if(s.radius != null) pxRadius_in.value = Math.round(s.radius * 670); // back-compat with old saved settings files
+    if(s.tube != null) tube_in.value = s.tube;
+    if(s.offset != null) offset_in.value = s.offset;
+    if(s.growth != null) growth_in.value = s.growth;
+    if(s.sphereGap != null) sphereGap_in.value = s.sphereGap;
+    if(s.spinSpeed != null) speed_in.value = s.spinSpeed;
+    if(s.pitchSpeed != null) pitchSpeed_in.value = s.pitchSpeed;
+    if(typeof s.spin === 'boolean'){
+      spinOn = s.spin;
+      document.querySelectorAll('.toggles button[data-spin]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.spin === 'on') === s.spin);
+      });
+    }
+    if(typeof s.pitch === 'boolean'){
+      pitchOn = s.pitch;
+      document.querySelectorAll('.toggles button[data-pitch]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.pitch === 'on') === s.pitch);
+      });
+    }
+    if(s.ringColor) ringColor_in.value = s.ringColor;
+    if(s.ringAlpha != null) ringAlpha_in.value = s.ringAlpha;
+    if(s.sphereColor) sphereColor_in.value = s.sphereColor;
+    if(s.sphereAlpha != null) sphereAlpha_in.value = s.sphereAlpha;
+
+    if(typeof s.externalOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-external]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.external === 'on') === s.externalOn);
+      });
+    }
+    if(typeof s.internalOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-internal]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.internal === 'on') === s.internalOn);
+      });
+    }
+    // Note: internal tube thickness is always auto-derived now (670px sphere
+    // interior ÷ Ni), so older settings files with s.autoFit/s.tubeI/s.shrink
+    // are simply ignored on load — nothing left to restore for them.
+    if(s.Ni != null) Ni_in.value = s.Ni;
+    if(s.stepI != null) stepI_in.value = s.stepI;
+    if(s.offsetI != null) offsetI_in.value = s.offsetI;
+    if(s.internalSpinSpeed != null) speedI_in.value = s.internalSpinSpeed;
+    if(s.internalPitchSpeed != null) pitchSpeedI_in.value = s.internalPitchSpeed;
+    if(typeof s.internalSpin === 'boolean'){
+      internalSpinOn = s.internalSpin;
+      document.querySelectorAll('.toggles button[data-ispin]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.ispin === 'on') === s.internalSpin);
+      });
+    }
+    if(typeof s.internalPitch === 'boolean'){
+      internalPitchOn = s.internalPitch;
+      document.querySelectorAll('.toggles button[data-ipitch]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.ipitch === 'on') === s.internalPitch);
+      });
+    }
+    if(s.ringColorI) ringColorI_in.value = s.ringColorI;
+    if(s.ringAlphaI != null) ringAlphaI_in.value = s.ringAlphaI;
+    if(s.discRadius != null) discRadius_in.value = s.discRadius;
+    if(s.discColor) discColor_in.value = s.discColor;
+    if(s.discAlpha != null) discAlpha_in.value = s.discAlpha;
+    if(typeof s.camFillOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.camfill === 'on') === s.camFillOn);
+      });
+      // Note: this only restores the toggle's visual state. The actual camera
+      // stream can't be restored automatically — browser permissions and device
+      // availability don't carry over between sessions, so "Enable Camera Access"
+      // still needs to be clicked again to actually populate the disc with video.
+    }
+    if(typeof s.camMirrorOn === 'boolean'){
+      camMirrorOn = s.camMirrorOn;
+      document.querySelectorAll('.toggles button[data-mirror]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.mirror === 'on') === s.camMirrorOn);
+      });
+      applyCameraMirror();
+    }
+    if(typeof s.camDiscLockOn === 'boolean'){
+      camDiscLockOn = s.camDiscLockOn;
+      document.querySelectorAll('.toggles button[data-camrotate]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.camrotate === 'lock') === s.camDiscLockOn);
+      });
+    }
+
+    spinSpeed = parseFloat(speed_in.value);
+    pitchSpeed = parseFloat(pitchSpeed_in.value);
+    internalSpinSpeed = parseFloat(speedI_in.value);
+    internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
+    syncLabels();
+    buildRings();
+  }
+
+  document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
+    const data = JSON.stringify(collectSettings(), null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '3d-rings-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  const loadSettingsFile = document.getElementById('loadSettingsFile');
+  document.getElementById('loadSettingsBtn').addEventListener('click', ()=> loadSettingsFile.click());
+  loadSettingsFile.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt)=>{
+      try{
+        applySettings(JSON.parse(evt.target.result));
+      }catch(err){
+        alert('Could not read settings file: ' + err.message);
+      }
+      loadSettingsFile.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  syncLabels();
+  buildRings();
+  animate();
+})();
+</script>
+</body>
+</html>
