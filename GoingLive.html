@@ -1983,7 +1983,7 @@
       const rect = box.getBoundingClientRect();
       line.setAttribute('x1', sx);
       line.setAttribute('y1', sy);
-      line.setAttribute('x2', rect.left);
+      line.setAttribute('x2', rect.right);
       line.setAttribute('y2', rect.top + rect.height / 2);
     });
   }
