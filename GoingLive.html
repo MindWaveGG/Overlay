@@ -108,6 +108,32 @@
     position:absolute; bottom:14px; left:16px; color:var(--text-dim);
     font-size:11px; letter-spacing:0.02em;
   }
+
+  /* Live-data stat labels + connector lines to their ring, ported from the 2D
+     overlay's drawLabelWithLine: a stacked column of boxes with a line running
+     from the box out to the ring's current progress point. Positioned to the
+     right of the settings panel (rather than at literal x=0) so the two don't
+     overlap — this is the same "anchored stack, line follows the ring" layout
+     the 2D version uses, just shifted to clear the panel. */
+  #labelLinesSvg{
+    position:absolute; inset:0; width:100%; height:100%;
+    pointer-events:none; z-index:5;
+  }
+  #liveLabels{
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    pointer-events:none; z-index:6;
+  }
+  .liveLabelBox{
+    position:absolute;
+    background: rgba(0,0,0,0.5);
+    border: 3px solid var(--box-border, var(--gold));
+    border-radius: 3px;
+    color: #fff;
+    font-family:'Consolas',monospace; font-weight:bold; font-size:13px;
+    white-space:nowrap;
+    padding: 7px 10px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  }
 </style>
 </head>
 <body>
@@ -473,7 +499,8 @@
 </div>
 
 <div id="hint">Drag to orbit · scroll to zoom</div>
-<div id="liveLabels" style="position:absolute; top:16px; right:16px; max-width:360px; font-family:'Consolas',monospace; font-size:12px; color:#fff; text-align:right; pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,0.9);"></div>
+<svg id="labelLinesSvg"></svg>
+<div id="liveLabels"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/obs-websocket-js"></script>
@@ -1039,6 +1066,21 @@
   scene.add(assembly);
   let ringData = []; // {mesh, normal (THREE.Vector3), pivot (THREE.Group)}
   let innerRingData = []; // same shape, fully independent internal-ring set
+
+  // Live-data label boxes + their connector lines to a ring's current progress
+  // tip. Rebuilt every time buildExternalDataRingsFromLayout/buildInternalDataRings
+  // run; the actual screen position is recomputed every animate() frame since the
+  // 3D tip point keeps moving (camera orbit, spin, pitch).
+  let labelTargets = []; // {key, text, tip (THREE.Object3D), color}
+
+  // Stable identity for a live-data item that survives rebuilds even though the
+  // item's array index can shift (rings get re-sorted by percentage, spill
+  // between outward/inward, or drop out when a timer expires). Used to (a) carry
+  // spin/pitch animation state forward onto the "same" ring after a rebuild, and
+  // (b) key label boxes/lines so they don't jump around when order changes.
+  function ringKey(item){
+    return item.timer ? ('timer:' + item.timer.name) : ('label:' + item.label);
+  }
   let centerSphere = null;
 
   // The flat circle is added directly to `scene`, never to `assembly` — assembly
@@ -1082,11 +1124,19 @@
   }
 
   function clearAssembly(){
+    // Preserve the slow overall turntable spin across rebuilds. Live-data mode
+    // calls buildRings() -> clearAssembly() every 1-5s (see liveTick/refreshLiveData),
+    // and a fresh THREE.Group() always starts at rotation 0 — without carrying this
+    // forward, the whole assembly visibly snapped back to its resting angle on every
+    // tick, which read as the animation "refreshing" instead of running continuously.
+    const prevRotationY = assembly.rotation.y;
     scene.remove(assembly);
     assembly = new THREE.Group();
+    assembly.rotation.y = prevRotationY;
     scene.add(assembly);
     ringData = [];
     innerRingData = [];
+    labelTargets = [];
   }
 
   function buildRings(){
@@ -1710,7 +1760,20 @@
     pivot.add(wrapper);
     parentGroup.add(pivot);
 
-    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0 };
+    // Marker at the arc's "progress tip" — the leading edge of the visible sweep,
+    // same point drawLabelWithLine() in the 2D version anchors its connector line
+    // to. TorusGeometry's outer-rim vertex at sweep angle `u` sits at
+    // (radius*cos(u), radius*sin(u), 0) in the geometry's own local space, BEFORE
+    // any transform is applied — so parenting this directly to the mesh (rather
+    // than hand-computing world position from hinge/wrapper math) means it
+    // automatically inherits every transform the visible ring gets: hinge tilt,
+    // pitch animation, spin, and the assembly's turntable rotation.
+    const tip = new THREE.Object3D();
+    const sweepRad = THREE.MathUtils.degToRad(sweepDeg);
+    tip.position.set(radiusWorld * Math.cos(sweepRad), radiusWorld * Math.sin(sweepRad), 0);
+    mesh.add(tip);
+
+    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0, tip };
   }
 
   function disposeDataRingSet(set){
@@ -1735,6 +1798,17 @@
   }
 
   function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup, baseTiltDeg, offsetWorld){
+    // Snapshot the outgoing ring set's animation state, keyed by stable identity
+    // (not array index — percentage-sort/spillover can reorder items between
+    // rebuilds). Restoring this onto whichever new ring matches the same item is
+    // what keeps spin/pitch running continuously through a rebuild instead of
+    // snapping back to rest — see clearAssembly() for the matching fix on the
+    // overall assembly rotation.
+    const savedState = new Map();
+    dataRingsExternal.forEach(rr=>{
+      if(rr.item) savedState.set(ringKey(rr.item), { spinZ: rr.mesh.rotation.z, pitchAngle: rr.pitchAngle });
+    });
+
     disposeDataRingSet(dataRingsExternal);
     dataRingsExternal = [];
     const worldPerPx = 1/pxPerUnit;
@@ -1746,19 +1820,47 @@
       const { axis, beta } = hingeFor(i, count, baseTiltDeg);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
+
+      const prev = savedState.get(ringKey(item));
+      if(prev){
+        rr.mesh.rotation.z = prev.spinZ;
+        rr.pitchAngle = prev.pitchAngle;
+        rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
+      }
+
       dataRingsExternal.push(rr);
       ringData.push(rr); // so animate()'s per-ring spin/pitch picks these up too
+
+      if(item.statLabel && !item.noLabel){
+        labelTargets.push({ key: ringKey(item), text: item.statLabel, tip: rr.tip, color: item.color });
+      }
     });
   }
 
   // Builds the inward (Internal) data-ring set: spillover items near the surface,
   // then GoingLive/subathon timers filling the rest down to true center.
   function buildInternalDataRings(pxPerUnit, parentGroup, layout, baseTiltDegI, offsetWorldI){
+    // Same continuity fix as buildExternalDataRingsFromLayout — see the comment
+    // there for why identity-keyed snapshot/restore is needed instead of index.
+    const savedState = new Map();
+    dataRingsInternal.forEach(rr=>{
+      if(rr.item) savedState.set(ringKey(rr.item), { spinZ: rr.mesh.rotation.z, pitchAngle: rr.pitchAngle });
+    });
+
     disposeDataRingSet(dataRingsInternal);
     dataRingsInternal = [];
     const worldPerPx = 1/pxPerUnit;
     const count = layout.inward.length + layout.goingLiveTimers.length;
     let i = 0;
+
+    function restoreState(rr, item){
+      const prev = savedState.get(ringKey(item));
+      if(prev){
+        rr.mesh.rotation.z = prev.spinZ;
+        rr.pitchAngle = prev.pitchAngle;
+        rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
+      }
+    }
 
     layout.inward.forEach(item=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
@@ -1766,8 +1868,12 @@
       const { axis, beta } = hingeFor(i, count, baseTiltDegI);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
+      restoreState(rr, item);
       dataRingsInternal.push(rr);
       innerRingData.push(rr);
+      if(item.statLabel && !item.noLabel){
+        labelTargets.push({ key: ringKey(item), text: item.statLabel, tip: rr.tip, color: item.color });
+      }
       i++;
     });
     layout.goingLiveTimers.forEach(item=>{
@@ -1776,8 +1882,11 @@
       const { axis, beta } = hingeFor(i, count, baseTiltDegI);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
+      restoreState(rr, item);
       dataRingsInternal.push(rr);
       innerRingData.push(rr);
+      // goingLiveTimers are deliberately unlabeled (matches 2D's noLabel:true for
+      // subathon timers), so no labelTargets entry here.
       i++;
     });
   }
@@ -1791,18 +1900,92 @@
                    // branches into the live-data ring builders below
   }
 
+  // Ported from the 2D overlay's drawLabelWithLine: a fixed stack of label boxes
+  // with a line running from each box out to its ring's current progress point.
+  // Difference from 2D: the 2D canvas draws both the box and the line fresh every
+  // frame at whatever angle the (static) 2D arc currently is. Here the boxes are
+  // real DOM elements stacked once per rebuild (labelTargets is rebuilt by
+  // buildExternalDataRingsFromLayout/buildInternalDataRings), but the LINE has to
+  // be recomputed every animate() frame in updateLabelLines() below, since the
+  // ring's tip point keeps moving continuously (spin/pitch/camera orbit) between
+  // rebuilds — that continuity is the whole point of the fix above.
   function updateDataLabels(){
     const el = document.getElementById('liveLabels');
-    if(!el) return;
-    if(!liveDataOn){ el.innerHTML=''; return; }
-    const lines = [];
-    if(lastLiveLayout){
-      lastLiveLayout.outward.forEach(it=>{ if(it.statLabel && !it.noLabel) lines.push(it.statLabel); });
-      lastLiveLayout.inward.forEach(it=>{ if(it.statLabel && !it.noLabel) lines.push(it.statLabel); });
-      // goingLiveTimers deliberately excluded — matches GoingLive's noLabel:true
-      // for subathon timers (drawItemLabel skips them there too).
-    }
-    el.innerHTML = lines.map(l=>`<div>${l.replace(/</g,'&lt;')}</div>`).join('');
+    const svg = document.getElementById('labelLinesSvg');
+    if(!el || !svg) return;
+    if(!liveDataOn || labelTargets.length===0){ el.innerHTML=''; svg.innerHTML=''; return; }
+
+    // Anchored to the left, like the 2D version's fixed (100,100) top-left start —
+    // shifted right past the settings panel (280px wide + margin) so the two
+    // overlays don't collide.
+    const boxLeft = 310;
+    const boxTop0 = 20;
+    const rowGap = 10;
+
+    el.innerHTML = '';
+    svg.innerHTML = '';
+
+    labelTargets.forEach((lt, i)=>{
+      const box = document.createElement('div');
+      box.className = 'liveLabelBox';
+      box.id = 'labelBox_' + i;
+      box.style.left = boxLeft + 'px';
+      box.style.setProperty('--box-border', lt.color || 'var(--gold)');
+      box.textContent = lt.text;
+      el.appendChild(box);
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('id', 'labelLine_' + i);
+      line.setAttribute('stroke', lt.color || '#d4a95a');
+      line.setAttribute('stroke-width', '2');
+      line.setAttribute('opacity', '0.85');
+      svg.appendChild(line);
+    });
+
+    // Stack top-to-bottom using each box's real rendered height (label text
+    // length varies, so a fixed row height would either clip or leave gaps).
+    let top = boxTop0;
+    labelTargets.forEach((lt, i)=>{
+      const box = document.getElementById('labelBox_' + i);
+      if(!box) return;
+      box.style.top = top + 'px';
+      top += box.offsetHeight + rowGap;
+    });
+
+    updateLabelLines(); // position lines immediately rather than waiting for next frame
+  }
+
+  function updateLabelLines(){
+    const svg = document.getElementById('labelLinesSvg');
+    if(!svg || !liveDataOn || labelTargets.length===0) return;
+    camera.updateMatrixWorld(); // ensure this frame's camera transform is current before projecting
+    const vec = new THREE.Vector3();
+
+    labelTargets.forEach((lt, i)=>{
+      const box = document.getElementById('labelBox_' + i);
+      const line = document.getElementById('labelLine_' + i);
+      if(!box || !line || !lt.tip) return;
+
+      lt.tip.getWorldPosition(vec);
+      vec.project(camera);
+
+      // Tip is behind the camera (or right at the clip plane) — hide the line
+      // rather than draw a garbage streak across the screen.
+      if(vec.z > 1){
+        line.setAttribute('opacity', '0');
+        return;
+      }
+      line.setAttribute('opacity', '0.85');
+
+      const sx = (vec.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (1 - (vec.y * 0.5 + 0.5)) * window.innerHeight;
+
+      const rect = box.getBoundingClientRect();
+      line.setAttribute('x1', sx);
+      line.setAttribute('y1', sy);
+      line.setAttribute('x2', rect.left);
+      line.setAttribute('y2', rect.top + rect.height / 2);
+    });
   }
 
   // --- StreamElements websocket relay (tips → Apps Script) — ported as-is ---
@@ -1912,6 +2095,7 @@
     }
 
     updateCamera();
+    updateLabelLines();
 
     // Billboard the flat disc to the camera every frame, AFTER updateCamera() so it
     // uses this frame's fresh orientation. This is the actual fix for "shouldn't
