@@ -524,6 +524,12 @@
   const UNBUILT_SENTINEL = '__' + 'WEB_SOCKET_P' + '__';
   const WEB_SOCKET_P = '__WEB_SOCKET_P__';
 
+  // Same build-time substitution, same reasoning, for the StreamElements JWT —
+  // this is a credential too, so it comes from the SE_JWT_TOKEN GitHub secret
+  // at deploy time rather than ever living in a user-saved settings file.
+  const UNBUILT_SENTINEL_SE_JWT = '__' + 'SE_JWT_TOKEN' + '__';
+  const SE_JWT_TOKEN = '__SE_JWT_TOKEN__';
+
   const container = document.getElementById('scene');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0c10);
@@ -737,10 +743,13 @@
         opt.textContent = d.label || ('Camera ' + (i+1));
         sel.appendChild(opt);
       });
-      // Prefer a device labeled "RazerCam" (this rig's camera is always that
-      // one) over just picking whatever enumerateDevices happens to list first.
+      // Prefer a device restored from a loaded settings file, then a device
+      // labeled "RazerCam" (this rig's camera is always that one), then just
+      // whatever enumerateDevices() happens to list first.
+      const pending = pendingCamDeviceId && cams.find(d=>d.deviceId === pendingCamDeviceId);
       const razer = cams.find(d=>/razer/i.test(d.label));
-      const chosen = razer || cams[0];
+      const chosen = pending || razer || cams[0];
+      pendingCamDeviceId = null;
       sel.value = chosen.deviceId;
       startCamera(chosen.deviceId);
     }).catch(err=>{
@@ -847,8 +856,15 @@
   // realistically ~8-10fps before it costs noticeable CPU on both ends — a
   // "video" made of a slideshow of screenshots, redrawn into a canvas texture.
   let captureMode = 'webcam'; // 'webcam' | 'obs'
+  let pendingCamDeviceId = null; // set by applySettings() when a saved settings file
+                                  // names a camera device that enumerateDevices() hasn't
+                                  // populated into the <select> yet — populateCameraList()
+                                  // checks this before falling back to RazerCam/first-cam
   let obs = null;
   let obsConnected = false;
+  let pendingObsSourceName = null; // set by applySettings() when a saved settings file
+                                    // names an OBS source that connectToOBS() hasn't
+                                    // fetched into the <select> yet
   const obsCanvas = document.createElement('canvas');
   const obsCtx = obsCanvas.getContext('2d');
   const obsTexture = new THREE.CanvasTexture(obsCanvas);
@@ -943,6 +959,18 @@
           opt.textContent = label;
           sel.appendChild(opt);
         });
+      }
+
+      // Restore a source saved in a loaded settings file, if it's present in
+      // this fetch — and if "Capture source" was also saved as OBS, start
+      // polling it immediately rather than waiting for a manual pick.
+      if(pendingObsSourceName){
+        const match = Array.from(sel.options).find(o=>o.value === pendingObsSourceName);
+        if(match){
+          sel.value = pendingObsSourceName;
+          if(captureMode === 'obs') startOBSPolling(pendingObsSourceName);
+        }
+        pendingObsSourceName = null;
       }
 
       obs.on('ConnectionClosed', ()=>{
@@ -1915,11 +1943,9 @@
     if(!el || !svg) return;
     if(!liveDataOn || labelTargets.length===0){ el.innerHTML=''; svg.innerHTML=''; return; }
 
-    // Anchored to the left, like the 2D version's fixed (100,100) top-left start —
-    // shifted right past the settings panel (280px wide + margin) so the two
-    // overlays don't collide.
+    // Anchored to the left, shifted right past the settings panel (280px wide +
+    // margin) so the two overlays don't collide.
     const boxLeft = 310;
-    const boxTop0 = 20;
     const rowGap = 10;
 
     el.innerHTML = '';
@@ -1943,8 +1969,20 @@
     });
 
     // Stack top-to-bottom using each box's real rendered height (label text
-    // length varies, so a fixed row height would either clip or leave gaps).
-    let top = boxTop0;
+    // length varies, so a fixed row height would either clip or leave gaps),
+    // then vertically CENTER the whole stack on the viewport. Pinning the
+    // stack to a fixed y=20 top-of-screen start (the old behavior, ported
+    // from the 2D overlay's small fixed-size canvas where that happened to
+    // sit near the middle) put the stack way above the subject on a full
+    // browser window, forcing the connector lines into long, steep diagonals.
+    let totalHeight = 0;
+    labelTargets.forEach((lt, i)=>{
+      const box = document.getElementById('labelBox_' + i);
+      if(box) totalHeight += box.offsetHeight;
+    });
+    totalHeight += rowGap * Math.max(0, labelTargets.length - 1);
+
+    let top = Math.max(20, (window.innerHeight - totalHeight) / 2);
     labelTargets.forEach((lt, i)=>{
       const box = document.getElementById('labelBox_' + i);
       if(!box) return;
@@ -2430,6 +2468,7 @@
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    updateDataLabels(); // re-center the label stack for the new viewport height
   });
 
   // --- Collapsible settings panel ---
@@ -2489,11 +2528,17 @@
       obsBgMode: document.querySelector('.toggles button[data-obsbg].active').dataset.obsbg,
       obsBgColor: document.getElementById('obsBgColor').value,
       obsUrl: document.getElementById('obsUrl').value,
-      obsSourceSelect: document.getElementById('obsSourceSelect').value
-      // Note: liveDataOn, seRelayOn, the SE JWT token, and the OBS WebSocket
-      // password are deliberately NOT saved — loading a settings file shouldn't
-      // silently start pulling live data or reconnect a websocket with stale
-      // credentials.
+      obsSourceSelect: document.getElementById('obsSourceSelect').value,
+      captureMode: captureMode,
+      camDeviceId: document.getElementById('camDevice').value,
+      liveDataOn: liveDataOn,
+      seRelayOn: seRelayOn
+      // Note: obsPassword and the SE JWT token are deliberately NOT saved here —
+      // they're credentials, and they already come from the WEB_SOCKET_P /
+      // SE_JWT_TOKEN GitHub secrets at deploy time (see the top of this script).
+      // Writing them into a downloadable settings file would mean a copy of
+      // your OBS password and StreamElements token sitting in plain text
+      // wherever that file goes.
     };
   }
 
@@ -2611,14 +2656,83 @@
       obsBgColor = s.obsBgColor;
     }
     if(s.obsUrl != null) document.getElementById('obsUrl').value = s.obsUrl;
-    if(s.obsSourceSelect != null) document.getElementById('obsSourceSelect').value = s.obsSourceSelect;
+    if(s.obsSourceSelect){
+      const obsSel = document.getElementById('obsSourceSelect');
+      const hasOption = Array.from(obsSel.options).some(o=>o.value === s.obsSourceSelect);
+      if(hasOption){
+        obsSel.value = s.obsSourceSelect;
+        if(captureMode === 'obs' || s.captureMode === 'obs') startOBSPolling(s.obsSourceSelect);
+      } else {
+        pendingObsSourceName = s.obsSourceSelect;
+      }
+    }
+    // obsPassword and seJwt are NOT restored from the settings file — they're
+    // credentials that come from GitHub secrets at deploy time (see the
+    // WEB_SOCKET_P / SE_JWT_TOKEN prefill at the bottom of this script), and
+    // loading a settings file shouldn't ever overwrite that with a stale or
+    // blank value.
+
+    if(s.captureMode){
+      captureMode = s.captureMode;
+      document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.capturemode === s.captureMode);
+      });
+    }
+    if(s.camDeviceId){
+      // The <select> is populated asynchronously by device enumeration
+      // (requestCameraAccess(), fired once on page load) — if it hasn't
+      // finished yet, stash the id and let populateCameraList() pick it up;
+      // if the options are already there, apply it immediately.
+      const camSel = document.getElementById('camDevice');
+      const hasOption = Array.from(camSel.options).some(o=>o.value === s.camDeviceId);
+      if(hasOption){
+        camSel.value = s.camDeviceId;
+        startCamera(s.camDeviceId);
+      } else {
+        pendingCamDeviceId = s.camDeviceId;
+      }
+    }
 
     spinSpeed = parseFloat(speed_in.value);
     pitchSpeed = parseFloat(pitchSpeed_in.value);
     internalSpinSpeed = parseFloat(speedI_in.value);
     internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
     syncLabels();
-    buildRings();
+
+    // Live data: restoring this as "on" is the whole point of saving it —
+    // reproduces the same startLiveDataTimers() path the On/Off toggle uses,
+    // so a loaded settings file immediately starts pulling from gasUrl rather
+    // than sitting on the manual decorative rings until someone clicks On.
+    // startLiveDataTimers() triggers its own refreshLiveData() -> rebuildDataRings()
+    // cycle, so the buildRings() call below only needs to run for the "off" /
+    // manual-mode case — same split the data-livedata click handler uses.
+    let needsBuildRings = true;
+    if(typeof s.liveDataOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-livedata]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.livedata === 'on') === s.liveDataOn);
+      });
+      liveDataOn = s.liveDataOn;
+      N_in.disabled = liveDataOn;
+      Ni_in.disabled = liveDataOn;
+      if(liveDataOn){
+        setLiveStatus('Connecting…');
+        startLiveDataTimers();
+        needsBuildRings = false;
+      } else {
+        stopLiveDataTimers();
+        setLiveStatus('Off');
+        lastLiveLayout = null;
+      }
+    }
+    if(typeof s.seRelayOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.serelay === 'on') === s.seRelayOn);
+      });
+      seRelayOn = s.seRelayOn;
+      if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
+    }
+
+    if(needsBuildRings) buildRings();
   }
 
   document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
@@ -2664,6 +2778,12 @@
     document.getElementById('obsPassword').value = WEB_SOCKET_P;
   }
   connectToOBS(); // setOBSStatus() reports Connecting… / Connected / any failure either way
+
+  // Same story for the StreamElements JWT: only prefill if the deploy step
+  // actually substituted SE_JWT_TOKEN, never send the literal placeholder.
+  if(SE_JWT_TOKEN && SE_JWT_TOKEN !== UNBUILT_SENTINEL_SE_JWT){
+    document.getElementById('seJwt').value = SE_JWT_TOKEN;
+  }
 
   // Camera: this rig's device is always RazerCam, so skip the manual "Enable
   // Camera Access" click and go straight for permission + enumeration. Per the
