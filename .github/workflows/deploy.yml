@@ -30,7 +30,7 @@ jobs:
         run: |
           python3 - <<'PYEOF'
           import os
-          path = "GoingLive-3D.html"
+          path = "GoingLive.html"
           with open(path, "r", encoding="utf-8") as f:
               content = f.read()
           if "__WEB_SOCKET_P__" not in content:
