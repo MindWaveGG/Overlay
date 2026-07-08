@@ -1714,9 +1714,10 @@
     if(!liveDataOn){ el.innerHTML=''; return; }
     const lines = [];
     if(lastLiveLayout){
-      lastLiveLayout.outward.forEach(it=>{ if(it.statLabel) lines.push(it.statLabel); });
-      lastLiveLayout.inward.forEach(it=>{ if(it.statLabel) lines.push(it.statLabel); });
-      lastLiveLayout.goingLiveTimers.forEach(it=>{ if(it.statLabel) lines.push(it.statLabel); });
+      lastLiveLayout.outward.forEach(it=>{ if(it.statLabel && !it.noLabel) lines.push(it.statLabel); });
+      lastLiveLayout.inward.forEach(it=>{ if(it.statLabel && !it.noLabel) lines.push(it.statLabel); });
+      // goingLiveTimers deliberately excluded — matches GoingLive's noLabel:true
+      // for subathon timers (drawItemLabel skips them there too).
     }
     el.innerHTML = lines.map(l=>`<div>${l.replace(/</g,'&lt;')}</div>`).join('');
   }
