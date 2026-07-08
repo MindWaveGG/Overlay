@@ -2,713 +2,2347 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Timer and Goal Tracker</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+<title>3D Rings — Precession Prototype</title>
 <style>
-    body { font-family: Arial, sans-serif; margin:0; padding:20px; }
-    h1 { text-align:center; }
-    .container { display:flex; justify-content:space-around; flex-wrap:wrap; }
-    .chart-container { width:300px; height:300px; margin:20px; }
-    .stats { text-align:center; margin-top:10px; }
-    #countdownTimer { font-size:1.5em; font-weight:bold; }
-    #timerStats, #targetDateDisplay { font-size:1.2em; margin-top:10px; }
+  :root{
+    --bg: #0b0c10;
+    --panel: #15171c;
+    --panel-border: #262a33;
+    --gold: #d4a95a;
+    --gold-bright: #f0cd8a;
+    --text: #e8e6e1;
+    --text-dim: #8b8f99;
+    --accent: #c96a3e;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:var(--bg); color:var(--text);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow:hidden;
+  }
+  #scene{position:absolute; inset:0;}
+  #scene canvas{display:block;}
+
+  #panel{
+    position:absolute; top:16px; left:16px; width:280px;
+    background: rgba(21,23,28,0.88);
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:18px 18px 14px;
+    backdrop-filter: blur(8px);
+    font-size:13px;
+    max-height: calc(100vh - 32px);
+    overflow-y:auto;
+  }
+  #panelHeader{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:2px;
+  }
+  #collapseBtn{
+    background:transparent; border:1px solid var(--panel-border); color:var(--text-dim);
+    border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;
+    flex-shrink:0; line-height:1;
+  }
+  #collapseBtn:hover{border-color:var(--gold); color:var(--gold-bright);}
+  #panelBody.collapsed{display:none;}
+  #panel h1{
+    font-size:15px; margin:0 0 2px; letter-spacing:0.03em;
+    color:var(--gold-bright); font-weight:600;
+  }
+  #panel .sub{
+    color:var(--text-dim); font-size:11.5px; margin:0 0 16px;
+    line-height:1.4;
+  }
+  .row{margin-bottom:14px;}
+  .row label{
+    display:flex; justify-content:space-between;
+    color:var(--text-dim); font-size:11.5px; margin-bottom:5px;
+    text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .row label span.val{color:var(--gold-bright); font-family:'Consolas',monospace;}
+  input[type=range]{
+    width:100%; -webkit-appearance:none; height:3px;
+    background:var(--panel-border); border-radius:2px; outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--gold); cursor:pointer; border:2px solid var(--bg);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%;
+    background:var(--gold); cursor:pointer; border:2px solid var(--bg);
+  }
+  input[type=number]{
+    width:100%; background:var(--bg); border:1px solid var(--panel-border);
+    color:var(--gold-bright); padding:7px 8px; border-radius:6px; outline:none;
+    font-family:'Consolas',monospace; font-size:13px;
+  }
+  input[type=number]:focus{border-color:var(--gold);}
+  input[type=color]{
+    width:42px; height:30px; border:1px solid var(--panel-border); border-radius:6px;
+    background:none; cursor:pointer; padding:2px; flex-shrink:0;
+  }
+  .color-row{display:flex; gap:10px; align-items:center;}
+  .color-row input[type=range]{flex:1;}
+  .toggles{display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;}
+  .toggles button{
+    flex:1; min-width:80px;
+    background:transparent; border:1px solid var(--panel-border);
+    color:var(--text-dim); padding:7px 8px; border-radius:6px;
+    font-size:11.5px; cursor:pointer; transition:all 0.15s;
+    text-transform:uppercase; letter-spacing:0.03em;
+  }
+  .toggles button.active{
+    border-color:var(--gold); color:var(--gold-bright);
+    background:rgba(212,169,90,0.08);
+  }
+  .toggles button:hover{border-color:var(--gold);}
+  hr{border:none; border-top:1px solid var(--panel-border); margin:14px 0;}
+  #readout{
+    font-family:'Consolas',monospace; font-size:10.5px; color:var(--text-dim);
+    line-height:1.6; white-space:pre;
+  }
+  #readout b{color:var(--gold-bright);}
+  #hint{
+    position:absolute; bottom:14px; left:16px; color:var(--text-dim);
+    font-size:11px; letter-spacing:0.02em;
+  }
 </style>
 </head>
 <body>
-<canvas id="myCanvas"></canvas>
-<h1>Timer and Goal Tracker</h1>
-<div id="errorMessage" style="color:red;"></div>
 
-<div id="countdownTimer"></div>
-<div id="timerStats"></div>
-<div id="targetDateDisplay"></div>
+<div id="scene"></div>
 
-<div class="container">
-    <div class="chart-container"><canvas id="timerChart"></canvas></div>
-    <div class="chart-container"><canvas id="followerChart"></canvas><div id="followerStats" class="stats"></div></div>
-    <div class="chart-container"><canvas id="subscriptionChart"></canvas><div id="subscriptionStats" class="stats"></div></div>
-    <div class="chart-container"><canvas id="bitsChart"></canvas><div id="bitsStats" class="stats"></div></div>
-    <div class="chart-container"><canvas id="donationChart"></canvas><div id="donationStats" class="stats"></div></div>
-    <div id="refreshTracker" style="text-align:center; margin-top:20px; font-size:1.2em; color:blue;">Last refresh: N/A</div>
+<div id="panel">
+  <div id="panelHeader">
+    <h1>3D RINGS</h1>
+    <button id="collapseBtn" title="Hide/show settings">▾</button>
+  </div>
+  <div id="panelBody">
+  <p class="sub">Model A — each ring's tilt precesses by a fixed step per index, azimuth divides 360° evenly.</p>
+
+  <div class="row">
+    <label>Page background</label>
+    <div class="toggles">
+      <button data-pagebg="color" class="active">Solid color</button>
+      <button data-pagebg="transparent">Transparent</button>
+    </div>
+  </div>
+
+  <div class="row" id="pageBgColorRow">
+    <label>Background color</label>
+    <input type="color" id="pageBgColor" value="#0b0c10" style="width:100%; height:34px; background:var(--bg); border:1px solid var(--panel-border); border-radius:6px; cursor:pointer; padding:2px;">
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>External rings</label>
+    <div class="toggles">
+      <button data-external="on" class="active">On</button>
+      <button data-external="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Ring count (N) — no max <span class="val" id="vN">6</span></label>
+    <input type="number" id="N" min="2" step="1" value="6">
+  </div>
+
+  <div class="row">
+    <label>Precession step per ring <span class="val" id="vStep">5°</span></label>
+    <input type="range" id="step" min="0" max="40" step="1" value="5">
+  </div>
+
+  <div class="row">
+    <label>Base tilt formula <span class="val" id="vFormula">360/N − step</span></label>
+    <div class="toggles">
+      <button data-mode="a" class="active">360/N − step</button>
+      <button data-mode="b">Fixed 360/N</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Sphere radius (px, max 670) <span class="val" id="vPxRadius">670px (Ø1340px)</span></label>
+    <input type="range" id="pxRadius" min="20" max="670" step="1" value="670">
+  </div>
+
+  <div class="row">
+    <label>Ring tube thickness <span class="val" id="vTube">0.045</span></label>
+    <input type="range" id="tube" min="0.01" max="0.12" step="0.005" value="0.045">
+  </div>
+
+  <div class="row">
+    <label>Ring offset — hinge stagger <span class="val" id="vOffset">3px</span></label>
+    <input type="range" id="offset" min="0" max="20" step="1" value="3">
+  </div>
+
+  <div class="row">
+    <label>Ring diameter growth (center→outer) <span class="val" id="vGrowth">0.08</span></label>
+    <input type="range" id="growth" min="0" max="0.3" step="0.01" value="0.08">
+  </div>
+
+  <div class="row">
+    <label>Ring gap from sphere surface <span class="val" id="vSphereGap">66px</span></label>
+    <input type="range" id="sphereGap" min="0" max="300" step="1" value="66">
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>Spin (about own normal)</label>
+    <div class="toggles">
+      <button data-spin="on" class="active">On</button>
+      <button data-spin="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Spin speed <span class="val" id="vSpeed">1.0×</span></label>
+    <input type="range" id="speed" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <div class="row">
+    <label>Pitch / cartwheel (about hinge)</label>
+    <div class="toggles">
+      <button data-pitch="on" class="active">On</button>
+      <button data-pitch="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Pitch speed <span class="val" id="vPitchSpeed">1.0×</span></label>
+    <input type="range" id="pitchSpeed" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>Ring color <span class="val" id="vRingAlpha">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="ringColor" value="#c9973f">
+      <input type="range" id="ringAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Sphere color <span class="val" id="vSphereAlpha">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="sphereColor" value="#dba85a">
+      <input type="range" id="sphereAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Flat circle — a stationary flat disc fixed at dead center, facing forward. No spin, no pitch, no animation of any kind.</p>
+
+  <div class="row">
+    <label>Flat circle radius (px, max 670) <span class="val" id="vDiscRadius">670px (Ø1340px)</span></label>
+    <input type="range" id="discRadius" min="20" max="670" step="1" value="670">
+  </div>
+
+  <div class="row">
+    <label>Flat circle color <span class="val" id="vDiscAlpha">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="discColor" value="#4fa3d1">
+      <input type="range" id="discAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Webcam fill — pipes a real camera device into the flat circle. Lists physical devices on this PC (e.g. RazerCam), not OBS's internal source list — Browser Sources can't see that. Right-click this source in OBS → <b>Interact</b> to grant camera permission if the list stays empty.</p>
+
+  <div class="row">
+    <label>Webcam fill</label>
+    <div class="toggles">
+      <button data-camfill="on">On</button>
+      <button data-camfill="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="enableCamBtn" type="button" style="width:100%; background:transparent; border:1px solid var(--panel-border); color:var(--text-dim); padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px; text-transform:uppercase; letter-spacing:0.03em;">Enable Camera Access</button>
+  </div>
+
+  <div class="row">
+    <label>Camera device</label>
+    <select id="camDevice" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+      <option value="">— click Enable, then pick —</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>Mirror webcam horizontally</label>
+    <div class="toggles">
+      <button data-mirror="on" class="active">On</button>
+      <button data-mirror="off">Off</button>
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">OBS source capture — instead of the raw OS camera, pulls a live screenshot feed of a named OBS source via obs-websocket. Shows exactly what OBS is compositing (chroma key, color correction, crop, etc. all included), at the cost of choppier ~8-10fps. Requires OBS 28+ with <b>Tools → WebSocket Server Settings → Enable WebSocket server</b> turned on.</p>
+
+  <div class="row">
+    <label>Capture source</label>
+    <div class="toggles">
+      <button data-capturemode="webcam" class="active">Webcam device</button>
+      <button data-capturemode="obs">OBS source</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>OBS WebSocket URL</label>
+    <input type="text" id="obsUrl" value="ws://localhost:4455" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+  </div>
+
+  <div class="row">
+    <label>OBS WebSocket password</label>
+    <input type="password" id="obsPassword" placeholder="leave blank if auth disabled" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+  </div>
+
+  <div class="row">
+    <button id="obsConnectBtn" type="button" style="width:100%; background:transparent; border:1px solid var(--panel-border); color:var(--text-dim); padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px; text-transform:uppercase; letter-spacing:0.03em;">Connect to OBS</button>
+  </div>
+
+  <div class="row">
+    <label style="text-transform:none; letter-spacing:0;">Status: <span class="val" id="obsStatus">Not connected</span></label>
+  </div>
+
+  <div class="row">
+    <label>OBS source</label>
+    <select id="obsSourceSelect" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+      <option value="">— connect first —</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <button id="obsApplyBtn" type="button" style="width:100%; background:transparent; border:1px solid var(--gold); color:var(--gold-bright); padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px; text-transform:uppercase; letter-spacing:0.03em;">Apply — Enable This Source</button>
+  </div>
+
+  <div class="row">
+    <label>OBS background</label>
+    <div class="toggles">
+      <button data-obsbg="transparent" class="active">Transparent</button>
+      <button data-obsbg="color">Solid color</button>
+    </div>
+  </div>
+
+  <div class="row" id="obsBgColorRow" style="display:none;">
+    <label>Background color</label>
+    <input type="color" id="obsBgColor" value="#000000" style="width:100%; height:34px; background:var(--bg); border:1px solid var(--panel-border); border-radius:6px; cursor:pointer; padding:2px;">
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Internal rings — independent set that fills inward from just under the sphere's surface toward the center.</p>
+
+  <div class="row">
+    <label>Internal rings</label>
+    <div class="toggles">
+      <button data-internal="on" class="active">On</button>
+      <button data-internal="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal ring count (N<sub>i</sub>) <span class="val" id="vNi">4</span></label>
+    <input type="number" id="Ni" min="1" step="1" value="4">
+  </div>
+
+  <div class="row">
+    <label>Internal tube thickness <span class="val" id="vTubeI">auto</span></label>
+    <p class="sub" style="margin:2px 0 0; font-size:11px;">Computed automatically: 670px sphere interior ÷ ring count, so it always fills to center with no overlap.</p>
+  </div>
+
+  <div class="row">
+    <label>Internal precession step per ring <span class="val" id="vStepI">5°</span></label>
+    <input type="range" id="stepI" min="0" max="40" step="1" value="5">
+  </div>
+
+  <div class="row">
+    <label>Internal hinge stagger <span class="val" id="vOffsetI">2px</span></label>
+    <input type="range" id="offsetI" min="0" max="20" step="1" value="2">
+  </div>
+
+  <div class="row">
+    <label>Internal spin</label>
+    <div class="toggles">
+      <button data-ispin="on" class="active">On</button>
+      <button data-ispin="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal spin speed <span class="val" id="vSpeedI">1.0×</span></label>
+    <input type="range" id="speedI" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <div class="row">
+    <label>Internal pitch / cartwheel</label>
+    <div class="toggles">
+      <button data-ipitch="on" class="active">On</button>
+      <button data-ipitch="off">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal pitch speed <span class="val" id="vPitchSpeedI">1.0×</span></label>
+    <input type="range" id="pitchSpeedI" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <div class="row">
+    <label>Internal ring color <span class="val" id="vRingAlphaI">alpha 1.00</span></label>
+    <div class="color-row">
+      <input type="color" id="ringColorI" value="#3fc9b8">
+      <input type="range" id="ringAlphaI" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Live Data — pulls goals, timers &amp; hype train from your GoingLive Google Apps Script and drives ring count / percentage / color directly. Outward rings (External) = goals, regular timers &amp; hype train. Inward rings (Internal) = spillover + GoingLive/subathon timers filling to center — same 4-step space math as the GoingLive canvas overlay, just applied to these rings.</p>
+
+  <div class="row">
+    <label>Live data</label>
+    <div class="toggles">
+      <button data-livedata="on">On</button>
+      <button data-livedata="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Google Apps Script URL</label>
+    <input type="text" id="gasUrl" value="https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
+  </div>
+
+  <div class="row">
+    <label>Outward ring space <span class="val" id="vOutwardSpace">400px</span></label>
+    <input type="range" id="outwardSpacePx" min="50" max="2000" step="10" value="400">
+  </div>
+
+  <div class="row">
+    <label>StreamElements relay (tips → Apps Script)</label>
+    <div class="toggles">
+      <button data-serelay="on">On</button>
+      <button data-serelay="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>SE JWT token</label>
+    <input type="text" id="seJwt" placeholder="paste StreamElements JWT" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
+  </div>
+
+  <div class="row">
+    <label>SE channel ID</label>
+    <input type="text" id="seChannelId" placeholder="StreamElements channel/room ID" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
+  </div>
+
+  <div class="row">
+    <label style="text-transform:none; letter-spacing:0;">Status: <span class="val" id="liveDataStatus">Off</span></label>
+  </div>
+
+  <hr>
+
+  <div class="row">
+    <label>Settings file</label>
+    <div class="toggles">
+      <button id="saveSettingsBtn" type="button">Save</button>
+      <button id="loadSettingsBtn" type="button">Load</button>
+    </div>
+    <input type="file" id="loadSettingsFile" accept="application/json" style="display:none">
+  </div>
+
+  <hr>
+  <div id="readout"></div>
+  </div>
 </div>
 
+<div id="hint">Drag to orbit · scroll to zoom</div>
+<div id="liveLabels" style="position:absolute; top:16px; right:16px; max-width:360px; font-family:'Consolas',monospace; font-size:12px; color:#fff; text-align:right; pointer-events:none; text-shadow:0 1px 3px rgba(0,0,0,0.9);"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/obs-websocket-js"></script>
 <script>
-let initiationComplete = false;
-let timerChart = null;
-const goalCharts = {};
-let timers = []; // <-- store all active timers
-let totalrings = 4;
-let followerCurrent=0, followerGoal=0;
-let subCurrent=0, subGoal=0;
-let donationCurrent=0, donationGoal=0;
-let bitsCurrent=0, bitsGoal=0;
+(function(){
+  const container = document.getElementById('scene');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0c10);
+  scene.fog = new THREE.FogExp2(0x0b0c10, 0.05);
 
-const canvas = document.getElementById('myCanvas');
-const ctx = canvas.getContext('2d');
-const canvasSize = 2200;
-canvas.width = canvasSize; canvas.height = canvasSize;
-const centerX = canvas.width/2, centerY = canvas.height/2;
-let donutWidth = 67.5; 
-let donutSpacing = 15, cameraRadius = 670, baseRadius = cameraRadius + donutSpacing + donutWidth;
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 1.6, 6.5);
 
-const cameraImage = new Image();
-cameraImage.src = 'https://static-cdn.jtvnw.net/jtv_user_pictures/4ae8547d-3e84-47bd-a024-ba09885f1bbe-profile_image-300x300.png';
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  renderer.setClearColor(0x0b0c10, 1); // starts opaque, matching the default "Solid color" page-background mode below
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  container.appendChild(renderer.domElement);
 
-// ----------------- UTILITY FETCH -----------------
-async function fetchData(url) {
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Network error");
-        return await response.json();
-    } catch (error) {
-        console.error("Fetch error:", error);
-        document.getElementById("errorMessage").textContent = "Failed to load data. Retrying...";
-        return null;
-    }
-}
-
-function getTotalRings() {
-    let count = 4 + timers.length;
-    if(hypeTrainData && hypeTrainData.hypeTrainActive) count += 1;
-    return count;
-}
-
-
-
-// ----------------- TIMER & GOALS -----------------
-async function loadInitialData() {
-    await getUpdatedTimerData();
-    await fetchAllGoalData();
-    initiationComplete = true;
-}
-
-// ----------------- MULTI-TIMER -----------------
-async function getUpdatedTimerData() {
-    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getTimers";
-    const timerDataArray = await fetchData(url);
-    if(timerDataArray && timerDataArray.length>0){
-        timers = timerDataArray.map(t => ({
-            name: t.timerName,
-            startTime: new Date(t.startDateTime),
-            endTime: new Date(t.endDateTime)
-        }));
-		
-		document.getElementById("targetDateDisplay").innerHTML = timers.map(t => 
-            `${t.name}: ${t.endTime.toDateString()} ${t.endTime.toLocaleTimeString()}`
-        ).join('<br>');
+  // Page background: 'color' keeps the original opaque look; 'transparent'
+  // makes the whole page (CSS body/html, canvas clear color, and the Three.js
+  // scene's own background) see-through — the main use case being OBS Browser
+  // Source, where a transparent page composites directly over whatever's
+  // beneath it in the scene instead of showing a black rectangle.
+  function applyPageBackground(mode, color){
+    if(mode === 'transparent'){
+      document.documentElement.style.background = 'transparent';
+      document.body.style.background = 'transparent';
+      renderer.setClearColor(0x000000, 0);
+      scene.background = null;
     } else {
-        timers = [];
-        document.getElementById("targetDateDisplay").textContent = "No active timers";
+      document.documentElement.style.background = color;
+      document.body.style.background = color;
+      renderer.setClearColor(color, 1);
+      scene.background = new THREE.Color(color);
+      scene.fog.color.set(color); // keep the fog tint matched to the backdrop instead of clashing
     }
- if(timers.length > 0) {
-	totalrings = 4 + timers.length;
- }
-}
+  }
 
-function getTimeRemaining(timer){
+  // Lighting — warm key + cool rim + soft ambient, for a gold-metal look
+  scene.add(new THREE.AmbientLight(0x404050, 0.7));
+  const key = new THREE.DirectionalLight(0xfff1d0, 2.4);
+  key.position.set(5, 8, 6);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 1;
+  key.shadow.camera.far = 20;
+  key.shadow.camera.left = -4;
+  key.shadow.camera.right = 4;
+  key.shadow.camera.top = 4;
+  key.shadow.camera.bottom = -4;
+  key.shadow.bias = -0.001;
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0x6699ff, 0.9);
+  rim.position.set(-6, -3, -5);
+  scene.add(rim);
+  const fill = new THREE.PointLight(0xffd8a0, 0.9, 20);
+  fill.position.set(-3, 2, 4);
+  scene.add(fill);
+
+  // --- Simple orbit-style controls (no external OrbitControls needed) ---
+  let camTheta = 0.6, camPhi = 1.15, camDist = 6.5;
+  let isDragging = false, lastX=0, lastY=0;
+  renderer.domElement.addEventListener('pointerdown', e=>{isDragging=true; lastX=e.clientX; lastY=e.clientY;});
+  window.addEventListener('pointerup', ()=>isDragging=false);
+  window.addEventListener('pointermove', e=>{
+    if(!isDragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    camTheta -= dx * 0.005;
+    camPhi = Math.min(Math.max(camPhi - dy*0.005, 0.15), Math.PI-0.15);
+  });
+  renderer.domElement.addEventListener('wheel', e=>{
+    camDist = Math.min(Math.max(camDist + e.deltaY*0.003, 2.5), 16);
+    e.preventDefault();
+  }, {passive:false});
+  function updateCamera(){
+    camera.position.set(
+      camDist*Math.sin(camPhi)*Math.sin(camTheta),
+      camDist*Math.cos(camPhi),
+      camDist*Math.sin(camPhi)*Math.cos(camTheta)
+    );
+    camera.lookAt(0,0,0);
+  }
+
+  // --- Materials ---
+  function goldMaterial(index){
+    // subtle per-ring tonal variation so overlapping rings don't visually merge into one mass
+    const hueShift = ((index % 5) - 2) * 0.008;
+    const ringColorHex = document.getElementById('ringColor').value;
+    const ringAlpha = parseFloat(document.getElementById('ringAlpha').value);
+    const base = new THREE.Color(ringColorHex);
+    const hsl = {h:0,s:0,l:0};
+    base.getHSL(hsl);
+    const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      metalness: 0.9,
+      roughness: 0.24 + (index % 4)*0.02,
+      emissive: 0x2a1a05,
+      emissiveIntensity: 0.12,
+      transparent: ringAlpha < 0.999,
+      opacity: ringAlpha,
+      depthWrite: ringAlpha >= 0.999
+    });
+  }
+  function sphereMaterial(){
+    const sphereColorHex = document.getElementById('sphereColor').value;
+    const sphereAlpha = parseFloat(document.getElementById('sphereAlpha').value);
+    return new THREE.MeshStandardMaterial({
+      color: sphereColorHex,
+      metalness: 0.85,
+      roughness: 0.35,
+      transparent: sphereAlpha < 0.999,
+      opacity: sphereAlpha,
+      depthWrite: sphereAlpha >= 0.999
+    });
+  }
+  function innerMaterial(index){
+    // same per-ring tonal variation trick as goldMaterial, but keyed off the
+    // internal ring's own color/alpha controls so it's fully independent
+    const hueShift = ((index % 5) - 2) * 0.008;
+    const colorHex = document.getElementById('ringColorI').value;
+    const alpha = parseFloat(document.getElementById('ringAlphaI').value);
+    const base = new THREE.Color(colorHex);
+    const hsl = {h:0,s:0,l:0};
+    base.getHSL(hsl);
+    const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
+    return new THREE.MeshStandardMaterial({
+      color: color,
+      metalness: 0.7,
+      roughness: 0.3 + (index % 4)*0.02,
+      emissive: 0x0a2a28,
+      emissiveIntensity: 0.15,
+      transparent: alpha < 0.999,
+      opacity: alpha,
+      depthWrite: alpha >= 0.999
+    });
+  }
+  function discMaterial(){
+    // color disc only — no webcam logic here at all anymore. Keeping this
+    // mesh's behavior completely unaffected by the webcam feature was the
+    // whole point of splitting them into two separate meshes.
+    const colorHex = document.getElementById('discColor').value;
+    const alpha = parseFloat(document.getElementById('discAlpha').value);
+    return new THREE.MeshStandardMaterial({
+      color: colorHex,
+      metalness: 0.1,
+      roughness: 0.6,
+      transparent: alpha < 0.999,
+      opacity: alpha,
+      depthWrite: alpha >= 0.999,
+      side: THREE.DoubleSide // camera can orbit fully around it, so both faces must render
+    });
+  }
+
+  function webcamMaterial(){
+    // Unlit on purpose: MeshBasicMaterial isn't affected by scene lights, so the
+    // warm key / blue rim lights can't tint the video. toneMapped:false skips the
+    // renderer's ACES filmic curve for this material specifically — that curve
+    // compresses/desaturates highlights, which was the other haze contributor.
+    // Transparency is opt-in and only ever relevant for the OBS path: a raw
+    // getUserMedia <video> element never carries an alpha channel (no browser
+    // API exposes camera alpha), so the "webcam device" path is always fully
+    // opaque. The OBS canvas texture, on the other hand, can genuinely have
+    // per-pixel alpha (from a background-removal filter) — but only render it
+    // as see-through when "Transparent" mode is selected; in "Solid color"
+    // mode the canvas itself was already flattened opaque in drawOBSFrame, so
+    // there's nothing left to gain from transparent:true there either.
+    const useAlpha = (captureMode === 'obs' && obsBgMode === 'transparent');
+    return new THREE.MeshBasicMaterial({
+      map: activeMediaTexture(),
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: useAlpha,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true, // normal depth testing — see buildWebcamDisc for why this now works correctly
+      toneMapped: false
+    });
+  }
+
+  // Shared by buildRings() and the webcam functions below, so both agree on the
+  // same px↔world-unit scale without duplicating the constant.
+  const PX_PER_WORLD_UNIT = 670;
+
+  // --- Webcam (for OBS overlay use) ---
+  // See the panel's explanatory text: this talks to the OS camera device directly
+  // via getUserMedia, NOT to OBS's internal source list (no public API exists for
+  // a Browser Source to read that). "RazerCam" shows up here as the raw device.
+  const videoEl = document.createElement('video');
+  videoEl.autoplay = true;
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+  let camStream = null;
+  let videoTexture = null;
+  let camMirrorOn = true;
+
+  function populateCameraList(){
+    navigator.mediaDevices.enumerateDevices().then(devices=>{
+      const cams = devices.filter(d=>d.kind === 'videoinput');
+      const sel = document.getElementById('camDevice');
+      sel.innerHTML = '';
+      if(cams.length === 0){
+        sel.innerHTML = '<option value="">No cameras found</option>';
+        return;
+      }
+      cams.forEach((d,i)=>{
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ('Camera ' + (i+1));
+        sel.appendChild(opt);
+      });
+      startCamera(cams[0].deviceId);
+    }).catch(err=>{
+      console.error('enumerateDevices failed', err);
+    });
+  }
+
+  function requestCameraAccess(){
+    // A throwaway getUserMedia call is the standard way to unlock labeled device
+    // enumeration (browsers hide device labels until permission is granted at
+    // least once) and to trigger the permission prompt itself.
+    navigator.mediaDevices.getUserMedia({video:true}).then(stream=>{
+      stream.getTracks().forEach(t=>t.stop()); // only needed it for the permission grant
+      populateCameraList();
+    }).catch(err=>{
+      alert('Camera access was blocked or unavailable: ' + err.message +
+        '\n\nIf this is running as an OBS Browser Source, right-click it in OBS → Interact, grant camera access there, then try again.');
+    });
+  }
+
+  function startCamera(deviceId){
+    const constraints = deviceId ? {video:{deviceId:{exact:deviceId}}} : {video:true};
+    navigator.mediaDevices.getUserMedia(constraints).then(stream=>{
+      if(camStream){ camStream.getTracks().forEach(t=>t.stop()); }
+      camStream = stream;
+      videoEl.srcObject = stream;
+      videoEl.play();
+      videoTexture = new THREE.VideoTexture(videoEl);
+      videoTexture.encoding = THREE.sRGBEncoding; // matches renderer.outputEncoding elsewhere in this file
+      // Aspect-ratio correction needs videoWidth/videoHeight, which aren't
+      // populated until the browser has loaded the stream's metadata — hook
+      // that event rather than assuming it's already available right here.
+      videoEl.addEventListener('loadedmetadata', updateVideoTransform, {once:true});
+      updateVideoTransform(); // also try immediately in case metadata is already ready
+      buildWebcamDisc(); // build the dedicated webcam mesh now that a texture exists
+    }).catch(err=>{
+      console.error('startCamera failed', err);
+    });
+  }
+
+  // Shared by both the raw-webcam texture and the OBS-screenshot texture below —
+  // same crop-and-mirror math applies to either source, just fed different
+  // width/height. ClampToEdgeWrapping (not Repeat) because both sources are
+  // almost always non-power-of-two dimensions, and REPEAT wrapping on an NPOT
+  // texture is a known spot where some WebGL contexts silently fail to display
+  // the texture at all. The math below never actually samples outside [0,1], so
+  // clamp mode works fine here and sidesteps that whole class of bug.
+  function updateMediaTransform(texture, srcWidth, srcHeight){
+    if(!texture) return;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+
+    // CircleGeometry's UV space is a square 0..1 box mapped onto the circle —
+    // if the source's real aspect ratio isn't 1:1 (webcams/OBS sources are
+    // almost always 16:9 or 4:3), mapping it directly stretches the image
+    // unevenly. Fix: compute a center-crop window (same idea as CSS
+    // object-fit:cover) so the image fills the square without distortion,
+    // just cropping the excess on whichever axis is longer.
+    let rx = 1, ry = 1, ox = 0, oy = 0;
+    if(srcWidth && srcHeight){
+      const srcAspect = srcWidth / srcHeight;
+      if(srcAspect > 1){
+        rx = 1 / srcAspect; ry = 1;
+        ox = (1 - rx) / 2; oy = 0;
+      } else {
+        rx = 1; ry = srcAspect;
+        ox = 0; oy = (1 - ry) / 2;
+      }
+    }
+
+    // Mirroring composes with the aspect-crop window above: flipping a cropped
+    // window in place means negating its repeat and shifting the offset by that
+    // same amount — this still stays within [0,1], no wraparound needed.
+    if(camMirrorOn){
+      ox = ox + rx;
+      rx = -rx;
+    }
+
+    texture.repeat.set(rx, ry);
+    texture.offset.set(ox, oy);
+    texture.needsUpdate = true;
+  }
+
+  function updateVideoTransform(){
+    updateMediaTransform(videoTexture, videoEl.videoWidth, videoEl.videoHeight);
+  }
+
+  function applyCameraMirror(){
+    // Re-applies the mirror flip to whichever source is currently active —
+    // both textures share the same mirror toggle rather than having two.
+    if(captureMode === 'obs'){
+      updateMediaTransform(obsTexture, obsCanvas.width, obsCanvas.height);
+    } else {
+      updateVideoTransform();
+    }
+  }
+
+  // --- OBS source capture (screenshot polling via obs-websocket) ---
+  // Alternative to the raw getUserMedia webcam above: this talks to OBS itself
+  // (not the OS) and pulls a still image of a *named OBS source's* rendered
+  // output — filters, crop, chroma key, color correction, all included, because
+  // it's a screenshot of what OBS is already compositing rather than the raw
+  // camera. The catch: GetSourceScreenshot is a poll, not a stream, so this is
+  // realistically ~8-10fps before it costs noticeable CPU on both ends — a
+  // "video" made of a slideshow of screenshots, redrawn into a canvas texture.
+  let captureMode = 'webcam'; // 'webcam' | 'obs'
+  let obs = null;
+  let obsConnected = false;
+  const obsCanvas = document.createElement('canvas');
+  const obsCtx = obsCanvas.getContext('2d');
+  const obsTexture = new THREE.CanvasTexture(obsCanvas);
+  obsTexture.encoding = THREE.sRGBEncoding; // matches renderer.outputEncoding, same as videoTexture
+  let obsPollTimer = null;
+  let obsSourceName = null;
+
+  // Single source of truth for "what should the webcam disc actually show right
+  // now" — used by buildWebcamDisc/webcamMaterial instead of reading videoTexture
+  // directly, so the disc can transparently follow whichever capture mode is active.
+  function activeMediaTexture(){
+    return captureMode === 'obs' ? (obsSourceName ? obsTexture : null) : videoTexture;
+  }
+
+  function setOBSStatus(text){
+    const el = document.getElementById('obsStatus');
+    if(el) el.textContent = text;
+  }
+
+  // GetInputList alone only surfaces global Inputs (cameras, browser/media
+  // sources, capture cards, etc.) — it does NOT include Scenes or Groups. If
+  // your other sources only exist as nested scenes, a group, or scene-only
+  // items, GetInputList silently omits every one of them, which is why only
+  // one source showed up before. Fix: also walk GetSceneList, and for every
+  // scene call GetSceneItemList to see what's actually placed in it — then
+  // recurse into any Group items via GetGroupSceneItemList, since a Group is
+  // its own little nested scene under the hood. Scenes are included as
+  // selectable options too (GetSourceScreenshot works on a scene name just as
+  // well as a source name — it grabs that scene's whole composited output).
+  async function fetchAllOBSSources(){
+    const found = new Map(); // sourceName -> display label
+
+    const {inputs} = await obs.call('GetInputList');
+    inputs.forEach(inp=>{
+      if(!found.has(inp.inputName)) found.set(inp.inputName, inp.inputName);
+    });
+
+    const {scenes} = await obs.call('GetSceneList');
+    for(const scene of scenes){
+      const sceneName = scene.sceneName;
+      if(!found.has(sceneName)) found.set(sceneName, sceneName + '  (scene)');
+      try{
+        const {sceneItems} = await obs.call('GetSceneItemList', {sceneName});
+        for(const item of sceneItems){
+          if(!found.has(item.sourceName)){
+            found.set(item.sourceName, item.sourceName + (item.isGroup ? '  (group)' : ''));
+          }
+          if(item.isGroup){
+            try{
+              const {sceneItems: groupItems} = await obs.call('GetGroupSceneItemList', {sceneName: item.sourceName});
+              groupItems.forEach(gi=>{
+                if(!found.has(gi.sourceName)) found.set(gi.sourceName, gi.sourceName);
+              });
+            }catch(e){
+              console.error('GetGroupSceneItemList failed for', item.sourceName, e);
+            }
+          }
+        }
+      }catch(e){
+        console.error('GetSceneItemList failed for', sceneName, e);
+      }
+    }
+    return found;
+  }
+
+  async function connectToOBS(){
+    if(typeof OBSWebSocket === 'undefined'){
+      setOBSStatus('Library failed to load (check network)');
+      return;
+    }
+    const url = document.getElementById('obsUrl').value.trim() || 'ws://localhost:4455';
+    const password = document.getElementById('obsPassword').value;
+    if(!obs) obs = new OBSWebSocket();
+    setOBSStatus('Connecting…');
+    try{
+      // obs-websocket-js v5 targets obs-websocket protocol v5, which ships with
+      // OBS 28+ (default port 4455). Password is optional — pass undefined
+      // rather than an empty string when auth is disabled on the OBS side.
+      await obs.connect(url, password || undefined);
+      obsConnected = true;
+      setOBSStatus('Connected');
+
+      const sel = document.getElementById('obsSourceSelect');
+      sel.innerHTML = '';
+      const sources = await fetchAllOBSSources();
+      if(sources.size === 0){
+        sel.innerHTML = '<option value="">No sources found</option>';
+      } else {
+        sources.forEach((label, name)=>{
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = label;
+          sel.appendChild(opt);
+        });
+      }
+
+      obs.on('ConnectionClosed', ()=>{
+        obsConnected = false;
+        setOBSStatus('Disconnected');
+        stopOBSPolling();
+      });
+    }catch(err){
+      obsConnected = false;
+      setOBSStatus('Connect failed: ' + err.message);
+      console.error('OBS connect failed', err);
+    }
+  }
+
+  function stopOBSPolling(){
+    if(obsPollTimer){ clearInterval(obsPollTimer); obsPollTimer = null; }
+  }
+
+  let obsRequestW = 640;
+  let obsRequestH = 360;
+
+  async function startOBSPolling(sourceName){
+    stopOBSPolling();
+    obsSourceName = sourceName || null;
+    if(!obsSourceName || !obsConnected) return;
+
+    // Detect the source's real aspect ratio once, up front: requesting a
+    // screenshot with NO width/height returns it at native resolution. If we
+    // instead always requested a hardcoded 640x360 (16:9) box, OBS would
+    // force-stretch any non-16:9 source into that box before it ever reached
+    // us — our own aspect-crop logic downstream never had a chance, because
+    // by the time we saw the image it already claimed to BE 640x360. This is
+    // almost certainly what was causing the distortion.
+    obsRequestW = 640;
+    obsRequestH = 360;
+    try{
+      const probe = await obs.call('GetSourceScreenshot', {
+        sourceName: obsSourceName,
+        imageFormat: 'png'
+      });
+      const dims = await getImageDimensions(probe.imageData);
+      if(dims.width && dims.height){
+        const aspect = dims.width / dims.height;
+        // Cap the long edge at 640px to keep the repeated poll payload small —
+        // just preserve the source's real proportions while doing it.
+        if(aspect >= 1){
+          obsRequestW = 640;
+          obsRequestH = Math.max(1, Math.round(640 / aspect));
+        } else {
+          obsRequestH = 640;
+          obsRequestW = Math.max(1, Math.round(640 * aspect));
+        }
+      }
+    }catch(err){
+      console.error('OBS aspect-ratio probe failed, falling back to 640x360', err);
+    }
+
+    // 100ms ≈ 10fps — the practical ceiling for screenshot polling before the
+    // encode-on-OBS's-side / decode-on-this-side round trip gets ugly.
+    obsPollTimer = setInterval(async ()=>{
+      if(!obsConnected || !obsSourceName) return;
+      try{
+        // PNG, not JPG: JPEG has no alpha channel at all, so any transparency
+        // produced by a background-removal filter (NVIDIA Broadcast, chroma
+        // key, etc.) on the OBS source gets silently flattened to solid black
+        // the moment OBS exports the screenshot. PNG carries alpha straight
+        // through, so cut-out areas actually stay transparent in the texture.
+        const res = await obs.call('GetSourceScreenshot', {
+          sourceName: obsSourceName,
+          imageFormat: 'png',
+          imageWidth: obsRequestW,
+          imageHeight: obsRequestH
+        });
+        drawOBSFrame(res.imageData);
+      }catch(err){
+        console.error('GetSourceScreenshot failed', err);
+      }
+    }, 100);
+  }
+
+  function getImageDimensions(dataUrl){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload = ()=> resolve({width: img.naturalWidth, height: img.naturalHeight});
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  // 'transparent': canvas keeps real alpha from the PNG, and the disc's
+  // material is built with transparent:true so cut-out areas let the 3D rings
+  // show through underneath.
+  // 'color': canvas is filled with a solid color FIRST, then the PNG is drawn
+  // on top — alpha blends onto that fill, producing a fully opaque canvas
+  // (cutout areas become the chosen flat color instead of see-through).
+  let obsBgMode = 'transparent'; // 'transparent' | 'color'
+  let obsBgColor = '#000000';
+
+  function drawOBSFrame(dataUrl){
+    const img = new Image();
+    img.onload = ()=>{
+      if(obsCanvas.width !== img.width || obsCanvas.height !== img.height){
+        obsCanvas.width = img.width;
+        obsCanvas.height = img.height;
+      }
+      obsCtx.clearRect(0, 0, obsCanvas.width, obsCanvas.height);
+      if(obsBgMode === 'color'){
+        obsCtx.fillStyle = obsBgColor;
+        obsCtx.fillRect(0, 0, obsCanvas.width, obsCanvas.height);
+      }
+      obsCtx.drawImage(img, 0, 0);
+      obsTexture.needsUpdate = true;
+      updateMediaTransform(obsTexture, img.width, img.height);
+      if(!flatCircleWebcam) buildWebcamDisc(); // first frame just arrived — build the disc now
+    };
+    img.src = dataUrl; // GetSourceScreenshot already returns a full data: URL, ready to use as-is
+  }
+
+  // --- Group holding the whole assembly ---
+  let assembly = new THREE.Group();
+  scene.add(assembly);
+  let ringData = []; // {mesh, normal (THREE.Vector3), pivot (THREE.Group)}
+  let innerRingData = []; // same shape, fully independent internal-ring set
+  let centerSphere = null;
+
+  // The flat circle is added directly to `scene`, never to `assembly` — assembly
+  // gets a slow turntable spin in animate() (assembly.rotation.y += ...) and every
+  // ring animates on top of that. Attaching the disc there would drag it along for
+  // the ride, breaking "completely stationary." Tracked separately so rebuilds can
+  // remove just this one mesh without touching the rest of the scene graph.
+  let flatCircle = null;
+  function clearFlatCircle(){
+    if(flatCircle){ scene.remove(flatCircle); flatCircle = null; }
+  }
+
+  // The webcam disc is a SEPARATE mesh from flatCircle, added directly to `scene`
+  // for the same "never inherit assembly's spin" reason. It exists ONLY while
+  // webcam fill is on and a video texture is ready — otherwise it's simply not
+  // built, which is what makes it "transparent" when off (nothing there to draw,
+  // rather than a mesh with alpha applied). It's also NOT positioned at dead
+  // center like flatCircle: a flat plane through the exact middle of a solid,
+  // opaque sphere is geometrically behind the sphere's near surface from every
+  // viewing angle, so it gets correctly depth-tested away — that was the actual
+  // "not showing at all" bug. Every frame in animate(), this mesh gets repositioned
+  // just outside the sphere's visible surface, straight toward the camera, so
+  // normal depth testing keeps it visible without needing to disable depth test
+  // (which would have broken correct occlusion against the rings instead).
+  let flatCircleWebcam = null;
+  function clearWebcamDisc(){
+    if(flatCircleWebcam){ scene.remove(flatCircleWebcam); flatCircleWebcam = null; }
+  }
+  function buildWebcamDisc(){
+    clearWebcamDisc();
+    const useCam = document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on';
+    if(!useCam || !activeMediaTexture()) return; // stays absent — the "transparent when off" state
+    const discPx = parseFloat(document.getElementById('discRadius').value) || 670;
+    const discWorldR = (discPx / PX_PER_WORLD_UNIT) * 0.55; // same sizing as the color disc, so they match
+    const geo = new THREE.CircleGeometry(discWorldR, 64);
+    flatCircleWebcam = new THREE.Mesh(geo, webcamMaterial());
+    scene.add(flatCircleWebcam);
+    // position/orientation get set every frame in animate() — no need to set
+    // them here since this mesh doesn't exist at all until webcam fill is on,
+    // and animate() runs continuously once it does.
+  }
+
+  function clearAssembly(){
+    scene.remove(assembly);
+    assembly = new THREE.Group();
+    scene.add(assembly);
+    ringData = [];
+    innerRingData = [];
+  }
+
+  function buildRings(){
+    clearAssembly();
+
+    const N = parseInt(document.getElementById('N').value);
+    const step = parseFloat(document.getElementById('step').value);
+    // Sphere radius is specified directly in px (max 670px) and converted to
+    // Three.js world units via the shared PX_PER_WORLD_UNIT scale factor defined
+    // above (next to the webcam code, which also needs it) — one control drives
+    // the geometry AND stays accurate for the px readout below.
+    const pxRadiusInput = parseFloat(document.getElementById('pxRadius').value) || 670;
+    const sphereR = pxRadiusInput / PX_PER_WORLD_UNIT;
+    const tube = parseFloat(document.getElementById('tube').value);
+    const offsetPx = parseFloat(document.getElementById('offset').value);
+    const OFFSET_SCALE = 0.012; // world units per "pixel" at this scene scale
+    const offsetWorld = offsetPx * OFFSET_SCALE;
+    const growth = parseFloat(document.getElementById('growth').value);
+    // Gap between the sphere's surface and the innermost ring is now its own
+    // control, specified directly in px and converted via the same fixed
+    // PX_PER_WORLD_UNIT scale used for the sphere radius — previously this was
+    // hardcoded as tube*2.2, so it silently changed any time tube thickness
+    // was adjusted instead of being independently tunable.
+    const sphereGapPx = parseFloat(document.getElementById('sphereGap').value) || 0;
+    const sphereGapWorld = sphereGapPx / PX_PER_WORLD_UNIT;
+    const mode = document.querySelector('.toggles button[data-mode].active').dataset.mode;
+
+    // The sphere MESH is drawn at sphereR*0.55, not the raw sphereR (see below) — that
+    // 0.55 factor is purely a visual scale-down and was never meant to change where the
+    // "surface" actually is for gap purposes. ringR0 previously measured its gap from the
+    // un-shrunk sphereR, which sits ~45% further out than the sphere anyone can actually
+    // see — at a 670px sphere that's ~300px of dead space even with the gap slider at 0.
+    // Using the same visibleSphereR the internal rings already rely on fixes ring 0 to
+    // sit the requested sphereGapWorld from the sphere's real, rendered surface.
+    const visibleSphereR = sphereR*0.55;
+    const ringR0 = visibleSphereR + sphereGapWorld; // ring 0 (center-most) sits sphereGapWorld outside the VISIBLE sphere
+
+    // Two rings of near-equal radius sharing near-equal centers are geometrically
+    // GUARANTEED to cross at 2 points regardless of tilt — that's just solid geometry.
+    // If the radius step between rings is smaller than their combined tube thickness,
+    // the solid tube volumes overlap at those crossings (not just the centerlines).
+    //
+    // IMPORTANT: the earlier version of this check assumed all rings share the exact
+    // same center, which isn't true once hinge stagger moves each ring's center outward.
+    // That positional drift eats directly into the radius-based safety margin — two
+    // rings can be pushed closer together by their offset even while their radii differ
+    // by a "safe" amount. The floor below accounts for both effects together: enough
+    // radius separation to clear the tube thickness, PLUS extra margin proportional to
+    // how far the hinge stagger can move rings toward each other (scaled up a bit
+    // further as ring count grows, since drift compounds across more rings).
+    const minGrowth = tube * 2.6 + offsetWorld * (2 + N * 0.15);
+    const effectiveGrowth = Math.max(growth, minGrowth);
+
+    // center sphere
+    const sphGeo = new THREE.SphereGeometry(sphereR*0.55, 48, 48);
+    centerSphere = new THREE.Mesh(sphGeo, sphereMaterial());
+    centerSphere.castShadow = true;
+    centerSphere.receiveShadow = true;
+    assembly.add(centerSphere);
+
+    const baseTiltDeg = mode === 'a' ? (360/N - step) : (360/N);
+
+    const externalOn = document.querySelector('.toggles button[data-external].active').dataset.external === 'on';
+
+    let liveLayoutForThisBuild = null;
+    if(liveDataOn){
+      const cameraRadiusPx = parseFloat(document.getElementById('pxRadius').value) || 670;
+      const outerSpacePx = parseFloat(document.getElementById('outwardSpacePx').value) || 400;
+      liveLayoutForThisBuild = computeGoingLiveLayout(cameraRadiusPx, outerSpacePx);
+      if(externalOn){
+        // Live data drives ring count/percentage/color directly — the manual
+        // N-loop below is skipped entirely in favor of the live layout's rings.
+        buildExternalDataRingsFromLayout(liveLayoutForThisBuild, PX_PER_WORLD_UNIT/0.55, assembly);
+      } else {
+        disposeDataRingSet(dataRingsExternal);
+        dataRingsExternal = [];
+      }
+    } else {
+      disposeDataRingSet(dataRingsExternal);
+      dataRingsExternal = [];
+    }
+
+    for(let i=0; externalOn && !liveDataOn && i<N; i++){
+      const alphaDeg = i * (360/N);              // azimuthal spacing — determines each ring's own hinge axis direction
+      const betaDeg  = i * baseTiltDeg;           // static tilt offset, animated further by pitch
+
+      const alpha = THREE.MathUtils.degToRad(alphaDeg);
+      const beta  = THREE.MathUtils.degToRad(betaDeg);
+
+      // Each ring gets its own FIXED hinge axis lying in the horizontal plane, pointed at
+      // its azimuth slot. Rotating around this single unique axis (instead of composing
+      // two Euler rotations around shared world axes) has no gimbal-lock singularity —
+      // there's no angle at which one ring's azimuth stops mattering and it collapses
+      // onto another ring's plane. Every ring sweeps its own distinct circle.
+      const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
+
+      const pivot = new THREE.Group();
+      // Hinge point shifts outward along that same axis, staggered per ring index —
+      // keeps rings from sharing a literal center point as well as a literal plane.
+      pivot.position.copy(axis).multiplyScalar(offsetWorld * i);
+      assembly.add(pivot);
+
+      const torusGeo = new THREE.TorusGeometry(ringR0 + i*effectiveGrowth, tube, 28, 128);
+      const mesh = new THREE.Mesh(torusGeo, goldMaterial(i));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      // Torus defaults to lying in XY plane (normal along Z); rotate to lie flat in XZ
+      // (normal along Y) as the shared reference "resting" plane before hinge tilt.
+      mesh.rotation.x = Math.PI/2;
+      pivot.add(mesh);
+
+      // Apply the static tilt immediately as a single axis-angle rotation about this
+      // ring's own fixed axis — pitch animation will update this quaternion each frame.
+      pivot.quaternion.setFromAxisAngle(axis, beta);
+
+      ringData.push({
+        mesh, pivot, axis: axis.clone(),
+        index: i,
+        betaBase: beta,      // static hinge tilt from layout math — pitch animates on top of this
+        pitchAngle: 0,
+        spinAngle: 0
+      });
+    }
+
+    // visibleSphereR (computed above, next to ringR0) is passed along so internal rings
+    // fill the real interior instead of floating in the gap between shell and cage.
+    // pxPerUnit is a fixed constant now (not derived per-frame from the input), since
+    // sphereR itself already came from px via PX_PER_WORLD_UNIT above. The 0.55 factor
+    // (visible mesh vs. cage radius) cancels out of pxRadiusInput/visibleSphereR, leaving
+    // this same constant regardless of the current px value.
+    const pxPerUnit = PX_PER_WORLD_UNIT / 0.55;
+
+    const innerLines = buildInnerRings(visibleSphereR, pxPerUnit, liveLayoutForThisBuild);
+    buildFlatCircle(PX_PER_WORLD_UNIT);
+
+    lastLiveLayout = liveLayoutForThisBuild;
+    updateDataLabels();
+
+    updateReadout(N, step, baseTiltDeg, mode, offsetPx, growth, effectiveGrowth, pxRadiusInput, pxPerUnit, innerLines, externalOn);
+  }
+
+  function buildFlatCircle(PX_PER_WORLD_UNIT){
+    clearFlatCircle();
+    const discPx = parseFloat(document.getElementById('discRadius').value) || 670;
+    // Same 0.55 visual-scale factor the sphere mesh uses, so a disc radius slider
+    // value equal to the sphere's radius slider value produces a genuinely matching
+    // size (flush with the sphere's actual rendered surface) rather than just a
+    // matching raw px number that then renders differently.
+    const discWorldR = (discPx / PX_PER_WORLD_UNIT) * 0.55;
+    const geo = new THREE.CircleGeometry(discWorldR, 64);
+    flatCircle = new THREE.Mesh(geo, discMaterial());
+    // Orientation isn't set here anymore — animate() re-aims this disc at the
+    // camera every frame so it stays parallel to the screen regardless of orbit.
+    // Position is still fixed dead-center, which is the only thing "stationary"
+    // actually needs to mean for a screen-facing billboard.
+    flatCircle.position.set(0, 0, 0);
+    scene.add(flatCircle);
+  }
+
+  function buildInnerRings(visibleSphereR, pxPerUnit, liveLayout){
+    const internalOn = document.querySelector('.toggles button[data-internal].active').dataset.internal === 'on';
+    if(!internalOn){
+      disposeDataRingSet(dataRingsInternal);
+      dataRingsInternal = [];
+      return []; // innerRingData stays empty; nothing to build or animate
+    }
+
+    if(liveDataOn){
+      const innerGroup = new THREE.Group();
+      assembly.add(innerGroup);
+      buildInternalDataRings(pxPerUnit, innerGroup, liveLayout);
+      return [``, `Internal rings — live data (spillover + GoingLive/subathon, fills to center)`,
+              `spillover: ${liveLayout.inward.length}   subathon: ${liveLayout.goingLiveTimers.length}`];
+    } else {
+      disposeDataRingSet(dataRingsInternal);
+      dataRingsInternal = [];
+    }
+
+    const Ni = parseInt(document.getElementById('Ni').value);
+    const stepI = parseFloat(document.getElementById('stepI').value);
+    const offsetPxI = parseFloat(document.getElementById('offsetI').value);
+    const OFFSET_SCALE = 0.012;
+    const offsetWorldI = offsetPxI * OFFSET_SCALE;
+    const baseTiltDegI = (360/Ni - stepI);
+
+    // Divide the entire interior — from just under the visible shell down to the
+    // exact center — into Ni equal, CONTIGUOUS radial bands. Ring i owns the band
+    // [visibleSphereR - (i+1)*bandWidth, visibleSphereR - i*bandWidth]; its tube
+    // radius is sized directly from that band's width, so thickness auto-adjusts
+    // to however many rings are asked for and however much radius is available.
+    // Since visibleSphereR * pxPerUnit == the sphere's real px radius (max 670px),
+    // this is exactly "670px of interior ÷ ring count" done in world units — same
+    // math as the reference dashboard's available-space / count ring sizing, just
+    // expressed in Three.js units instead of canvas pixels. Because the bands are
+    // contiguous down to 0, the innermost ring's band always reaches true center —
+    // nothing is left unfilled, and there's no separate manual thickness control
+    // that could drift out of sync with the actual available space.
+    let geom = []; // geom[i] = { r: centerline radius, tubeR: tube radius } for ring i (0 = outermost)
+    const bandWidth = visibleSphereR / Ni;
+    const gapFrac = 0.16; // fraction of each band kept as clear air between rings
+    // hinge stagger pushes ring centers sideways, eating into the same clearance
+    // the gap above protects — fold that drift in as extra reserved radius.
+    const driftMargin = offsetWorldI * (1 + Ni*0.05);
+
+    for(let i=0; i<Ni; i++){
+      const outerEdge = visibleSphereR - i*bandWidth;
+      const innerEdge = Math.max(visibleSphereR - (i+1)*bandWidth, 0);
+      const rCenter = (outerEdge + innerEdge) / 2;
+      let tubeR = (bandWidth*(1-gapFrac))/2 - driftMargin*0.5;
+      const minTubeR = bandWidth * 0.05; // never let a ring shrink to invisible
+      const maxTubeR = bandWidth * 0.49; // never let it overrun into the next band
+      tubeR = Math.min(Math.max(tubeR, minTubeR), maxTubeR);
+      geom.push({ r: Math.max(rCenter, tubeR*0.02), tubeR });
+    }
+
+    const innerGroup = new THREE.Group();
+    assembly.add(innerGroup); // nested under the main assembly — inherits the slow overall spin
+
+    for(let i=0; i<Ni; i++){
+      const alphaDeg = i * (360/Ni);
+      const betaDeg  = i * baseTiltDegI;
+      const alpha = THREE.MathUtils.degToRad(alphaDeg);
+      const beta  = THREE.MathUtils.degToRad(betaDeg);
+      const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
+
+      const { r, tubeR } = geom[i];
+
+      const pivot = new THREE.Group();
+      pivot.position.copy(axis).multiplyScalar(offsetWorldI * i);
+      innerGroup.add(pivot);
+
+      const torusGeo = new THREE.TorusGeometry(r, tubeR, 20, 96);
+      const mesh = new THREE.Mesh(torusGeo, innerMaterial(i));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.rotation.x = Math.PI/2;
+      pivot.add(mesh);
+
+      pivot.quaternion.setFromAxisAngle(axis, beta);
+
+      innerRingData.push({
+        mesh, pivot, axis: axis.clone(),
+        index: i,
+        betaBase: beta,
+        pitchAngle: 0
+      });
+    }
+
+    // Build readout lines for this ring set, in both world units and real px
+    // (using the sphere's reference px radius so it lines up with an actual
+    // design spec, e.g. a 670px-radius sphere).
+    const lines = [];
+    lines.push(``);
+    lines.push(`Internal rings — auto-sized (670px interior ÷ ring count)`);
+    lines.push(`Ni = <b>${Ni}</b>`);
+    lines.push(`ring   r (world)   Ø tube (world)   r (px)   Ø tube (px)`);
+    for(let i=0;i<Ni;i++){
+      const { r, tubeR } = geom[i];
+      const rPx = (r*pxPerUnit).toFixed(0);
+      const dPx = (tubeR*2*pxPerUnit).toFixed(0);
+      lines.push(`${String(i).padStart(2,' ')}     ${r.toFixed(3).padStart(7,' ')}     ${(tubeR*2).toFixed(3).padStart(9,' ')}      ${String(rPx).padStart(5,' ')}    ${String(dPx).padStart(6,' ')}`);
+    }
+    return lines;
+  }
+
+  function updateReadout(N, step, baseTilt, mode, offsetPx, growth, effectiveGrowth, pxRadius, pxPerUnit, innerLines, externalOn){
+    const lines = [];
+    lines.push(`Scale ref: sphere = <b>${pxRadius}px</b> radius (Ø${pxRadius*2}px)  ·  1 world unit ≈ ${pxPerUnit.toFixed(1)}px`);
+    lines.push(``);
+    if(externalOn){
+      lines.push(`N = <b>${N}</b>   azimuth step = <b>${(360/N).toFixed(1)}°</b>`);
+      lines.push(`tilt formula = ${mode==='a' ? '360/N − step' : '360/N (fixed)'}`);
+      lines.push(`base tilt per ring = <b>${baseTilt.toFixed(1)}°</b>`);
+      lines.push(`hinge stagger = <b>${offsetPx}px</b> × ring index`);
+      if(effectiveGrowth > growth + 1e-6){
+        lines.push(`radius step = <b>${effectiveGrowth.toFixed(3)}</b> (raised from ${growth.toFixed(3)} — min gap enforced)`);
+      } else {
+        lines.push(`radius step = <b>${effectiveGrowth.toFixed(3)}</b>`);
+      }
+      lines.push(``);
+      lines.push(`ring   azimuth(α)   tilt(β)   hinge Δ`);
+      for(let i=0;i<N;i++){
+        const a = (i*(360/N)).toFixed(1);
+        const b = (i*baseTilt).toFixed(1);
+        const h = (i*offsetPx).toFixed(0);
+        lines.push(`${String(i).padStart(2,' ')}     ${a.padStart(6,' ')}°     ${b.padStart(6,' ')}°   ${h.padStart(4,' ')}px`);
+      }
+    } else {
+      lines.push(`External rings — <b>off</b>`);
+    }
+    if(innerLines && innerLines.length){
+      lines.push(...innerLines);
+    }
+    document.getElementById('readout').innerHTML = lines.join('\n');
+  }
+
+  // ============================================================
+  // LIVE DATA — GoingLive integration
+  // ============================================================
+  // Ports the GoingLive canvas overlay's data plumbing and ring-layout algorithm
+  // as directly as possible onto this scene's existing External/Internal ring
+  // systems. External rings = GoingLive's "outward" set (goals, regular timers,
+  // hype train). Internal rings = GoingLive's "inward" set (spillover from
+  // outward + GoingLive/subathon timers filling to center) — same 4-step space
+  // math, just expressed in this scene's px↔world-unit scale instead of canvas
+  // pixels. The sphere's own px radius (pxRadius slider, max 670) stands in for
+  // GoingLive's fixed `cameraRadius = 670`.
+
+  let liveDataOn = false;
+  let seRelayOn = false;
+  let timers = [];
+  let followerCurrent=0, followerGoal=0;
+  let subCurrent=0, subGoal=0;
+  let donationCurrent=0, donationGoal=0;
+  let bitsCurrent=0, bitsGoal=0;
+  let hypeTrainData = null;
+  let dataRingsExternal = []; // {wrapper, mesh, geo, item, radiusWorld, tubeWorld, ccw, startAngleOffset}
+  let dataRingsInternal = [];
+  let liveRefreshTimer = null; // 5s: re-fetch from Apps Script
+  let liveTickTimer = null;    // 1s: re-lay-out rings (countdown %, cascade, color pulse)
+
+  async function fetchLiveData(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Network error");
+      return await response.json();
+    } catch (error) {
+      console.error("GoingLive fetch error:", error);
+      setLiveStatus('Fetch failed — retrying…');
+      return null;
+    }
+  }
+
+  function gasUrl(){ return document.getElementById('gasUrl').value.trim(); }
+
+  async function getUpdatedTimerData() {
+    const url = `${gasUrl()}?action=getTimers`;
+    const timerDataArray = await fetchLiveData(url);
+    if (timerDataArray && timerDataArray.length > 0) {
+      timers = timerDataArray.map(t => ({
+        name: t.timerName,
+        startTime: new Date(t.startDateTime),
+        endTime: new Date(t.endDateTime)
+      }));
+    } else {
+      timers = [];
+    }
+  }
+
+  function getTimeRemaining(timer){
     const now = new Date().getTime();
     const timeLeft = timer.endTime - now;
     const totalDuration = timer.endTime - timer.startTime;
-
-    // Change this line:
     const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
-
     return {
-        countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
-        countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
-        countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
-        countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-        percentage // Now 1.0 at start, 0.0 at finish
+      countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
+      countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
+      countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
+      countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
+      percentage
     };
-}
+  }
 
-
-async function removeExpiredTimers() {
+  function removeExpiredTimers() {
     const now = new Date().getTime();
-
-    for (let i = timers.length - 1; i >= 0; i--) { // iterate backwards to safely remove
-        const timer = timers[i];
-        if (timer.endTime <= now) {
-            console.log(`Timer expired: ${timer.name}`);
-
-            // Call Google Apps Script to delete timer
-            const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
-            fetch(url).then(r => r.json()).then(res => {
-                console.log('Deleted timer response:', res);
-            }).catch(err => console.error('Error deleting timer:', err));
-
-            // Remove from local array so it disappears from canvas immediately
-            timers.splice(i, 1);
-        }
-		
+    let removedAny = false;
+    for (let i = timers.length - 1; i >= 0; i--) {
+      const timer = timers[i];
+      if (timer.endTime <= now) {
+        const url = `${gasUrl()}?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
+        fetch(url).then(r => r.json()).then(res => {
+          console.log('Deleted timer response:', res);
+        }).catch(err => console.error('Error deleting timer:', err));
+        timers.splice(i, 1);
+        removedAny = true;
+      }
     }
-}
+    // Timers must "cleanly remove" immediately, not wait for the next 5s poll or
+    // 1s layout tick — rebuild right away so the ring disappears this frame.
+    if(removedAny && liveDataOn) rebuildDataRings();
+  }
 
-
-// ----------------- GOALS -----------------
-async function fetchAllGoalData() {
+  async function fetchAllGoalData() {
     const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
     await Promise.all(goalTypes.map(fetchGoalData));
-}
+  }
 
-async function fetchGoalData(goalType) {
-    const url = `https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
-    const goalData = await fetchData(url);
-    if(goalData){
-        const current = goalData.CurrentCount;
-        const goal = goalData.goalValue;
-        if(current!==undefined && goal!==undefined){
-            updateGoalChart(goalType,current,goal);
-            updateGoalStats(goalType,current,goal);
-        }
+  async function fetchGoalData(goalType) {
+    const url = `${gasUrl()}?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
+    const goalData = await fetchLiveData(url);
+    if (goalData) {
+      const current = goalData.CurrentCount;
+      const goal = goalData.goalValue;
+      if (current !== undefined && goal !== undefined) {
+        if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
+        if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
+        if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
+        if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
+      }
     }
-}
+  }
 
-let hypeTrainData = null;
+  async function fetchHypeTrainData() {
+    const url = `${gasUrl()}?action=gethypetrain`;
+    const data = await fetchLiveData(url);
+    hypeTrainData = data || null;
+  }
 
-async function fetchHypeTrainData() {
-    const url = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec?action=gethypetrain";
-    const data = await fetchData(url);
-    if(data){
-        hypeTrainData = data;
-    } else {
-        hypeTrainData = null;
-    }
-}
+  function setLiveStatus(text){
+    const el = document.getElementById('liveDataStatus');
+    if(el) el.textContent = text;
+  }
 
+  async function refreshLiveData(){
+    await getUpdatedTimerData();
+    await fetchAllGoalData();
+    await fetchHypeTrainData();
+    setLiveStatus('Connected · last refresh ' + new Date().toLocaleTimeString());
+    if(liveDataOn) rebuildDataRings();
+  }
 
+  // --- Color pulsing, ported verbatim from GoingLive ---
+  function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
+  function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
+  const LD_RED={r:255,g:255,b:255}, LD_BLUE={r:54,g:69,b:79}, LD_GOLD={r:255,g:175,b:55}, LD_BLACK={r:54,g:69,b:79};
 
+  // --- Layout: ports GoingLive's Steps 1–4 (outward → spillover → GoingLive
+  // fill-to-center → cascading spiral angles) almost line-for-line, operating in
+  // px using this scene's sphere px-radius in place of GoingLive's fixed 670. ---
+  function computeGoingLiveLayout(cameraRadiusPx, outerSpacePx){
+    const nowSec = Date.now()/1000;
+    const t = (Math.sin(nowSec)+1)/2;
+    const colorHex = rgbToHex(lerpColor(LD_RED, LD_BLUE, t));
+    const hypeHex  = rgbToHex(lerpColor(LD_RED, LD_GOLD, t));
+    const goliveHex = rgbToHex(lerpColor(LD_BLACK, LD_RED, t));
 
-function updateGoalChart(goalType,current,goal){
-    const map = {"Follower Goal":"followerChart","Subscription Goal":"subscriptionChart","Bits Goal":"bitsChart","Donation Goal":"donationChart"};
-    const ctxGoal = document.getElementById(map[goalType])?.getContext('2d');
-    if(!ctxGoal) return;
-
-    const progress = goal>0?Math.min(100,(current/goal)*100):0;
-    const remaining = 100-progress;
-
-    if(!goalCharts[goalType]){
-        goalCharts[goalType] = new Chart(ctxGoal,{
-            type:'doughnut',
-            data:{labels:["Progress","Remaining"], datasets:[{data:[progress,remaining], backgroundColor:["#4caf50","#ddd"]}]},
-            options:{responsive:true, maintainAspectRatio:false,
-                plugins:{datalabels:{color:'white', font:{weight:'bold', size:14}, formatter:(v,ctx)=>{
-                    const total = ctx.chart.data.datasets[0].data[0]+ctx.chart.data.datasets[0].data[1];
-                    const pct = Math.round(ctx.chart.data.datasets[0].data[0]/total*100);
-                    return ctx.dataset.data[0]===v?`${pct}%`:`${100-pct}%`;
-                }}}}, plugins:[ChartDataLabels]
-        });
-    } else {
-        goalCharts[goalType].data.datasets[0].data = [progress,remaining];
-        goalCharts[goalType].update();
-    }
-
-    // Save globals
-    if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
-    if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
-    if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
-    if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
-}
-
-function updateGoalStats(goalType,current,goal){
-    const map = {"Follower Goal":"followerStats","Subscription Goal":"subscriptionStats","Bits Goal":"bitsStats","Donation Goal":"donationStats"};
-    let cur=current, g=goal;
-    if(goalType==="Donation Goal"){
-        cur=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(current);
-        g=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(goal);
-    }
-    document.getElementById(map[goalType]).textContent = `${goalType}: ${cur} / ${g}`;
-}
-
-// ----------------- CANVAS -----------------
-function drawCameraCircle(x,y,radius,alpha){
-    ctx.save(); ctx.globalAlpha=alpha;
-    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.clip();
-    ctx.drawImage(cameraImage,x-radius,y-radius,radius*2,radius*2);
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.lineWidth=8; ctx.strokeStyle='#D3D3D3CC'; ctx.stroke();
-}
-
-function drawDonut(x, y, radius, width, percentage, color, ccw = false, startAngleOffset = 0) {
-    if (percentage <= 0) return;
-    
-    // Convert offset from degrees to radians and add to base start angle
-    const startAngle = -Math.PI / 2 + (startAngleOffset * Math.PI / 180);
-    const endAngle = startAngle + (ccw ? -1 : 1) * (Math.PI * 2 * percentage);
-    
-    // Main ring
-    ctx.beginPath();
-    ctx.arc(x, y, radius, startAngle, endAngle, ccw);
-    ctx.lineWidth = width;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    
-    // Outer glow / highlight
-    ctx.beginPath();
-    ctx.arc(x, y, radius + width / 2, startAngle, endAngle, ccw);
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    
-    // Inner black edge
-    ctx.beginPath();
-    ctx.arc(x, y, radius - width / 2, startAngle, endAngle, ccw);
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = 'black';
-    ctx.stroke();
-}
-
-
-function drawLabelWithLine(label,x,y,radius,percentage,index,totalLabels,textColor,lineColor,borderColor){
-    const padding=10, fontSize=80;
-    ctx.font=`bold ${fontSize}px Arial`;
-    const textWidth=ctx.measureText(label).width;
-    const labelWidth=textWidth+padding*2;
-    const labelHeight=fontSize+padding*2;
-
-    // --- FORCE TOP-LEFT START ---
-    // labelX = 100px from left edge
-    // labelY = 100px from top, plus height for each index
-    const labelX = 100;
-    const labelY = 100 + (index * (labelHeight + 20)); 
-
-    const angle = -Math.PI/2 + Math.PI*2*percentage;
-    const startX = x + radius * Math.cos(angle);
-    const startY = y + radius * Math.sin(angle);
-
-    // Draw Line
-    ctx.beginPath(); 
-    ctx.moveTo(startX,startY); 
-    ctx.lineTo(labelX + labelWidth, labelY + labelHeight/2); 
-    ctx.strokeStyle = lineColor; 
-    ctx.lineWidth = 4; 
-    ctx.stroke();
-
-    // Draw Box
-    ctx.strokeStyle = borderColor; ctx.lineWidth = 10; 
-    ctx.strokeRect(labelX, labelY, labelWidth, labelHeight);
-    ctx.fillStyle = '#0000007F'; 
-    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
-
-    // Draw Text
-    ctx.fillStyle = 'white'; 
-    ctx.textAlign = 'left'; 
-    ctx.fillText(label, labelX + padding, labelY + fontSize + padding/2);
-}
-
-
-function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)}} 
-function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-// White ring + subtle gray distinctions
-const red={r:255,g:255,b:255}, blue={r:54,g:69,b:79}; gold={r:255,g:175,b:55}; black={r:54,g:69,b:79};
-
-// Add this global flag before drawAll function
-let debugRunCount = 0;
-
-function drawAll() {
-    // 1️⃣ Remove expired timers first
-    removeExpiredTimers();
-
-    // 2️⃣ Clear canvas and draw camera circle
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawCameraCircle(centerX, centerY, cameraRadius + 20, 0.13);
-
-    const ringZoneStart = cameraRadius + 20;
-    const canvasOuterEdge = (canvas.width / 2) - 40;
-    const outerSpace = canvasOuterEdge - ringZoneStart;
-    const innerSpace = ringZoneStart - cameraRadius; // Space from ring zone to camera center
-
-    // 3️⃣ Dynamic colors based on current time
-    const nowSec = Date.now() / 1000;
-    const t = (Math.sin(nowSec) + 1) / 2;
-    const colorHex = rgbToHex(lerpColor(red, blue, t));
-    const hypeHex  = rgbToHex(lerpColor(red, gold, t));
-    const goliveHex  = rgbToHex(lerpColor(black, red, t));
-
-    // 4️⃣ Build data array with updated percentages
     let data = [
-        { label:'Followers', percentage:followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
-        { label:'Subs', percentage:subGoal ? subCurrent/subGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
-        { label:'Donations', percentage:donationGoal ? donationCurrent/donationGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true },
-        { label:'Bits', percentage:bitsGoal ? bitsCurrent/bitsGoal : 0, color:colorHex, allowOut:true, allowIn:true, isGoal:true }
+      { label:'Followers', percentage: followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Followers: ${followerCurrent}/${followerGoal}` },
+      { label:'Subs', percentage: subGoal ? subCurrent/subGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Subs: ${subCurrent}/${subGoal}` },
+      { label:'Donations', percentage: donationGoal ? donationCurrent/donationGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Donations: $${donationCurrent}/$${donationGoal}` },
+      { label:'Bits', percentage: bitsGoal ? bitsCurrent/bitsGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Bits: ${bitsCurrent}/${bitsGoal}` }
     ];
 
     let goingLiveTimers = [];
-
-    timers.forEach((timer, idx) => {
-        const tRem = getTimeRemaining(timer); // ✅ recalc each frame
-        timer.percentage = tRem.percentage;
-
-        const isGoingLive = timer.name.includes("GoingLive");
-        const item = {
-            timer: timer,
-            percentage: tRem.percentage,
-            color: isGoingLive ? goliveHex : colorHex,
-            allowOut: !isGoingLive,
-            allowIn: true,
-            noLabel: isGoingLive,
-            goingLive: isGoingLive,
-            ccw: isGoingLive ? (idx % 2 === 0) : false
-        };
-
-        if (isGoingLive) goingLiveTimers.push(item);
-        else data.push(item);
+    timers.forEach((timer)=>{
+      const tRem = getTimeRemaining(timer);
+      timer.percentage = tRem.percentage;
+      const isGoingLive = timer.name.includes("GoingLive");
+      const item = {
+        timer, percentage: tRem.percentage,
+        color: isGoingLive ? goliveHex : colorHex,
+        allowOut: !isGoingLive,
+        noLabel: isGoingLive,
+        label: timer.name,
+        statLabel: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`
+      };
+      if (isGoingLive) goingLiveTimers.push(item); else data.push(item);
     });
 
-    // 5️⃣ Hype train data
     if (hypeTrainData?.hypeTrainActive) {
-        const cur = Number(hypeTrainData.currentLevel) || 0;
-        const goal = Number(hypeTrainData.goalLevel) || 1;
-        data.push({
-            label:'Hype Train',
-            percentage: Math.min(1, cur / goal),
-            color: hypeHex,
-            allowOut:true,
-            allowIn:true,
-            isGoal:true
-        });
+      const cur = Number(hypeTrainData.currentLevel) || 0;
+      const goal = Number(hypeTrainData.goalLevel) || 1;
+      data.push({ label:'Hype Train', percentage: Math.min(1, cur/goal), color:hypeHex, allowOut:true, isGoal:true, statLabel:`Hype Train: level ${cur}/${goal}` });
     }
 
-    // 6️⃣ Sort by percentage descending
     data.sort((a,b)=>b.percentage - a.percentage);
     goingLiveTimers.sort((a,b)=>b.percentage - a.percentage);
 
-    // 7️⃣ Constants for ring sizing
-    const BASE_WIDTH = cameraRadius - 20;
+    const ringZoneStart = cameraRadiusPx + 20;
+    const canvasOuterEdge = ringZoneStart + outerSpacePx;
+    const outerSpace = outerSpacePx;
+    const innerSpace = 20; // ringZoneStart - cameraRadiusPx, matches GoingLive's fixed inner gap
+
+    const BASE_WIDTH = cameraRadiusPx - 20;
     const BASE_SPACING = 15;
     const MIN_WIDTH = 3;
-    const MAX_WIDTH = cameraRadius - 20;
+    const MAX_WIDTH = cameraRadiusPx - 20;
 
-    // ============================================================
-    // STEP 1: Handle OUTWARD rings (Goals & Regular Timers)
-    // ============================================================
+    // STEP 1: outward
     let outward = data.filter(d => d.allowOut);
-    
-    // Calculate how many rings can fit in outer space at base size
     const baseStepOut = BASE_WIDTH + BASE_SPACING;
     const maxOuterRingsAtBaseSize = Math.floor(outerSpace / baseStepOut);
-    
     let donutWidthOut, donutSpacingOut;
-    
     if (outward.length <= maxOuterRingsAtBaseSize) {
-        // All rings fit at base size
-        donutWidthOut = BASE_WIDTH;
-        donutSpacingOut = BASE_SPACING;
+      donutWidthOut = BASE_WIDTH; donutSpacingOut = BASE_SPACING;
     } else {
-        // Need to scale down to fit all rings
-        const totalSpacePerRing = outerSpace / outward.length;
-        donutWidthOut = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
-        donutSpacingOut = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
+      const totalSpacePerRing = outerSpace / outward.length;
+      donutWidthOut = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing*0.8)));
+      donutSpacingOut = Math.max(0, Math.floor(totalSpacePerRing*0.2));
     }
-    
     const stepOut = donutWidthOut + donutSpacingOut;
-    
-    // Position outward rings and determine spillover
+
     let inward = [];
     outward.forEach((item, i) => {
-        const r = ringZoneStart + (i * stepOut) + donutWidthOut / 2;
-        if (r + donutWidthOut / 2 > canvasOuterEdge) {
-            // This ring spills over - move to inward
-            inward.push(item);
-            item.finalRadius = null;
-        } else {
-            item.finalRadius = r;
-        }
+      const r = ringZoneStart + (i*stepOut) + donutWidthOut/2;
+      if (r + donutWidthOut/2 > canvasOuterEdge) {
+        inward.push(item);
+        item.finalRadiusPx = null;
+      } else {
+        item.finalRadiusPx = r;
+        item.widthPx = donutWidthOut;
+      }
     });
-    
-    // Remove spillover items from outward array
-    outward = outward.filter(item => item.finalRadius !== null);
+    outward = outward.filter(item => item.finalRadiusPx !== null);
 
-    // ============================================================
-    // STEP 2: Handle SPILLOVER rings (draw inward from ringZoneStart)
-    // ============================================================
+    // STEP 2: spillover
     let donutWidthSpillover, donutSpacingSpillover;
-    
     if (inward.length === 0) {
-        donutWidthSpillover = BASE_WIDTH;
-        donutSpacingSpillover = BASE_SPACING;
+      donutWidthSpillover = BASE_WIDTH; donutSpacingSpillover = BASE_SPACING;
     } else {
-        // Calculate how many rings fit at base size in inner space
-        const baseStepSpillover = BASE_WIDTH + BASE_SPACING;
-        const maxSpilloverAtBaseSize = Math.floor(innerSpace / baseStepSpillover);
-        
-        if (inward.length <= maxSpilloverAtBaseSize) {
-            // Can use base size
-            donutWidthSpillover = BASE_WIDTH;
-            donutSpacingSpillover = BASE_SPACING;
-        } else {
-            // Scale spillover to fit in inner space
-            const totalSpacePerRing = innerSpace / inward.length;
-            donutWidthSpillover = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing * 0.8)));
-            donutSpacingSpillover = Math.max(0, Math.floor(totalSpacePerRing * 0.2));
-        }
+      const baseStepSpillover = BASE_WIDTH + BASE_SPACING;
+      const maxSpilloverAtBaseSize = Math.floor(innerSpace / baseStepSpillover);
+      if (inward.length <= maxSpilloverAtBaseSize) {
+        donutWidthSpillover = BASE_WIDTH; donutSpacingSpillover = BASE_SPACING;
+      } else {
+        const totalSpacePerRing = innerSpace / inward.length;
+        donutWidthSpillover = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing*0.8)));
+        donutSpacingSpillover = Math.max(0, Math.floor(totalSpacePerRing*0.2));
+      }
     }
-    
     const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
 
-    // ============================================================
-    // STEP 3: Calculate where spillover ends (if any)
-    // ============================================================
+    // STEP 3: where spillover ends
     let goingLiveStartPoint = ringZoneStart;
-    
-    // Position spillover rings first to determine where GoingLive starts
     if (inward.length > 0) {
-        inward.forEach((item, i) => {
-            item.finalRadius = ringZoneStart - (i * stepSpillover) - donutWidthSpillover / 2;
-        });
-        
-        // Calculate where the last spillover ring ends (inner edge, not outer edge!)
-        const lastSpilloverCenter = ringZoneStart - ((inward.length - 1) * stepSpillover) - donutWidthSpillover / 2;
-        const lastSpilloverInnerEdge = lastSpilloverCenter - donutWidthSpillover / 2;
-        goingLiveStartPoint = lastSpilloverInnerEdge;
+      inward.forEach((item, i) => {
+        item.finalRadiusPx = ringZoneStart - (i*stepSpillover) - donutWidthSpillover/2;
+        item.widthPx = donutWidthSpillover;
+      });
+      const lastSpilloverCenter = ringZoneStart - ((inward.length-1)*stepSpillover) - donutWidthSpillover/2;
+      goingLiveStartPoint = lastSpilloverCenter - donutWidthSpillover/2;
     }
 
-    // ============================================================
-    // STEP 4: Handle GOING LIVE timers - fill remaining space to CENTER
-    // ============================================================
+    // STEP 4: GoingLive/subathon timers fill remaining space to CENTER
     let donutWidthGoingLive, donutSpacingGoingLive;
-    
     if (goingLiveTimers.length === 0) {
-        donutWidthGoingLive = BASE_WIDTH;
-        donutSpacingGoingLive = 2;
+      donutWidthGoingLive = BASE_WIDTH; donutSpacingGoingLive = 2;
     } else {
-        // Calculate ACTUAL available space from goingLiveStartPoint to CENTER (0)
-        const availableSpaceForGoingLive = goingLiveStartPoint - 0; // Fill to center!
-        
-        // Your exact formula: floor(availableSpace / ringCount) - spacing
-        const totalSpacePerRing = Math.floor(availableSpaceForGoingLive / goingLiveTimers.length);
-        donutSpacingGoingLive = BASE_SPACING;
-        const calculatedWidth = totalSpacePerRing - donutSpacingGoingLive;
-        
-        // Clamp to min/max and handle edge case where width would be negative
-        if (calculatedWidth >= MIN_WIDTH && calculatedWidth <= MAX_WIDTH) {
-            donutWidthGoingLive = calculatedWidth;
-        } else if (calculatedWidth > MAX_WIDTH) {
-            donutWidthGoingLive = MAX_WIDTH;
-        } else {
-            // calculatedWidth < MIN_WIDTH - need to reduce spacing too
-            donutWidthGoingLive = MIN_WIDTH;
-            donutSpacingGoingLive = Math.max(0, totalSpacePerRing - MIN_WIDTH);
-        }
+      const availableSpaceForGoingLive = goingLiveStartPoint - 0;
+      const totalSpacePerRing = Math.floor(availableSpaceForGoingLive / goingLiveTimers.length);
+      donutSpacingGoingLive = BASE_SPACING;
+      const calculatedWidth = totalSpacePerRing - donutSpacingGoingLive;
+      if (calculatedWidth >= MIN_WIDTH && calculatedWidth <= MAX_WIDTH) {
+        donutWidthGoingLive = calculatedWidth;
+      } else if (calculatedWidth > MAX_WIDTH) {
+        donutWidthGoingLive = MAX_WIDTH;
+      } else {
+        donutWidthGoingLive = MIN_WIDTH;
+        donutSpacingGoingLive = Math.max(0, totalSpacePerRing - MIN_WIDTH);
+      }
     }
-    
     const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
-    
-    // ============================================================
-    // Position GoingLive timers with cascading spiral rotation
-    // ============================================================
+
     if (goingLiveTimers.length > 0) {
-        goingLiveTimers.forEach((item, i) => {
-            // Start from goingLiveStartPoint and work inward toward camera
-            item.finalRadius = goingLiveStartPoint - (i * stepGoingLive) - donutWidthGoingLive / 2;
-            
-            // Calculate rotating start angle based on cascading pattern
-            let startAngleOffset = 0;
-            
-            if (i === 0) {
-                // Ring 1 (index 0): starts at 0° and counts down counter-clockwise
-                startAngleOffset = 0;
-                item.ccw = true;
-            } else if (i === 1) {
-                // Ring 2 (index 1): starts at 180° and counts down clockwise
-                startAngleOffset = 180;
-                item.ccw = false;
-            } else if (i % 2 === 0) {
-                // Odd rings (index 2, 4, 6... = rings 3, 5, 7...): start where previous odd ring's arc ENDS
-                const prevOddIndex = i - 2;
-                const prevOddItem = goingLiveTimers[prevOddIndex];
-                
-                // Previous ring is counter-clockwise:
-                // - Starts at its startAngleOffset
-                // - Arc goes counter-clockwise (backwards) for (percentage * 360) degrees
-                // - So the END of the arc is at: startAngleOffset - (percentage * 360)
-                const prevArcDegrees = prevOddItem.percentage * 360;
-                startAngleOffset = prevOddItem.startAngleOffset - prevArcDegrees;
-                item.ccw = true;
-            } else {
-                // Even rings (index 3, 5, 7... = rings 4, 6, 8...): start where previous even ring's arc ENDS
-                const prevEvenIndex = i - 2;
-                const prevEvenItem = goingLiveTimers[prevEvenIndex];
-                
-                // Previous ring is clockwise:
-                // - Starts at its startAngleOffset
-                // - Arc goes clockwise (forwards) for (percentage * 360) degrees
-                // - So the END of the arc is at: startAngleOffset + (percentage * 360)
-                const prevArcDegrees = prevEvenItem.percentage * 360;
-                startAngleOffset = prevEvenItem.startAngleOffset + prevArcDegrees;
-                item.ccw = false;
-            }
-            
-            item.startAngleOffset = startAngleOffset;
-        });
-    }
+      goingLiveTimers.forEach((item, i) => {
+        item.finalRadiusPx = goingLiveStartPoint - (i*stepGoingLive) - donutWidthGoingLive/2;
+        item.widthPx = donutWidthGoingLive;
 
-    // ============================================================
-    // 9️⃣ Draw all donuts
-    // ============================================================
-    outward.forEach(item => {
-        if (!item.finalRadius) return;
-        drawDonut(centerX, centerY, item.finalRadius, donutWidthOut, item.percentage, item.color, item.ccw || false);
-    });
-
-    inward.forEach(item => {
-        if (!item.finalRadius) return;
-        drawDonut(centerX, centerY, item.finalRadius, donutWidthSpillover, item.percentage, item.color, item.ccw || false);
-    });
-
-    goingLiveTimers.forEach(item => {
-        if (!item.finalRadius) return;
-        drawDonut(centerX, centerY, item.finalRadius, donutWidthGoingLive, item.percentage, item.color, item.ccw || false, item.startAngleOffset || 0);
-    });
-
-    // 🔟 Draw labels dynamically
-    function drawItemLabel(item, idx, total, color = '#D3D3D3CC') {
-        if (item.noLabel || !item.finalRadius) return;
-
-        let label = '';
-        if (item.isGoal) {
-            switch (item.label) {
-                case 'Followers': label = `Followers: ${followerCurrent}/${followerGoal}`; break;
-                case 'Subs': label = `Subs: ${subCurrent}/${subGoal}`; break;
-                case 'Donations': label = `Donations: $${donationCurrent}/$${donationGoal}`; break;
-                case 'Bits': label = `Bits: ${bitsCurrent}/${bitsGoal}`; break;
-                default: label = item.label;
-            }
-        } else if (item.timer) {
-            const tRem = getTimeRemaining(item.timer);
-            label = `${item.timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`;
-        } else label = item.label;
-
-        drawLabelWithLine(label, centerX, centerY, item.finalRadius, item.percentage, idx, total, color, 'black', 'black');
-    }
-
-    outward.forEach((item, i) => drawItemLabel(item, (outward.length - 1) - i, outward.length));
-    inward.forEach((item, i) => drawItemLabel(item, (inward.length - 1) - i, inward.length));
-
-    // 🔄 Loop animation
-    requestAnimationFrame(drawAll);
-}
-
-
-
-async function refreshDataPeriodically(){
-    setInterval(async ()=>{
-        const now = new Date();
-        document.getElementById("refreshTracker").textContent=`Refreshing data at: ${now.toLocaleTimeString()}`;
-        await getUpdatedTimerData();
-        await fetchAllGoalData();
-        await fetchHypeTrainData(); // <--- add this
-    },5000);
-}
-
-
-// ----------------- STREAMELEMENTS WEBSOCKET -----------------
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec";
-const SE_JWT_TOKEN = '__SE_JWT_TOKEN__';
-const SE_CHANNEL_ID = '__SE_CHANNEL_ID__';
-
-let seSocket = null;
-let seReconnectToken = null;
-let seReconnectAttempts = 0;
-
-function connectSEWebSocket() {
-    const wsUrl = seReconnectToken
-        ? `wss://astro.streamelements.com/?reconnect_token=${seReconnectToken}`
-        : 'wss://astro.streamelements.com/';
-
-    seSocket = new WebSocket(wsUrl);
-
-    seSocket.addEventListener('open', () => {
-        console.log('✅ SE WebSocket connected');
-        seReconnectAttempts = 0;
-    });
-
-    seSocket.addEventListener('message', (event) => {
-        const msg = JSON.parse(event.data);
-
-        switch (msg.type) {
-            case 'welcome':
-                seReconnectToken = null;
-                seSocket.send(JSON.stringify({
-                    type: 'subscribe',
-                    nonce: crypto.randomUUID(),
-                    data: {
-                        topic: 'channel.tips',
-                        room: SE_CHANNEL_ID,
-                        token: SE_JWT_TOKEN,
-                        token_type: 'jwt'
-                    }
-                }));
-                break;
-
-            case 'response':
-                if (msg.error) {
-                    console.error('❌ SE subscription error:', msg.error, msg.data?.message);
-                } else {
-                    console.log('✅ SE subscribed:', msg.data?.message);
-                }
-                break;
-
-            case 'message':
-                if (msg.topic !== 'channel.tips') return;
-                if (msg.data?.status !== 'success' || msg.data?.approved !== 'allowed') return;
-
-                const donation = msg.data.donation;
-                const tipPayload = {
-                    type: 'tip',
-                    event: {
-                        _id: msg.data._id,
-                        user: donation?.user?.username || 'Anonymous',
-                        amount: donation?.amount || 0,
-                        currency: donation?.currency || 'USD',
-                        message: donation?.message || ''
-                    }
-                };
-
-                console.log(`💰 Tip: ${tipPayload.event.user} → $${tipPayload.event.amount}`);
-
-fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(tipPayload)
-})
-.then(() => console.log('📤 Tip forwarded to Apps Script'))
-.catch(err => console.error('❌ Forward failed:', err));
-                break;
-
-            case 'reconnect':
-                console.log('🔄 SE graceful reconnect');
-                seReconnectToken = msg.data?.reconnect_token || null;
-                seSocket.close();
-                break;
+        let startAngleOffset = 0;
+        if (i === 0) {
+          startAngleOffset = 0; item.ccw = true;
+        } else if (i === 1) {
+          startAngleOffset = 180; item.ccw = false;
+        } else if (i % 2 === 0) {
+          const prevOddItem = goingLiveTimers[i-2];
+          const prevArcDegrees = prevOddItem.percentage * 360;
+          startAngleOffset = prevOddItem.startAngleOffset - prevArcDegrees;
+          item.ccw = true;
+        } else {
+          const prevEvenItem = goingLiveTimers[i-2];
+          const prevArcDegrees = prevEvenItem.percentage * 360;
+          startAngleOffset = prevEvenItem.startAngleOffset + prevArcDegrees;
+          item.ccw = false;
         }
+        item.startAngleOffset = startAngleOffset;
+      });
+    }
+
+    return { outward, inward, goingLiveTimers };
+  }
+
+  // --- 3D arc-ring construction ---
+  // radiusWorld/tubeWorld already converted from px; startAngleDeg/ccw follow the
+  // same span convention GoingLive's drawDonut uses: cw spans [start, start+sweep],
+  // ccw spans [start-sweep, start]. The wrapper's rotation.y anchors that span's
+  // lower bound so cascading rings (GoingLive/subathon set) stay continuous.
+  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup){
+    const pct = Math.max(0.004, Math.min(1, percentage));
+    const sweepDeg = pct*360;
+    const beginDeg = (ccw ? (startAngleDeg - sweepDeg) : startAngleDeg) - 90; // -90: 0° reads as "top"
+    const segs = Math.max(6, Math.round(96*pct));
+    const geo = new THREE.TorusGeometry(radiusWorld, tubeWorld, 10, segs, THREE.MathUtils.degToRad(sweepDeg));
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(colorHex), metalness:0.5, roughness:0.35,
+      emissive: new THREE.Color(colorHex), emissiveIntensity:0.22
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = Math.PI/2;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    const wrapper = new THREE.Group();
+    wrapper.rotation.y = -THREE.MathUtils.degToRad(beginDeg);
+    wrapper.add(mesh);
+    parentGroup.add(wrapper);
+    return { wrapper, mesh, geo, mat };
+  }
+
+  function disposeDataRingSet(set){
+    set.forEach(rr=>{ rr.geo.dispose(); rr.mat.dispose(); });
+  }
+
+  // Builds the outward (External) data-ring set from an already-computed layout
+  // (see computeGoingLiveLayout) — split out so Internal rings can reuse the same
+  // layout object even when External rings happen to be toggled off.
+  function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup){
+    disposeDataRingSet(dataRingsExternal);
+    dataRingsExternal = [];
+    const worldPerPx = 1/pxPerUnit;
+
+    layout.outward.forEach(item=>{
+      const radiusWorld = item.finalRadiusPx * worldPerPx;
+      const tubeWorld = (item.widthPx/2) * worldPerPx;
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup);
+      rr.item = item; rr.lastPct = item.percentage;
+      dataRingsExternal.push(rr);
+    });
+  }
+
+  // Builds the inward (Internal) data-ring set: spillover items near the surface,
+  // then GoingLive/subathon timers filling the rest down to true center.
+  function buildInternalDataRings(pxPerUnit, parentGroup, layout){
+    disposeDataRingSet(dataRingsInternal);
+    dataRingsInternal = [];
+    const worldPerPx = 1/pxPerUnit;
+
+    layout.inward.forEach(item=>{
+      const radiusWorld = item.finalRadiusPx * worldPerPx;
+      const tubeWorld = (item.widthPx/2) * worldPerPx;
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup);
+      rr.item = item; rr.lastPct = item.percentage;
+      dataRingsInternal.push(rr);
+    });
+    layout.goingLiveTimers.forEach(item=>{
+      const radiusWorld = item.finalRadiusPx * worldPerPx;
+      const tubeWorld = (item.widthPx/2) * worldPerPx;
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup);
+      rr.item = item; rr.lastPct = item.percentage;
+      dataRingsInternal.push(rr);
+    });
+  }
+
+  // Full layout+geometry rebuild — cheap enough to run on a 1s tick (see below)
+  // without going all the way through buildRings()'s sphere/lighting/etc. setup.
+  let lastLiveLayout = null;
+  function rebuildDataRings(){
+    if(!liveDataOn) return;
+    buildRings(); // simplest correct path — re-runs the whole scene build, which
+                   // branches into the live-data ring builders below
+  }
+
+  function updateDataLabels(){
+    const el = document.getElementById('liveLabels');
+    if(!el) return;
+    if(!liveDataOn){ el.innerHTML=''; return; }
+    const lines = [];
+    if(lastLiveLayout){
+      lastLiveLayout.outward.forEach(it=>{ if(it.statLabel) lines.push(it.statLabel); });
+      lastLiveLayout.inward.forEach(it=>{ if(it.statLabel) lines.push(it.statLabel); });
+      lastLiveLayout.goingLiveTimers.forEach(it=>{ if(it.statLabel) lines.push(it.statLabel); });
+    }
+    el.innerHTML = lines.map(l=>`<div>${l.replace(/</g,'&lt;')}</div>`).join('');
+  }
+
+  // --- StreamElements websocket relay (tips → Apps Script) — ported as-is ---
+  let seSocket = null;
+  let seReconnectToken = null;
+  let seReconnectAttempts = 0;
+  function connectSEWebSocket() {
+    const wsUrl = seReconnectToken
+      ? `wss://astro.streamelements.com/?reconnect_token=${seReconnectToken}`
+      : 'wss://astro.streamelements.com/';
+    seSocket = new WebSocket(wsUrl);
+    seSocket.addEventListener('open', () => { seReconnectAttempts = 0; });
+    seSocket.addEventListener('message', (event) => {
+      const msg = JSON.parse(event.data);
+      switch (msg.type) {
+        case 'welcome':
+          seReconnectToken = null;
+          seSocket.send(JSON.stringify({
+            type: 'subscribe',
+            nonce: crypto.randomUUID(),
+            data: {
+              topic: 'channel.tips',
+              room: document.getElementById('seChannelId').value.trim(),
+              token: document.getElementById('seJwt').value.trim(),
+              token_type: 'jwt'
+            }
+          }));
+          break;
+        case 'message':
+          if (msg.topic !== 'channel.tips') return;
+          if (msg.data?.status !== 'success' || msg.data?.approved !== 'allowed') return;
+          const donation = msg.data.donation;
+          const tipPayload = {
+            type: 'tip',
+            event: {
+              _id: msg.data._id,
+              user: donation?.user?.username || 'Anonymous',
+              amount: donation?.amount || 0,
+              currency: donation?.currency || 'USD',
+              message: donation?.message || ''
+            }
+          };
+          fetch(gasUrl(), {
+            method: 'POST', mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(tipPayload)
+          }).catch(err => console.error('Forward failed:', err));
+          break;
+        case 'reconnect':
+          seReconnectToken = msg.data?.reconnect_token || null;
+          seSocket.close();
+          break;
+      }
+    });
+    seSocket.addEventListener('close', () => {
+      if(!seRelayOn) return; // don't auto-reconnect once the user has turned the relay off
+      const delay = Math.min(1000 * Math.pow(2, seReconnectAttempts), 30000);
+      seReconnectAttempts++;
+      setTimeout(()=>{ if(seRelayOn) connectSEWebSocket(); }, delay);
+    });
+  }
+  function disconnectSEWebSocket(){
+    if(seSocket){ seSocket.close(); seSocket = null; }
+  }
+
+  // --- Animation ---
+  let spinOn = true;
+  let pitchOn = true;
+  let spinSpeed = 1.0;
+  let pitchSpeed = 1.0;
+  let internalSpinOn = true;
+  let internalPitchOn = true;
+  let internalSpinSpeed = 1.0;
+  let internalPitchSpeed = 1.0;
+  const clock = new THREE.Clock();
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+
+    ringData.forEach((r)=>{
+      if(spinOn){
+        // spin about the ring's own normal — flat rotation, doesn't change its plane
+        r.mesh.rotation.z += dt * spinSpeed * (0.4 + 0.08*r.index);
+      }
+      if(pitchOn){
+        // pitch/cartwheel about the ring's own fixed hinge axis — a single axis-angle
+        // rotation, so sweeping through a full 360° never causes it to collapse onto
+        // another ring's plane the way composed Euler rotations did.
+        r.pitchAngle += dt * pitchSpeed * (0.25 + 0.12*r.index);
+        r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase + r.pitchAngle);
+      }
     });
 
-    seSocket.addEventListener('close', (e) => {
-        const delay = Math.min(1000 * Math.pow(2, seReconnectAttempts), 30000);
-        seReconnectAttempts++;
-        console.warn(`🔌 SE disconnected (${e.code}) — reconnecting in ${delay}ms`);
-        setTimeout(connectSEWebSocket, delay);
+    innerRingData.forEach((r)=>{
+      if(internalSpinOn){
+        r.mesh.rotation.z += dt * internalSpinSpeed * (0.4 + 0.08*r.index);
+      }
+      if(internalPitchOn){
+        r.pitchAngle += dt * internalPitchSpeed * (0.25 + 0.12*r.index);
+        r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase + r.pitchAngle);
+      }
     });
 
-    seSocket.addEventListener('error', (err) => {
-        console.error('SE WebSocket error:', err);
+    if(spinOn || pitchOn){
+      assembly.rotation.y += dt * spinSpeed * 0.05;
+    }
+
+    updateCamera();
+
+    // Billboard the flat disc to the camera every frame, AFTER updateCamera() so it
+    // uses this frame's fresh orientation. This is the actual fix for "shouldn't
+    // rotate as I drag" — the disc's world orientation never matched the drag
+    // gesture at all; what was changing was the camera's viewing angle onto a
+    // disc that stayed fixed to a world axis. Copying the camera's quaternion
+    // keeps the disc's plane parallel to the screen at all times, like a HUD
+    // element or a decal stuck to the glass in front of the lens.
+    if(flatCircle){
+      flatCircle.quaternion.copy(camera.quaternion);
+    }
+
+    // Same fix, applied to the webcam/OBS disc: without the quaternion copy, the
+    // disc's plane stayed fixed to a world axis while only the camera's viewing
+    // angle onto it changed as you dragged to orbit — which reads as "the webcam
+    // is rotating with the model." Position is pinned to the exact same origin
+    // the internal rings are built around (0,0,0) — NOT offset toward the camera
+    // — so it sits centered in the same 3D space as the rest of the assembly
+    // instead of floating above/in front of it at some other depth.
+    if(flatCircleWebcam){
+      flatCircleWebcam.quaternion.copy(camera.quaternion);
+      flatCircleWebcam.position.set(0, 0, 0);
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  // --- UI wiring ---
+  const N_in = document.getElementById('N');
+  const step_in = document.getElementById('step');
+  const pxRadius_in = document.getElementById('pxRadius');
+  const tube_in = document.getElementById('tube');
+  const offset_in = document.getElementById('offset');
+  const growth_in = document.getElementById('growth');
+  const sphereGap_in = document.getElementById('sphereGap');
+  const speed_in = document.getElementById('speed');
+  const pitchSpeed_in = document.getElementById('pitchSpeed');
+  const ringColor_in = document.getElementById('ringColor');
+  const ringAlpha_in = document.getElementById('ringAlpha');
+  const sphereColor_in = document.getElementById('sphereColor');
+  const sphereAlpha_in = document.getElementById('sphereAlpha');
+  const Ni_in = document.getElementById('Ni');
+  const stepI_in = document.getElementById('stepI');
+  const offsetI_in = document.getElementById('offsetI');
+  const speedI_in = document.getElementById('speedI');
+  const pitchSpeedI_in = document.getElementById('pitchSpeedI');
+  const ringColorI_in = document.getElementById('ringColorI');
+  const ringAlphaI_in = document.getElementById('ringAlphaI');
+  const discRadius_in = document.getElementById('discRadius');
+  const discColor_in = document.getElementById('discColor');
+  const discAlpha_in = document.getElementById('discAlpha');
+  const gasUrl_in = document.getElementById('gasUrl');
+  const outwardSpacePx_in = document.getElementById('outwardSpacePx');
+  const seJwt_in = document.getElementById('seJwt');
+  const seChannelId_in = document.getElementById('seChannelId');
+
+  function syncLabels(){
+    document.getElementById('vN').textContent = N_in.value;
+    document.getElementById('vStep').textContent = step_in.value + '°';
+    const pxR = parseFloat(pxRadius_in.value) || 0;
+    document.getElementById('vPxRadius').textContent = pxR + 'px (Ø' + (pxR*2) + 'px)';
+    document.getElementById('vTube').textContent = parseFloat(tube_in.value).toFixed(3);
+    document.getElementById('vOffset').textContent = offset_in.value + 'px';
+    document.getElementById('vGrowth').textContent = parseFloat(growth_in.value).toFixed(2);
+    document.getElementById('vSphereGap').textContent = sphereGap_in.value + 'px';
+    document.getElementById('vSpeed').textContent = parseFloat(speed_in.value).toFixed(1) + '×';
+    document.getElementById('vPitchSpeed').textContent = parseFloat(pitchSpeed_in.value).toFixed(1) + '×';
+    document.getElementById('vRingAlpha').textContent = 'alpha ' + parseFloat(ringAlpha_in.value).toFixed(2);
+    document.getElementById('vSphereAlpha').textContent = 'alpha ' + parseFloat(sphereAlpha_in.value).toFixed(2);
+    document.getElementById('vNi').textContent = Ni_in.value;
+    document.getElementById('vStepI').textContent = stepI_in.value + '°';
+    // Internal tube thickness has no input control anymore — it's always derived
+    // from 670px sphere interior ÷ Ni inside buildInnerRings, so the label just
+    // stays the static "auto" text already in the HTML markup.
+    document.getElementById('vOffsetI').textContent = offsetI_in.value + 'px';
+    document.getElementById('vSpeedI').textContent = parseFloat(speedI_in.value).toFixed(1) + '×';
+    document.getElementById('vPitchSpeedI').textContent = parseFloat(pitchSpeedI_in.value).toFixed(1) + '×';
+    document.getElementById('vRingAlphaI').textContent = 'alpha ' + parseFloat(ringAlphaI_in.value).toFixed(2);
+    const discR = parseFloat(discRadius_in.value) || 0;
+    document.getElementById('vDiscRadius').textContent = discR + 'px (Ø' + (discR*2) + 'px)';
+    document.getElementById('vDiscAlpha').textContent = 'alpha ' + parseFloat(discAlpha_in.value).toFixed(2);
+    document.getElementById('vOutwardSpace').textContent = outwardSpacePx_in.value + 'px';
+  }
+
+  [N_in, step_in, pxRadius_in, tube_in, offset_in, growth_in, sphereGap_in, ringColor_in, ringAlpha_in, sphereColor_in, sphereAlpha_in,
+   Ni_in, stepI_in, offsetI_in, ringColorI_in, ringAlphaI_in, discRadius_in, discColor_in, discAlpha_in].forEach(el=>{
+    el.addEventListener('input', ()=>{
+      if(N_in.value === '' || parseInt(N_in.value) < 2) return; // ignore mid-typing/invalid states
+      if(Ni_in.value === '' || parseInt(Ni_in.value) < 1) return; // same guard for internal count
+      syncLabels(); buildRings();
     });
-}
+  });
 
-// ----------------- INIT -----------------
-cameraImage.onload = ()=>{drawAll();}
-async function init(){
-    await loadInitialData();
-    drawAll();
-    refreshDataPeriodically();
-    connectSEWebSocket();
-}
-init();
+  document.querySelectorAll('.toggles button[data-mode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-mode]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('vFormula').textContent = btn.textContent;
+      buildRings();
+    });
+  });
 
+  document.querySelectorAll('.toggles button[data-spin]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-spin]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      spinOn = btn.dataset.spin === 'on';
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-pitch]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-pitch]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      pitchOn = btn.dataset.pitch === 'on';
+    });
+  });
+
+  speed_in.addEventListener('input', ()=>{
+    spinSpeed = parseFloat(speed_in.value);
+    syncLabels();
+  });
+
+  pitchSpeed_in.addEventListener('input', ()=>{
+    pitchSpeed = parseFloat(pitchSpeed_in.value);
+    syncLabels();
+  });
+
+  document.querySelectorAll('.toggles button[data-internal]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-internal]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildRings(); // internal-on state is read live inside buildInnerRings, so just rebuild
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-external]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-external]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildRings(); // external-on state is read live inside buildRings, so just rebuild
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-ispin]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-ispin]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      internalSpinOn = btn.dataset.ispin === 'on';
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-ipitch]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-ipitch]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      internalPitchOn = btn.dataset.ipitch === 'on';
+    });
+  });
+
+  speedI_in.addEventListener('input', ()=>{
+    internalSpinSpeed = parseFloat(speedI_in.value);
+    syncLabels();
+  });
+
+  pitchSpeedI_in.addEventListener('input', ()=>{
+    internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
+    syncLabels();
+  });
+
+  function stopLiveDataTimers(){
+    if(liveRefreshTimer){ clearInterval(liveRefreshTimer); liveRefreshTimer = null; }
+    if(liveTickTimer){ clearInterval(liveTickTimer); liveTickTimer = null; }
+  }
+  function liveTick(){
+    removeExpiredTimers(); // cleanly removes any timer that just hit 0 and rebuilds immediately
+    rebuildDataRings();    // otherwise, periodic re-layout for smooth-ish countdown/cascade/color pulse
+  }
+  function startLiveDataTimers(){
+    stopLiveDataTimers();
+    refreshLiveData(); // fetch immediately rather than waiting the first 5s
+    liveRefreshTimer = setInterval(refreshLiveData, 5000);
+    liveTickTimer = setInterval(liveTick, 1000);
+  }
+
+  document.querySelectorAll('.toggles button[data-livedata]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-livedata]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      liveDataOn = btn.dataset.livedata === 'on';
+      N_in.disabled = liveDataOn;
+      Ni_in.disabled = liveDataOn;
+      if(liveDataOn){
+        setLiveStatus('Connecting…');
+        startLiveDataTimers();
+      } else {
+        stopLiveDataTimers();
+        setLiveStatus('Off');
+        lastLiveLayout = null;
+        buildRings(); // falls back to the manual decorative ring systems
+      }
+    });
+  });
+
+  gasUrl_in.addEventListener('change', ()=>{
+    if(liveDataOn) refreshLiveData();
+  });
+
+  outwardSpacePx_in.addEventListener('input', ()=>{
+    syncLabels();
+    if(liveDataOn) rebuildDataRings();
+  });
+
+  document.querySelectorAll('.toggles button[data-serelay]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      seRelayOn = btn.dataset.serelay === 'on';
+      if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
+    });
+  });
+
+  document.getElementById('enableCamBtn').addEventListener('click', requestCameraAccess);
+
+  document.getElementById('camDevice').addEventListener('change', (e)=>{
+    startCamera(e.target.value);
+  });
+
+  document.querySelectorAll('.toggles button[data-capturemode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      captureMode = btn.dataset.capturemode;
+      if(captureMode === 'obs'){
+        const sel = document.getElementById('obsSourceSelect');
+        if(sel.value) startOBSPolling(sel.value);
+      } else {
+        stopOBSPolling();
+      }
+      buildWebcamDisc(); // rebuild disc so its material picks up the newly-active texture
+    });
+  });
+
+  document.getElementById('obsConnectBtn').addEventListener('click', connectToOBS);
+
+  document.getElementById('obsSourceSelect').addEventListener('change', (e)=>{
+    if(captureMode === 'obs') startOBSPolling(e.target.value);
+  });
+
+  // One-click activation: picking a source from the dropdown alone doesn't turn
+  // anything on — "Webcam fill" also has to be On and "Capture source" also has
+  // to be set to "OBS source" for the disc to actually appear. This button does
+  // all three steps at once instead of requiring three separate clicks in the
+  // right order.
+  document.getElementById('obsApplyBtn').addEventListener('click', ()=>{
+    const sel = document.getElementById('obsSourceSelect');
+    const sourceName = sel.value;
+    if(!sourceName){
+      alert('Pick an OBS source from the dropdown first.');
+      return;
+    }
+    // 1. Force "Capture source" to OBS.
+    captureMode = 'obs';
+    document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.capturemode === 'obs');
+    });
+    // 2. Force "Webcam fill" to On.
+    document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.camfill === 'on');
+    });
+    // 3. Start polling that source and (re)build the disc so it's visible now.
+    startOBSPolling(sourceName);
+    buildWebcamDisc();
+  });
+
+  document.querySelectorAll('.toggles button[data-obsbg]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-obsbg]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      obsBgMode = btn.dataset.obsbg;
+      document.getElementById('obsBgColorRow').style.display = (obsBgMode === 'color') ? '' : 'none';
+      buildWebcamDisc(); // rebuild so the material's transparent flag matches the new mode
+    });
+  });
+
+  document.getElementById('obsBgColor').addEventListener('input', (e)=>{
+    obsBgColor = e.target.value; // read live by drawOBSFrame on the next polled frame — no rebuild needed
+  });
+
+  document.querySelectorAll('.toggles button[data-pagebg]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-pagebg]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const mode = btn.dataset.pagebg;
+      document.getElementById('pageBgColorRow').style.display = (mode === 'transparent') ? 'none' : '';
+      applyPageBackground(mode, document.getElementById('pageBgColor').value);
+    });
+  });
+
+  document.getElementById('pageBgColor').addEventListener('input', (e)=>{
+    const activeMode = document.querySelector('.toggles button[data-pagebg].active').dataset.pagebg;
+    applyPageBackground(activeMode, e.target.value);
+  });
+
+  document.querySelectorAll('.toggles button[data-camfill]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildFlatCircle(PX_PER_WORLD_UNIT); // camfill state is read live inside discMaterial
+      buildWebcamDisc(); // also rebuild the actual webcam/OBS disc — this was previously missing,
+                          // so toggling "Webcam fill" alone never made the feed appear or disappear
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-mirror]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-mirror]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      camMirrorOn = btn.dataset.mirror === 'on';
+      applyCameraMirror();
+    });
+  });
+
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // --- Collapsible settings panel ---
+  const collapseBtn = document.getElementById('collapseBtn');
+  const panelBody = document.getElementById('panelBody');
+  collapseBtn.addEventListener('click', ()=>{
+    const collapsed = panelBody.classList.toggle('collapsed');
+    collapseBtn.textContent = collapsed ? '▸' : '▾';
+  });
+
+  // --- Settings export / import ---
+  // Browser localStorage isn't reliable inside this preview sandbox, so persistence
+  // is handled as an explicit settings file instead — download it, then load it back
+  // any time (including in a future session) to restore every control exactly.
+  function collectSettings(){
+    return {
+      N: N_in.value,
+      step: step_in.value,
+      mode: document.querySelector('.toggles button[data-mode].active').dataset.mode,
+      pxRadius: pxRadius_in.value,
+      tube: tube_in.value,
+      offset: offset_in.value,
+      growth: growth_in.value,
+      sphereGap: sphereGap_in.value,
+      spin: spinOn,
+      spinSpeed: speed_in.value,
+      pitch: pitchOn,
+      pitchSpeed: pitchSpeed_in.value,
+      ringColor: ringColor_in.value,
+      ringAlpha: ringAlpha_in.value,
+      sphereColor: sphereColor_in.value,
+      sphereAlpha: sphereAlpha_in.value,
+      externalOn: document.querySelector('.toggles button[data-external].active').dataset.external === 'on',
+      internalOn: document.querySelector('.toggles button[data-internal].active').dataset.internal === 'on',
+      Ni: Ni_in.value,
+      stepI: stepI_in.value,
+      offsetI: offsetI_in.value,
+      internalSpin: internalSpinOn,
+      internalSpinSpeed: speedI_in.value,
+      internalPitch: internalPitchOn,
+      internalPitchSpeed: pitchSpeedI_in.value,
+      ringColorI: ringColorI_in.value,
+      ringAlphaI: ringAlphaI_in.value,
+      discRadius: discRadius_in.value,
+      discColor: discColor_in.value,
+      discAlpha: discAlpha_in.value,
+      camFillOn: document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on',
+      camMirrorOn: camMirrorOn,
+      gasUrl: gasUrl_in.value,
+      outwardSpacePx: outwardSpacePx_in.value,
+      seChannelId: seChannelId_in.value
+      // Note: liveDataOn, seRelayOn, and the SE JWT token are deliberately NOT
+      // saved — loading a settings file shouldn't silently start pulling live
+      // data or reconnect a websocket with stale credentials.
+    };
+  }
+
+  function applySettings(s){
+    if(s.N != null) N_in.value = s.N;
+    if(s.step != null) step_in.value = s.step;
+    if(s.mode){
+      document.querySelectorAll('.toggles button[data-mode]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.mode === s.mode);
+      });
+      document.getElementById('vFormula').textContent = s.mode === 'a' ? '360/N − step' : 'Fixed 360/N';
+    }
+    if(s.pxRadius != null) pxRadius_in.value = s.pxRadius;
+    else if(s.radius != null) pxRadius_in.value = Math.round(s.radius * 670); // back-compat with old saved settings files
+    if(s.tube != null) tube_in.value = s.tube;
+    if(s.offset != null) offset_in.value = s.offset;
+    if(s.growth != null) growth_in.value = s.growth;
+    if(s.sphereGap != null) sphereGap_in.value = s.sphereGap;
+    if(s.spinSpeed != null) speed_in.value = s.spinSpeed;
+    if(s.pitchSpeed != null) pitchSpeed_in.value = s.pitchSpeed;
+    if(typeof s.spin === 'boolean'){
+      spinOn = s.spin;
+      document.querySelectorAll('.toggles button[data-spin]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.spin === 'on') === s.spin);
+      });
+    }
+    if(typeof s.pitch === 'boolean'){
+      pitchOn = s.pitch;
+      document.querySelectorAll('.toggles button[data-pitch]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.pitch === 'on') === s.pitch);
+      });
+    }
+    if(s.ringColor) ringColor_in.value = s.ringColor;
+    if(s.ringAlpha != null) ringAlpha_in.value = s.ringAlpha;
+    if(s.sphereColor) sphereColor_in.value = s.sphereColor;
+    if(s.sphereAlpha != null) sphereAlpha_in.value = s.sphereAlpha;
+
+    if(typeof s.externalOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-external]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.external === 'on') === s.externalOn);
+      });
+    }
+    if(typeof s.internalOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-internal]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.internal === 'on') === s.internalOn);
+      });
+    }
+    // Note: internal tube thickness is always auto-derived now (670px sphere
+    // interior ÷ Ni), so older settings files with s.autoFit/s.tubeI/s.shrink
+    // are simply ignored on load — nothing left to restore for them.
+    if(s.Ni != null) Ni_in.value = s.Ni;
+    if(s.stepI != null) stepI_in.value = s.stepI;
+    if(s.offsetI != null) offsetI_in.value = s.offsetI;
+    if(s.internalSpinSpeed != null) speedI_in.value = s.internalSpinSpeed;
+    if(s.internalPitchSpeed != null) pitchSpeedI_in.value = s.internalPitchSpeed;
+    if(typeof s.internalSpin === 'boolean'){
+      internalSpinOn = s.internalSpin;
+      document.querySelectorAll('.toggles button[data-ispin]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.ispin === 'on') === s.internalSpin);
+      });
+    }
+    if(typeof s.internalPitch === 'boolean'){
+      internalPitchOn = s.internalPitch;
+      document.querySelectorAll('.toggles button[data-ipitch]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.ipitch === 'on') === s.internalPitch);
+      });
+    }
+    if(s.ringColorI) ringColorI_in.value = s.ringColorI;
+    if(s.ringAlphaI != null) ringAlphaI_in.value = s.ringAlphaI;
+    if(s.discRadius != null) discRadius_in.value = s.discRadius;
+    if(s.discColor) discColor_in.value = s.discColor;
+    if(s.discAlpha != null) discAlpha_in.value = s.discAlpha;
+    if(typeof s.camFillOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.camfill === 'on') === s.camFillOn);
+      });
+      // Note: this only restores the toggle's visual state. The actual camera
+      // stream can't be restored automatically — browser permissions and device
+      // availability don't carry over between sessions, so "Enable Camera Access"
+      // still needs to be clicked again to actually populate the disc with video.
+    }
+    if(typeof s.camMirrorOn === 'boolean'){
+      camMirrorOn = s.camMirrorOn;
+      document.querySelectorAll('.toggles button[data-mirror]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.mirror === 'on') === s.camMirrorOn);
+      });
+      applyCameraMirror();
+    }
+    if(s.gasUrl) gasUrl_in.value = s.gasUrl;
+    if(s.outwardSpacePx != null) outwardSpacePx_in.value = s.outwardSpacePx;
+    if(s.seChannelId) seChannelId_in.value = s.seChannelId;
+
+    spinSpeed = parseFloat(speed_in.value);
+    pitchSpeed = parseFloat(pitchSpeed_in.value);
+    internalSpinSpeed = parseFloat(speedI_in.value);
+    internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
+    syncLabels();
+    buildRings();
+  }
+
+  document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
+    const data = JSON.stringify(collectSettings(), null, 2);
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '3d-rings-settings.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  const loadSettingsFile = document.getElementById('loadSettingsFile');
+  document.getElementById('loadSettingsBtn').addEventListener('click', ()=> loadSettingsFile.click());
+  loadSettingsFile.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt)=>{
+      try{
+        applySettings(JSON.parse(evt.target.result));
+      }catch(err){
+        alert('Could not read settings file: ' + err.message);
+      }
+      loadSettingsFile.value = '';
+    };
+    reader.readAsText(file);
+  });
+
+  syncLabels();
+  buildRings();
+  animate();
+})();
 </script>
 </body>
 </html>
