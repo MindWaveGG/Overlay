@@ -499,7 +499,19 @@
 </div>
 
 <div id="hint">Drag to orbit · scroll to zoom</div>
-<svg id="labelLinesSvg"></svg>
+<svg id="labelLinesSvg">
+  <defs>
+    <!-- Punches a hole over the webcam/OBS disc's current on-screen circle so
+         connector lines never draw on top of the streamer's face — see the
+         camMaskHole cx/cy/r updates in updateLabelLines(). r starts at 0 (no
+         hole) until that first update runs. -->
+    <mask id="camMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
+      <rect x="0" y="0" width="100%" height="100%" fill="white"></rect>
+      <circle id="camMaskHole" cx="0" cy="0" r="0" fill="black"></circle>
+    </mask>
+  </defs>
+  <g id="labelLinesGroup" mask="url(#camMask)"></g>
+</svg>
 <div id="liveLabels"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1940,16 +1952,24 @@
   function updateDataLabels(){
     const el = document.getElementById('liveLabels');
     const svg = document.getElementById('labelLinesSvg');
-    if(!el || !svg) return;
-    if(!liveDataOn || labelTargets.length===0){ el.innerHTML=''; svg.innerHTML=''; return; }
+    const linesGroup = document.getElementById('labelLinesGroup');
+    if(!el || !svg || !linesGroup) return;
+    if(!liveDataOn || labelTargets.length===0){ el.innerHTML=''; linesGroup.innerHTML=''; return; }
 
-    // Anchored to the left, shifted right past the settings panel (280px wide +
-    // margin) so the two overlays don't collide.
-    const boxLeft = 310;
+    // Anchored past the settings panel (280px wide + margin), then nudged
+    // further right and pulled up into the upper third of the screen — per
+    // the user's reference screenshot marking roughly where the stack should
+    // sit (around 34% across, vertically centered around 25% down), rather
+    // than the panel-clearance minimum or a full viewport vertical center.
+    const boxLeft = Math.max(310, window.innerWidth * 0.34);
     const rowGap = 10;
 
     el.innerHTML = '';
-    svg.innerHTML = '';
+    // NOTE: clear linesGroup, not the whole svg — the svg's <defs><mask> lives
+    // outside this group and must survive every rebuild (see camMaskHole in
+    // updateLabelLines(), which punches a hole over the webcam disc so lines
+    // never draw on top of the streamer's face).
+    linesGroup.innerHTML = '';
 
     labelTargets.forEach((lt, i)=>{
       const box = document.createElement('div');
@@ -1965,16 +1985,14 @@
       line.setAttribute('stroke', lt.color || '#d4a95a');
       line.setAttribute('stroke-width', '2');
       line.setAttribute('opacity', '0.85');
-      svg.appendChild(line);
+      linesGroup.appendChild(line);
     });
 
     // Stack top-to-bottom using each box's real rendered height (label text
     // length varies, so a fixed row height would either clip or leave gaps),
-    // then vertically CENTER the whole stack on the viewport. Pinning the
-    // stack to a fixed y=20 top-of-screen start (the old behavior, ported
-    // from the 2D overlay's small fixed-size canvas where that happened to
-    // sit near the middle) put the stack way above the subject on a full
-    // browser window, forcing the connector lines into long, steep diagonals.
+    // then center the whole stack around ~25% down the viewport — matching
+    // the upper-left zone from the reference screenshot, not a full 50%
+    // vertical center (which was still noticeably lower than intended).
     let totalHeight = 0;
     labelTargets.forEach((lt, i)=>{
       const box = document.getElementById('labelBox_' + i);
@@ -1982,7 +2000,7 @@
     });
     totalHeight += rowGap * Math.max(0, labelTargets.length - 1);
 
-    let top = Math.max(20, (window.innerHeight - totalHeight) / 2);
+    let top = Math.max(20, window.innerHeight * 0.25 - totalHeight / 2);
     labelTargets.forEach((lt, i)=>{
       const box = document.getElementById('labelBox_' + i);
       if(!box) return;
@@ -1998,6 +2016,33 @@
     if(!svg || !liveDataOn || labelTargets.length===0) return;
     camera.updateMatrixWorld(); // ensure this frame's camera transform is current before projecting
     const vec = new THREE.Vector3();
+
+    // Punch a hole in the connector-line mask over wherever the webcam/OBS
+    // disc currently projects on screen, so lines always draw behind it
+    // rather than crossing over the streamer's face. The disc is a billboard
+    // fixed at world origin (see animate()'s flatCircleWebcam.position.set(0,0,0)
+    // + quaternion.copy(camera.quaternion)), so its screen-space edge is found
+    // by projecting a point one disc-radius along the camera's own right axis.
+    const maskHole = document.getElementById('camMaskHole');
+    if(maskHole){
+      if(flatCircleWebcam){
+        const discR = flatCircleWebcam.geometry.parameters.radius;
+        const center = new THREE.Vector3(0, 0, 0).project(camera);
+        const camRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
+        const edge = camRight.multiplyScalar(discR).project(camera);
+
+        const cx = (center.x * 0.5 + 0.5) * window.innerWidth;
+        const cy = (1 - (center.y * 0.5 + 0.5)) * window.innerHeight;
+        const ex = (edge.x * 0.5 + 0.5) * window.innerWidth;
+        const ey = (1 - (edge.y * 0.5 + 0.5)) * window.innerHeight;
+
+        maskHole.setAttribute('cx', cx);
+        maskHole.setAttribute('cy', cy);
+        maskHole.setAttribute('r', Math.hypot(ex - cx, ey - cy));
+      } else {
+        maskHole.setAttribute('r', 0); // no disc active — nothing to hide behind
+      }
+    }
 
     labelTargets.forEach((lt, i)=>{
       const box = document.getElementById('labelBox_' + i);
