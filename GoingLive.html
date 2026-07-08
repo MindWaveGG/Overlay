@@ -482,9 +482,19 @@
   // Substituted at deploy time by the same build step that fills in
   // SE_JWT_TOKEN/SE_CHANNEL_ID for the 2D overlay (see GoingLive.html) — reads
   // the WEB_SOCKET_P GitHub secret and replaces this placeholder before the
-  // page ships. Left untouched (still literally "__WEB_SOCKET_P__") when
+  // page ships. Left untouched (still literally the raw placeholder) when
   // opened locally outside that pipeline, which is the signal used below to
   // decide whether to prefill the OBS password field.
+  //
+  // IMPORTANT: the sentinel used to detect "was this replaced?" is built by
+  // concatenation (UNBUILT_SENTINEL below), NOT written as one literal
+  // "__WEB_SOCKET_P__" string. The deploy step does a blind find/replace of
+  // that exact substring — if the sentinel comparison also contained that
+  // literal text, the replace would corrupt BOTH sides identically and the
+  // guard would always evaluate WEB_SOCKET_P !== WEB_SOCKET_P (always false),
+  // permanently disabling the prefill. This was the actual bug that caused
+  // obsPassword.value to always come back as ''.
+  const UNBUILT_SENTINEL = '__' + 'WEB_SOCKET_P' + '__';
   const WEB_SOCKET_P = '__WEB_SOCKET_P__';
 
   const container = document.getElementById('scene');
@@ -2463,10 +2473,10 @@
   // --- Auto-connect on load ---
   // OBS password: only prefill if a real build step actually substituted
   // WEB_SOCKET_P — if this file is opened directly (no build), the placeholder
-  // string is still literally "__WEB_SOCKET_P__" and must NOT be sent as a
+  // string is still literally the raw sentinel and must NOT be sent as a
   // password. obsUrl already defaults to ws://localhost:4455 in the markup,
   // so a bare connect attempt is meaningful even with no password.
-  if(WEB_SOCKET_P && WEB_SOCKET_P !== '__WEB_SOCKET_P__'){
+  if(WEB_SOCKET_P && WEB_SOCKET_P !== UNBUILT_SENTINEL){
     document.getElementById('obsPassword').value = WEB_SOCKET_P;
   }
   connectToOBS(); // setOBSStatus() reports Connecting… / Connected / any failure either way
