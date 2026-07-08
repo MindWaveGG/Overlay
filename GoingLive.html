@@ -479,6 +479,14 @@
 <script src="https://cdn.jsdelivr.net/npm/obs-websocket-js"></script>
 <script>
 (function(){
+  // Substituted at deploy time by the same build step that fills in
+  // SE_JWT_TOKEN/SE_CHANNEL_ID for the 2D overlay (see GoingLive.html) — reads
+  // the WEB_SOCKET_P GitHub secret and replaces this placeholder before the
+  // page ships. Left untouched (still literally "__WEB_SOCKET_P__") when
+  // opened locally outside that pipeline, which is the signal used below to
+  // decide whether to prefill the OBS password field.
+  const WEB_SOCKET_P = '__WEB_SOCKET_P__';
+
   const container = document.getElementById('scene');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0c10);
@@ -692,7 +700,12 @@
         opt.textContent = d.label || ('Camera ' + (i+1));
         sel.appendChild(opt);
       });
-      startCamera(cams[0].deviceId);
+      // Prefer a device labeled "RazerCam" (this rig's camera is always that
+      // one) over just picking whatever enumerateDevices happens to list first.
+      const razer = cams.find(d=>/razer/i.test(d.label));
+      const chosen = razer || cams[0];
+      sel.value = chosen.deviceId;
+      startCamera(chosen.deviceId);
     }).catch(err=>{
       console.error('enumerateDevices failed', err);
     });
@@ -1136,7 +1149,7 @@
       if(externalOn){
         // Live data drives ring count/percentage/color directly — the manual
         // N-loop below is skipped entirely in favor of the live layout's rings.
-        buildExternalDataRingsFromLayout(liveLayoutForThisBuild, PX_PER_WORLD_UNIT/0.55, assembly);
+        buildExternalDataRingsFromLayout(liveLayoutForThisBuild, PX_PER_WORLD_UNIT/0.55, assembly, baseTiltDeg, offsetWorld);
       } else {
         disposeDataRingSet(dataRingsExternal);
         dataRingsExternal = [];
@@ -1231,23 +1244,23 @@
       return []; // innerRingData stays empty; nothing to build or animate
     }
 
-    if(liveDataOn){
-      const innerGroup = new THREE.Group();
-      assembly.add(innerGroup);
-      buildInternalDataRings(pxPerUnit, innerGroup, liveLayout);
-      return [``, `Internal rings — live data (spillover + GoingLive/subathon, fills to center)`,
-              `spillover: ${liveLayout.inward.length}   subathon: ${liveLayout.goingLiveTimers.length}`];
-    } else {
-      disposeDataRingSet(dataRingsInternal);
-      dataRingsInternal = [];
-    }
-
     const Ni = parseInt(document.getElementById('Ni').value);
     const stepI = parseFloat(document.getElementById('stepI').value);
     const offsetPxI = parseFloat(document.getElementById('offsetI').value);
     const OFFSET_SCALE = 0.012;
     const offsetWorldI = offsetPxI * OFFSET_SCALE;
     const baseTiltDegI = (360/Ni - stepI);
+
+    if(liveDataOn){
+      const innerGroup = new THREE.Group();
+      assembly.add(innerGroup);
+      buildInternalDataRings(pxPerUnit, innerGroup, liveLayout, baseTiltDegI, offsetWorldI);
+      return [``, `Internal rings — live data (spillover + GoingLive/subathon, fills to center)`,
+              `spillover: ${liveLayout.inward.length}   subathon: ${liveLayout.goingLiveTimers.length}`];
+    } else {
+      disposeDataRingSet(dataRingsInternal);
+      dataRingsInternal = [];
+    }
 
     // Divide the entire interior — from just under the visible shell down to the
     // exact center — into Ni equal, CONTIGUOUS radial bands. Ring i owns the band
@@ -1658,7 +1671,7 @@
   // same span convention GoingLive's drawDonut uses: cw spans [start, start+sweep],
   // ccw spans [start-sweep, start]. The wrapper's rotation.y anchors that span's
   // lower bound so cascading rings (GoingLive/subathon set) stay continuous.
-  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup){
+  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup, hingeAxis, hingeBeta, hingeOffsetScalar){
     const pct = Math.max(0.004, Math.min(1, percentage));
     const sweepDeg = pct*360;
     const beginDeg = (ccw ? (startAngleDeg - sweepDeg) : startAngleDeg) - 90; // -90: 0° reads as "top"
@@ -1674,8 +1687,20 @@
     const wrapper = new THREE.Group();
     wrapper.rotation.y = -THREE.MathUtils.degToRad(beginDeg);
     wrapper.add(mesh);
-    parentGroup.add(wrapper);
-    return { wrapper, mesh, geo, mat };
+
+    // Same fixed-hinge-axis tilt the manual rings use (see buildRings' N-loop):
+    // a pivot group, offset outward along its own axis and rotated once with a
+    // single axis-angle quaternion, so each data ring gets a distinct plane
+    // instead of every arc lying flat in the same XZ plane. animate() then
+    // spins this quaternion further every frame via betaBase + pitchAngle,
+    // exactly like the manual rings.
+    const pivot = new THREE.Group();
+    pivot.position.copy(hingeAxis).multiplyScalar(hingeOffsetScalar);
+    pivot.quaternion.setFromAxisAngle(hingeAxis, hingeBeta);
+    pivot.add(wrapper);
+    parentGroup.add(pivot);
+
+    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0 };
   }
 
   function disposeDataRingSet(set){
@@ -1685,40 +1710,65 @@
   // Builds the outward (External) data-ring set from an already-computed layout
   // (see computeGoingLiveLayout) — split out so Internal rings can reuse the same
   // layout object even when External rings happen to be toggled off.
-  function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup){
+  // Shared with the manual N-loop's per-ring hinge math (see buildRings): each
+  // ring gets its own fixed axis in the horizontal plane, at azimuth i*(360/count),
+  // tilted by i*baseTiltDeg. count is the ring's own set size, not a global N, so
+  // a live layout with e.g. 4 outward rings spaces those 4 evenly regardless of
+  // whatever N the manual-mode slider happens to be set to.
+  function hingeFor(i, count, baseTiltDeg){
+    const alphaDeg = i * (360 / Math.max(count, 1));
+    const betaDeg = i * baseTiltDeg;
+    const alpha = THREE.MathUtils.degToRad(alphaDeg);
+    const beta = THREE.MathUtils.degToRad(betaDeg);
+    const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
+    return { axis, beta };
+  }
+
+  function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup, baseTiltDeg, offsetWorld){
     disposeDataRingSet(dataRingsExternal);
     dataRingsExternal = [];
     const worldPerPx = 1/pxPerUnit;
+    const count = layout.outward.length;
 
-    layout.outward.forEach(item=>{
+    layout.outward.forEach((item, i)=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup);
-      rr.item = item; rr.lastPct = item.percentage;
+      const { axis, beta } = hingeFor(i, count, baseTiltDeg);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i);
+      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       dataRingsExternal.push(rr);
+      ringData.push(rr); // so animate()'s per-ring spin/pitch picks these up too
     });
   }
 
   // Builds the inward (Internal) data-ring set: spillover items near the surface,
   // then GoingLive/subathon timers filling the rest down to true center.
-  function buildInternalDataRings(pxPerUnit, parentGroup, layout){
+  function buildInternalDataRings(pxPerUnit, parentGroup, layout, baseTiltDegI, offsetWorldI){
     disposeDataRingSet(dataRingsInternal);
     dataRingsInternal = [];
     const worldPerPx = 1/pxPerUnit;
+    const count = layout.inward.length + layout.goingLiveTimers.length;
+    let i = 0;
 
     layout.inward.forEach(item=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup);
-      rr.item = item; rr.lastPct = item.percentage;
+      const { axis, beta } = hingeFor(i, count, baseTiltDegI);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i);
+      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       dataRingsInternal.push(rr);
+      innerRingData.push(rr);
+      i++;
     });
     layout.goingLiveTimers.forEach(item=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup);
-      rr.item = item; rr.lastPct = item.percentage;
+      const { axis, beta } = hingeFor(i, count, baseTiltDegI);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i);
+      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       dataRingsInternal.push(rr);
+      innerRingData.push(rr);
+      i++;
     });
   }
 
@@ -2409,6 +2459,24 @@
 
   syncLabels();
   buildRings();
+
+  // --- Auto-connect on load ---
+  // OBS password: only prefill if a real build step actually substituted
+  // WEB_SOCKET_P — if this file is opened directly (no build), the placeholder
+  // string is still literally "__WEB_SOCKET_P__" and must NOT be sent as a
+  // password. obsUrl already defaults to ws://localhost:4455 in the markup,
+  // so a bare connect attempt is meaningful even with no password.
+  if(WEB_SOCKET_P && WEB_SOCKET_P !== '__WEB_SOCKET_P__'){
+    document.getElementById('obsPassword').value = WEB_SOCKET_P;
+  }
+  connectToOBS(); // setOBSStatus() reports Connecting… / Connected / any failure either way
+
+  // Camera: this rig's device is always RazerCam, so skip the manual "Enable
+  // Camera Access" click and go straight for permission + enumeration. Per the
+  // existing error text in requestCameraAccess(), a Browser Source in OBS may
+  // still need one manual Interact → grant the first time regardless.
+  requestCameraAccess();
+
   animate();
 })();
 </script>
