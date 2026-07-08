@@ -420,6 +420,21 @@
   </div>
 
   <div class="row">
+    <label>Pulse color — white end</label>
+    <input type="color" id="pulseWhite" value="#ffffff">
+  </div>
+
+  <div class="row">
+    <label>Pulse color — charcoal end (goal / GoingLive fill)</label>
+    <input type="color" id="pulseCharcoal" value="#36454f">
+  </div>
+
+  <div class="row">
+    <label>Pulse color — gold end (hype train)</label>
+    <input type="color" id="pulseGold" value="#ffaf37">
+  </div>
+
+  <div class="row">
     <label>StreamElements relay (tips → Apps Script)</label>
     <div class="toggles">
       <button data-serelay="on">On</button>
@@ -1473,7 +1488,15 @@
   // --- Color pulsing, ported verbatim from GoingLive ---
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
   function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-  const LD_RED={r:255,g:255,b:255}, LD_BLUE={r:54,g:69,b:79}, LD_GOLD={r:255,g:175,b:55}, LD_BLACK={r:54,g:69,b:79};
+  function hexToRgb(hex){const v=parseInt(hex.slice(1),16); return {r:(v>>16)&255, g:(v>>8)&255, b:v&255};}
+  // Pulse endpoints are user-adjustable (see #pulseWhite/#pulseCharcoal/#pulseGold);
+  // read live each frame so dragging a picker updates the pulse immediately.
+  // Originally LD_BLUE and LD_BLACK were both hardcoded to the same charcoal
+  // value, so they now share a single "charcoal" picker.
+  function LD_RED(){ return hexToRgb(document.getElementById('pulseWhite').value); }
+  function LD_BLUE(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
+  function LD_GOLD(){ return hexToRgb(document.getElementById('pulseGold').value); }
+  function LD_BLACK(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
 
   // --- Layout: ports GoingLive's Steps 1–4 (outward → spillover → GoingLive
   // fill-to-center → cascading spiral angles) almost line-for-line, operating in
@@ -1481,9 +1504,9 @@
   function computeGoingLiveLayout(cameraRadiusPx, outerSpacePx){
     const nowSec = Date.now()/1000;
     const t = (Math.sin(nowSec)+1)/2;
-    const colorHex = rgbToHex(lerpColor(LD_RED, LD_BLUE, t));
-    const hypeHex  = rgbToHex(lerpColor(LD_RED, LD_GOLD, t));
-    const goliveHex = rgbToHex(lerpColor(LD_BLACK, LD_RED, t));
+    const colorHex = rgbToHex(lerpColor(LD_RED(), LD_BLUE(), t));
+    const hypeHex  = rgbToHex(lerpColor(LD_RED(), LD_GOLD(), t));
+    const goliveHex = rgbToHex(lerpColor(LD_BLACK(), LD_RED(), t));
 
     let data = [
       { label:'Followers', percentage: followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Followers: ${followerCurrent}/${followerGoal}` },
@@ -1884,6 +1907,9 @@
   const outwardSpacePx_in = document.getElementById('outwardSpacePx');
   const seJwt_in = document.getElementById('seJwt');
   const seChannelId_in = document.getElementById('seChannelId');
+  const pulseWhite_in = document.getElementById('pulseWhite');
+  const pulseCharcoal_in = document.getElementById('pulseCharcoal');
+  const pulseGold_in = document.getElementById('pulseGold');
 
   function syncLabels(){
     document.getElementById('vN').textContent = N_in.value;
@@ -1920,6 +1946,10 @@
       if(Ni_in.value === '' || parseInt(Ni_in.value) < 1) return; // same guard for internal count
       syncLabels(); buildRings();
     });
+  });
+
+  [pulseWhite_in, pulseCharcoal_in, pulseGold_in].forEach(el=>{
+    el.addEventListener('input', ()=>{ if(liveDataOn) rebuildDataRings(); });
   });
 
   document.querySelectorAll('.toggles button[data-mode]').forEach(btn=>{
@@ -2206,10 +2236,20 @@
       camMirrorOn: camMirrorOn,
       gasUrl: gasUrl_in.value,
       outwardSpacePx: outwardSpacePx_in.value,
-      seChannelId: seChannelId_in.value
-      // Note: liveDataOn, seRelayOn, and the SE JWT token are deliberately NOT
-      // saved — loading a settings file shouldn't silently start pulling live
-      // data or reconnect a websocket with stale credentials.
+      seChannelId: seChannelId_in.value,
+      pulseWhite: pulseWhite_in.value,
+      pulseCharcoal: pulseCharcoal_in.value,
+      pulseGold: pulseGold_in.value,
+      pageBgMode: document.querySelector('.toggles button[data-pagebg].active').dataset.pagebg,
+      pageBgColor: document.getElementById('pageBgColor').value,
+      obsBgMode: document.querySelector('.toggles button[data-obsbg].active').dataset.obsbg,
+      obsBgColor: document.getElementById('obsBgColor').value,
+      obsUrl: document.getElementById('obsUrl').value,
+      obsSourceSelect: document.getElementById('obsSourceSelect').value
+      // Note: liveDataOn, seRelayOn, the SE JWT token, and the OBS WebSocket
+      // password are deliberately NOT saved — loading a settings file shouldn't
+      // silently start pulling live data or reconnect a websocket with stale
+      // credentials.
     };
   }
 
@@ -2301,6 +2341,33 @@
     if(s.gasUrl) gasUrl_in.value = s.gasUrl;
     if(s.outwardSpacePx != null) outwardSpacePx_in.value = s.outwardSpacePx;
     if(s.seChannelId) seChannelId_in.value = s.seChannelId;
+    if(s.pulseWhite) pulseWhite_in.value = s.pulseWhite;
+    if(s.pulseCharcoal) pulseCharcoal_in.value = s.pulseCharcoal;
+    if(s.pulseGold) pulseGold_in.value = s.pulseGold;
+    if(s.pageBgMode){
+      document.querySelectorAll('.toggles button[data-pagebg]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.pagebg === s.pageBgMode);
+      });
+      document.getElementById('pageBgColorRow').style.display = (s.pageBgMode === 'transparent') ? 'none' : '';
+    }
+    if(s.pageBgColor) document.getElementById('pageBgColor').value = s.pageBgColor;
+    applyPageBackground(
+      s.pageBgMode || document.querySelector('.toggles button[data-pagebg].active').dataset.pagebg,
+      document.getElementById('pageBgColor').value
+    );
+    if(s.obsBgMode){
+      document.querySelectorAll('.toggles button[data-obsbg]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.obsbg === s.obsBgMode);
+      });
+      document.getElementById('obsBgColorRow').style.display = (s.obsBgMode === 'color') ? '' : 'none';
+      obsBgMode = s.obsBgMode;
+    }
+    if(s.obsBgColor){
+      document.getElementById('obsBgColor').value = s.obsBgColor;
+      obsBgColor = s.obsBgColor;
+    }
+    if(s.obsUrl != null) document.getElementById('obsUrl').value = s.obsUrl;
+    if(s.obsSourceSelect != null) document.getElementById('obsSourceSelect').value = s.obsSourceSelect;
 
     spinSpeed = parseFloat(speed_in.value);
     pitchSpeed = parseFloat(pitchSpeed_in.value);
