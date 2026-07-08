@@ -25,8 +25,20 @@ jobs:
           sed -i "s|__SE_JWT_TOKEN__|${{ secrets.SE_JWT_TOKEN }}|g" GoingLive.html
           sed -i "s|__SE_CHANNEL_ID__|${{ secrets.SE_CHANNEL_ID }}|g" GoingLive.html
       - name: Inject OBS websocket password into 3D HTML
+        env:
+          WS_PASS: ${{ secrets.WEB_SOCKET_P }}
         run: |
-          sed -i "s|__WEB_SOCKET_P__|${{ secrets.WEB_SOCKET_P }}|g" GoingLive-3D.html
+          python3 - <<'PYEOF'
+          import os
+          path = "GoingLive-3D.html"
+          with open(path, "r", encoding="utf-8") as f:
+              content = f.read()
+          if "__WEB_SOCKET_P__" not in content:
+              raise SystemExit(f"Placeholder __WEB_SOCKET_P__ not found in {path} — check the filename/path or that the placeholder text is still present.")
+          content = content.replace("__WEB_SOCKET_P__", os.environ["WS_PASS"])
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(content)
+          PYEOF
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact
