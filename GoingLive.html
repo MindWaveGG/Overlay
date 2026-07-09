@@ -108,32 +108,6 @@
     position:absolute; bottom:14px; left:16px; color:var(--text-dim);
     font-size:11px; letter-spacing:0.02em;
   }
-
-  /* Live-data stat labels + connector lines to their ring, ported from the 2D
-     overlay's drawLabelWithLine: a stacked column of boxes with a line running
-     from the box out to the ring's current progress point. Positioned to the
-     right of the settings panel (rather than at literal x=0) so the two don't
-     overlap — this is the same "anchored stack, line follows the ring" layout
-     the 2D version uses, just shifted to clear the panel. */
-  #labelLinesSvg{
-    position:absolute; inset:0; width:100%; height:100%;
-    pointer-events:none; z-index:5;
-  }
-  #liveLabels{
-    position:absolute; top:0; left:0; width:100%; height:100%;
-    pointer-events:none; z-index:6;
-  }
-  .liveLabelBox{
-    position:absolute;
-    background: rgba(0,0,0,0.5);
-    border: 3px solid var(--box-border, var(--gold));
-    border-radius: 3px;
-    color: #fff;
-    font-family:'Consolas',monospace; font-weight:bold; font-size:13px;
-    white-space:nowrap;
-    padding: 7px 10px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  }
 </style>
 </head>
 <body>
@@ -240,6 +214,22 @@
   <div class="row">
     <label>Pitch speed <span class="val" id="vPitchSpeed">1.0×</span></label>
     <input type="range" id="pitchSpeed" min="0" max="3" step="0.1" value="1.0">
+  </div>
+
+  <hr>
+  <p class="sub" style="margin-bottom:12px;">Cartwheel build — freezes spin and pitch, and instead fans every ring out to a fixed, non-moving angle, each stepped further than the last in an alternating spiral (like a pinwheel frozen mid-turn).</p>
+
+  <div class="row">
+    <label>Cartwheel build</label>
+    <div class="toggles">
+      <button data-cartwheel="on">On</button>
+      <button data-cartwheel="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Cartwheel step <span class="val" id="vCartwheelStep">30.0°</span></label>
+    <input type="range" id="cartwheelStep" min="0" max="90" step="1" value="30">
   </div>
 
   <hr>
@@ -417,6 +407,19 @@
   </div>
 
   <div class="row">
+    <label>Internal cartwheel build</label>
+    <div class="toggles">
+      <button data-icartwheel="on">On</button>
+      <button data-icartwheel="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal cartwheel step <span class="val" id="vCartwheelStepI">30.0°</span></label>
+    <input type="range" id="cartwheelStepI" min="0" max="90" step="1" value="30">
+  </div>
+
+  <div class="row">
     <label>Internal ring color <span class="val" id="vRingAlphaI">alpha 1.00</span></label>
     <div class="color-row">
       <input type="color" id="ringColorI" value="#3fc9b8">
@@ -425,61 +428,12 @@
   </div>
 
   <hr>
-  <p class="sub" style="margin-bottom:12px;">Live Data — pulls goals, timers &amp; hype train from your GoingLive Google Apps Script and drives ring count / percentage / color directly. Outward rings (External) = goals, regular timers &amp; hype train. Inward rings (Internal) = spillover + GoingLive/subathon timers filling to center — same 4-step space math as the GoingLive canvas overlay, just applied to these rings.</p>
 
   <div class="row">
-    <label>Live data</label>
+    <label>Rotation</label>
     <div class="toggles">
-      <button data-livedata="on">On</button>
-      <button data-livedata="off" class="active">Off</button>
+      <button id="resetRotationBtn" type="button">Reset rotation/spin position</button>
     </div>
-  </div>
-
-  <div class="row">
-    <label>Google Apps Script URL</label>
-    <input type="text" id="gasUrl" value="https://script.google.com/macros/s/AKfycbzlkrtrHI6rzcv1udzcN8bzS4JggQ0xHJjgWXXQvS88w_lBu4zLC-gSrQLnc7Kc6kTz/exec" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
-  </div>
-
-  <div class="row">
-    <label>Outward ring space <span class="val" id="vOutwardSpace">400px</span></label>
-    <input type="range" id="outwardSpacePx" min="50" max="2000" step="10" value="400">
-  </div>
-
-  <div class="row">
-    <label>Pulse color — white end</label>
-    <input type="color" id="pulseWhite" value="#ffffff">
-  </div>
-
-  <div class="row">
-    <label>Pulse color — charcoal end (goal / GoingLive fill)</label>
-    <input type="color" id="pulseCharcoal" value="#36454f">
-  </div>
-
-  <div class="row">
-    <label>Pulse color — gold end (hype train)</label>
-    <input type="color" id="pulseGold" value="#ffaf37">
-  </div>
-
-  <div class="row">
-    <label>StreamElements relay (tips → Apps Script)</label>
-    <div class="toggles">
-      <button data-serelay="on">On</button>
-      <button data-serelay="off" class="active">Off</button>
-    </div>
-  </div>
-
-  <div class="row">
-    <label>SE JWT token</label>
-    <input type="text" id="seJwt" placeholder="paste StreamElements JWT" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
-  </div>
-
-  <div class="row">
-    <label>SE channel ID</label>
-    <input type="text" id="seChannelId" placeholder="StreamElements channel/room ID" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
-  </div>
-
-  <div class="row">
-    <label style="text-transform:none; letter-spacing:0;">Status: <span class="val" id="liveDataStatus">Off</span></label>
   </div>
 
   <hr>
@@ -499,49 +453,11 @@
 </div>
 
 <div id="hint">Drag to orbit · scroll to zoom</div>
-<svg id="labelLinesSvg">
-  <defs>
-    <!-- Punches a hole over the webcam/OBS disc's current on-screen circle so
-         connector lines never draw on top of the streamer's face — see the
-         camMaskHole cx/cy/r updates in updateLabelLines(). r starts at 0 (no
-         hole) until that first update runs. -->
-    <mask id="camMask" maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
-      <rect x="0" y="0" width="100%" height="100%" fill="white"></rect>
-      <circle id="camMaskHole" cx="0" cy="0" r="0" fill="black"></circle>
-    </mask>
-  </defs>
-  <g id="labelLinesGroup" mask="url(#camMask)"></g>
-</svg>
-<div id="liveLabels"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/obs-websocket-js"></script>
 <script>
 (function(){
-  // Substituted at deploy time by the same build step that fills in
-  // SE_JWT_TOKEN/SE_CHANNEL_ID for the 2D overlay (see GoingLive.html) — reads
-  // the WEB_SOCKET_P GitHub secret and replaces this placeholder before the
-  // page ships. Left untouched (still literally the raw placeholder) when
-  // opened locally outside that pipeline, which is the signal used below to
-  // decide whether to prefill the OBS password field.
-  //
-  // IMPORTANT: the sentinel used to detect "was this replaced?" is built by
-  // concatenation (UNBUILT_SENTINEL below), NOT written as one literal
-  // "__WEB_SOCKET_P__" string. The deploy step does a blind find/replace of
-  // that exact substring — if the sentinel comparison also contained that
-  // literal text, the replace would corrupt BOTH sides identically and the
-  // guard would always evaluate WEB_SOCKET_P !== WEB_SOCKET_P (always false),
-  // permanently disabling the prefill. This was the actual bug that caused
-  // obsPassword.value to always come back as ''.
-  const UNBUILT_SENTINEL = '__' + 'WEB_SOCKET_P' + '__';
-  const WEB_SOCKET_P = '__WEB_SOCKET_P__';
-
-  // Same build-time substitution, same reasoning, for the StreamElements JWT —
-  // this is a credential too, so it comes from the SE_JWT_TOKEN GitHub secret
-  // at deploy time rather than ever living in a user-saved settings file.
-  const UNBUILT_SENTINEL_SE_JWT = '__' + 'SE_JWT_TOKEN' + '__';
-  const SE_JWT_TOKEN = '__SE_JWT_TOKEN__';
-
   const container = document.getElementById('scene');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0c10);
@@ -755,15 +671,7 @@
         opt.textContent = d.label || ('Camera ' + (i+1));
         sel.appendChild(opt);
       });
-      // Prefer a device restored from a loaded settings file, then a device
-      // labeled "RazerCam" (this rig's camera is always that one), then just
-      // whatever enumerateDevices() happens to list first.
-      const pending = pendingCamDeviceId && cams.find(d=>d.deviceId === pendingCamDeviceId);
-      const razer = cams.find(d=>/razer/i.test(d.label));
-      const chosen = pending || razer || cams[0];
-      pendingCamDeviceId = null;
-      sel.value = chosen.deviceId;
-      startCamera(chosen.deviceId);
+      startCamera(cams[0].deviceId);
     }).catch(err=>{
       console.error('enumerateDevices failed', err);
     });
@@ -868,15 +776,8 @@
   // realistically ~8-10fps before it costs noticeable CPU on both ends — a
   // "video" made of a slideshow of screenshots, redrawn into a canvas texture.
   let captureMode = 'webcam'; // 'webcam' | 'obs'
-  let pendingCamDeviceId = null; // set by applySettings() when a saved settings file
-                                  // names a camera device that enumerateDevices() hasn't
-                                  // populated into the <select> yet — populateCameraList()
-                                  // checks this before falling back to RazerCam/first-cam
   let obs = null;
   let obsConnected = false;
-  let pendingObsSourceName = null; // set by applySettings() when a saved settings file
-                                    // names an OBS source that connectToOBS() hasn't
-                                    // fetched into the <select> yet
   const obsCanvas = document.createElement('canvas');
   const obsCtx = obsCanvas.getContext('2d');
   const obsTexture = new THREE.CanvasTexture(obsCanvas);
@@ -971,18 +872,6 @@
           opt.textContent = label;
           sel.appendChild(opt);
         });
-      }
-
-      // Restore a source saved in a loaded settings file, if it's present in
-      // this fetch — and if "Capture source" was also saved as OBS, start
-      // polling it immediately rather than waiting for a manual pick.
-      if(pendingObsSourceName){
-        const match = Array.from(sel.options).find(o=>o.value === pendingObsSourceName);
-        if(match){
-          sel.value = pendingObsSourceName;
-          if(captureMode === 'obs') startOBSPolling(pendingObsSourceName);
-        }
-        pendingObsSourceName = null;
       }
 
       obs.on('ConnectionClosed', ()=>{
@@ -1106,21 +995,6 @@
   scene.add(assembly);
   let ringData = []; // {mesh, normal (THREE.Vector3), pivot (THREE.Group)}
   let innerRingData = []; // same shape, fully independent internal-ring set
-
-  // Live-data label boxes + their connector lines to a ring's current progress
-  // tip. Rebuilt every time buildExternalDataRingsFromLayout/buildInternalDataRings
-  // run; the actual screen position is recomputed every animate() frame since the
-  // 3D tip point keeps moving (camera orbit, spin, pitch).
-  let labelTargets = []; // {key, text, tip (THREE.Object3D), color}
-
-  // Stable identity for a live-data item that survives rebuilds even though the
-  // item's array index can shift (rings get re-sorted by percentage, spill
-  // between outward/inward, or drop out when a timer expires). Used to (a) carry
-  // spin/pitch animation state forward onto the "same" ring after a rebuild, and
-  // (b) key label boxes/lines so they don't jump around when order changes.
-  function ringKey(item){
-    return item.timer ? ('timer:' + item.timer.name) : ('label:' + item.label);
-  }
   let centerSphere = null;
 
   // The flat circle is added directly to `scene`, never to `assembly` — assembly
@@ -1164,19 +1038,11 @@
   }
 
   function clearAssembly(){
-    // Preserve the slow overall turntable spin across rebuilds. Live-data mode
-    // calls buildRings() -> clearAssembly() every 1-5s (see liveTick/refreshLiveData),
-    // and a fresh THREE.Group() always starts at rotation 0 — without carrying this
-    // forward, the whole assembly visibly snapped back to its resting angle on every
-    // tick, which read as the animation "refreshing" instead of running continuously.
-    const prevRotationY = assembly.rotation.y;
     scene.remove(assembly);
     assembly = new THREE.Group();
-    assembly.rotation.y = prevRotationY;
     scene.add(assembly);
     ringData = [];
     innerRingData = [];
-    labelTargets = [];
   }
 
   function buildRings(){
@@ -1241,25 +1107,7 @@
 
     const externalOn = document.querySelector('.toggles button[data-external].active').dataset.external === 'on';
 
-    let liveLayoutForThisBuild = null;
-    if(liveDataOn){
-      const cameraRadiusPx = parseFloat(document.getElementById('pxRadius').value) || 670;
-      const outerSpacePx = parseFloat(document.getElementById('outwardSpacePx').value) || 400;
-      liveLayoutForThisBuild = computeGoingLiveLayout(cameraRadiusPx, outerSpacePx);
-      if(externalOn){
-        // Live data drives ring count/percentage/color directly — the manual
-        // N-loop below is skipped entirely in favor of the live layout's rings.
-        buildExternalDataRingsFromLayout(liveLayoutForThisBuild, PX_PER_WORLD_UNIT/0.55, assembly, baseTiltDeg, offsetWorld);
-      } else {
-        disposeDataRingSet(dataRingsExternal);
-        dataRingsExternal = [];
-      }
-    } else {
-      disposeDataRingSet(dataRingsExternal);
-      dataRingsExternal = [];
-    }
-
-    for(let i=0; externalOn && !liveDataOn && i<N; i++){
+    for(let i=0; externalOn && i<N; i++){
       const alphaDeg = i * (360/N);              // azimuthal spacing — determines each ring's own hinge axis direction
       const betaDeg  = i * baseTiltDeg;           // static tilt offset, animated further by pitch
 
@@ -1290,12 +1138,14 @@
 
       // Apply the static tilt immediately as a single axis-angle rotation about this
       // ring's own fixed axis — pitch animation will update this quaternion each frame.
-      pivot.quaternion.setFromAxisAngle(axis, beta);
+      const cartwheelAngle = cartwheelOn ? THREE.MathUtils.degToRad(cartwheelAngleDeg(i, cartwheelStepDeg)) : 0;
+      pivot.quaternion.setFromAxisAngle(axis, beta + cartwheelAngle);
 
       ringData.push({
         mesh, pivot, axis: axis.clone(),
         index: i,
         betaBase: beta,      // static hinge tilt from layout math — pitch animates on top of this
+        cartwheelAngle,      // frozen fan offset when Cartwheel build is on; 0 otherwise
         pitchAngle: 0,
         spinAngle: 0
       });
@@ -1309,11 +1159,8 @@
     // this same constant regardless of the current px value.
     const pxPerUnit = PX_PER_WORLD_UNIT / 0.55;
 
-    const innerLines = buildInnerRings(visibleSphereR, pxPerUnit, liveLayoutForThisBuild);
+    const innerLines = buildInnerRings(visibleSphereR, pxPerUnit);
     buildFlatCircle(PX_PER_WORLD_UNIT);
-
-    lastLiveLayout = liveLayoutForThisBuild;
-    updateDataLabels();
 
     updateReadout(N, step, baseTiltDeg, mode, offsetPx, growth, effectiveGrowth, pxRadiusInput, pxPerUnit, innerLines, externalOn);
   }
@@ -1336,13 +1183,9 @@
     scene.add(flatCircle);
   }
 
-  function buildInnerRings(visibleSphereR, pxPerUnit, liveLayout){
+  function buildInnerRings(visibleSphereR, pxPerUnit){
     const internalOn = document.querySelector('.toggles button[data-internal].active').dataset.internal === 'on';
-    if(!internalOn){
-      disposeDataRingSet(dataRingsInternal);
-      dataRingsInternal = [];
-      return []; // innerRingData stays empty; nothing to build or animate
-    }
+    if(!internalOn) return []; // innerRingData stays empty; nothing to build or animate
 
     const Ni = parseInt(document.getElementById('Ni').value);
     const stepI = parseFloat(document.getElementById('stepI').value);
@@ -1350,17 +1193,6 @@
     const OFFSET_SCALE = 0.012;
     const offsetWorldI = offsetPxI * OFFSET_SCALE;
     const baseTiltDegI = (360/Ni - stepI);
-
-    if(liveDataOn){
-      const innerGroup = new THREE.Group();
-      assembly.add(innerGroup);
-      buildInternalDataRings(pxPerUnit, innerGroup, liveLayout, baseTiltDegI, offsetWorldI);
-      return [``, `Internal rings — live data (spillover + GoingLive/subathon, fills to center)`,
-              `spillover: ${liveLayout.inward.length}   subathon: ${liveLayout.goingLiveTimers.length}`];
-    } else {
-      disposeDataRingSet(dataRingsInternal);
-      dataRingsInternal = [];
-    }
 
     // Divide the entire interior — from just under the visible shell down to the
     // exact center — into Ni equal, CONTIGUOUS radial bands. Ring i owns the band
@@ -1415,12 +1247,14 @@
       mesh.rotation.x = Math.PI/2;
       pivot.add(mesh);
 
-      pivot.quaternion.setFromAxisAngle(axis, beta);
+      const internalCartwheelAngle = internalCartwheelOn ? THREE.MathUtils.degToRad(cartwheelAngleDeg(i, internalCartwheelStepDeg)) : 0;
+      pivot.quaternion.setFromAxisAngle(axis, beta + internalCartwheelAngle);
 
       innerRingData.push({
         mesh, pivot, axis: axis.clone(),
         index: i,
         betaBase: beta,
+        cartwheelAngle: internalCartwheelAngle,
         pitchAngle: 0
       });
     }
@@ -1473,667 +1307,6 @@
     document.getElementById('readout').innerHTML = lines.join('\n');
   }
 
-  // ============================================================
-  // LIVE DATA — GoingLive integration
-  // ============================================================
-  // Ports the GoingLive canvas overlay's data plumbing and ring-layout algorithm
-  // as directly as possible onto this scene's existing External/Internal ring
-  // systems. External rings = GoingLive's "outward" set (goals, regular timers,
-  // hype train). Internal rings = GoingLive's "inward" set (spillover from
-  // outward + GoingLive/subathon timers filling to center) — same 4-step space
-  // math, just expressed in this scene's px↔world-unit scale instead of canvas
-  // pixels. The sphere's own px radius (pxRadius slider, max 670) stands in for
-  // GoingLive's fixed `cameraRadius = 670`.
-
-  let liveDataOn = false;
-  let seRelayOn = false;
-  let timers = [];
-  let followerCurrent=0, followerGoal=0;
-  let subCurrent=0, subGoal=0;
-  let donationCurrent=0, donationGoal=0;
-  let bitsCurrent=0, bitsGoal=0;
-  let hypeTrainData = null;
-  let dataRingsExternal = []; // {wrapper, mesh, geo, item, radiusWorld, tubeWorld, ccw, startAngleOffset}
-  let dataRingsInternal = [];
-  let liveRefreshTimer = null; // 5s: re-fetch from Apps Script
-  let liveTickTimer = null;    // 1s: re-lay-out rings (countdown %, cascade, color pulse)
-
-  async function fetchLiveData(url) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("Network error");
-      return await response.json();
-    } catch (error) {
-      console.error("GoingLive fetch error:", error);
-      setLiveStatus('Fetch failed — retrying…');
-      return null;
-    }
-  }
-
-  function gasUrl(){ return document.getElementById('gasUrl').value.trim(); }
-
-  async function getUpdatedTimerData() {
-    const url = `${gasUrl()}?action=getTimers`;
-    const timerDataArray = await fetchLiveData(url);
-    if (timerDataArray && timerDataArray.length > 0) {
-      timers = timerDataArray.map(t => ({
-        name: t.timerName,
-        startTime: new Date(t.startDateTime),
-        endTime: new Date(t.endDateTime)
-      }));
-    } else {
-      timers = [];
-    }
-  }
-
-  function getTimeRemaining(timer){
-    const now = new Date().getTime();
-    const timeLeft = timer.endTime - now;
-    const totalDuration = timer.endTime - timer.startTime;
-    const percentage = Math.max(0, Math.min(1, timeLeft / totalDuration));
-    return {
-      countdownDays: Math.floor(timeLeft/(1000*60*60*24)),
-      countdownHours: Math.floor((timeLeft%(1000*60*60*24))/(1000*60*60)),
-      countdownMinutes: Math.floor((timeLeft%(1000*60*60))/(1000*60)),
-      countdownSeconds: Math.floor((timeLeft%(1000*60))/1000),
-      percentage
-    };
-  }
-
-  function removeExpiredTimers() {
-    const now = new Date().getTime();
-    let removedAny = false;
-    for (let i = timers.length - 1; i >= 0; i--) {
-      const timer = timers[i];
-      if (timer.endTime <= now) {
-        const url = `${gasUrl()}?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
-        fetch(url).then(r => r.json()).then(res => {
-          console.log('Deleted timer response:', res);
-        }).catch(err => console.error('Error deleting timer:', err));
-        timers.splice(i, 1);
-        removedAny = true;
-      }
-    }
-    // Timers must "cleanly remove" immediately, not wait for the next 5s poll or
-    // 1s layout tick — rebuild right away so the ring disappears this frame.
-    if(removedAny && liveDataOn) rebuildDataRings();
-  }
-
-  async function fetchAllGoalData() {
-    const goalTypes = ["Follower Goal","Subscription Goal","Bits Goal","Donation Goal"];
-    await Promise.all(goalTypes.map(fetchGoalData));
-  }
-
-  async function fetchGoalData(goalType) {
-    const url = `${gasUrl()}?action=getGoal&goalType=${encodeURIComponent(goalType)}`;
-    const goalData = await fetchLiveData(url);
-    if (goalData) {
-      const current = goalData.CurrentCount;
-      const goal = goalData.goalValue;
-      if (current !== undefined && goal !== undefined) {
-        if(goalType==="Follower Goal"){followerCurrent=current; followerGoal=goal;}
-        if(goalType==="Subscription Goal"){subCurrent=current; subGoal=goal;}
-        if(goalType==="Bits Goal"){bitsCurrent=current; bitsGoal=goal;}
-        if(goalType==="Donation Goal"){donationCurrent=current; donationGoal=goal;}
-      }
-    }
-  }
-
-  async function fetchHypeTrainData() {
-    const url = `${gasUrl()}?action=gethypetrain`;
-    const data = await fetchLiveData(url);
-    hypeTrainData = data || null;
-  }
-
-  function setLiveStatus(text){
-    const el = document.getElementById('liveDataStatus');
-    if(el) el.textContent = text;
-  }
-
-  async function refreshLiveData(){
-    await getUpdatedTimerData();
-    await fetchAllGoalData();
-    await fetchHypeTrainData();
-    setLiveStatus('Connected · last refresh ' + new Date().toLocaleTimeString());
-    if(liveDataOn) rebuildDataRings();
-  }
-
-  // --- Color pulsing, ported verbatim from GoingLive ---
-  function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
-  function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-  function hexToRgb(hex){const v=parseInt(hex.slice(1),16); return {r:(v>>16)&255, g:(v>>8)&255, b:v&255};}
-  // Pulse endpoints are user-adjustable (see #pulseWhite/#pulseCharcoal/#pulseGold);
-  // read live each frame so dragging a picker updates the pulse immediately.
-  // Originally LD_BLUE and LD_BLACK were both hardcoded to the same charcoal
-  // value, so they now share a single "charcoal" picker.
-  function LD_RED(){ return hexToRgb(document.getElementById('pulseWhite').value); }
-  function LD_BLUE(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
-  function LD_GOLD(){ return hexToRgb(document.getElementById('pulseGold').value); }
-  function LD_BLACK(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
-
-  // --- Layout: ports GoingLive's Steps 1–4 (outward → spillover → GoingLive
-  // fill-to-center → cascading spiral angles) almost line-for-line, operating in
-  // px using this scene's sphere px-radius in place of GoingLive's fixed 670. ---
-  function computeGoingLiveLayout(cameraRadiusPx, outerSpacePx){
-    const nowSec = Date.now()/1000;
-    const t = (Math.sin(nowSec)+1)/2;
-    const colorHex = rgbToHex(lerpColor(LD_RED(), LD_BLUE(), t));
-    const hypeHex  = rgbToHex(lerpColor(LD_RED(), LD_GOLD(), t));
-    const goliveHex = rgbToHex(lerpColor(LD_BLACK(), LD_RED(), t));
-
-    let data = [
-      { label:'Followers', percentage: followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Followers: ${followerCurrent}/${followerGoal}` },
-      { label:'Subs', percentage: subGoal ? subCurrent/subGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Subs: ${subCurrent}/${subGoal}` },
-      { label:'Donations', percentage: donationGoal ? donationCurrent/donationGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Donations: $${donationCurrent}/$${donationGoal}` },
-      { label:'Bits', percentage: bitsGoal ? bitsCurrent/bitsGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Bits: ${bitsCurrent}/${bitsGoal}` }
-    ];
-
-    let goingLiveTimers = [];
-    timers.forEach((timer)=>{
-      const tRem = getTimeRemaining(timer);
-      timer.percentage = tRem.percentage;
-      const isGoingLive = timer.name.includes("GoingLive");
-      const item = {
-        timer, percentage: tRem.percentage,
-        color: isGoingLive ? goliveHex : colorHex,
-        allowOut: !isGoingLive,
-        noLabel: isGoingLive,
-        label: timer.name,
-        statLabel: `${timer.name}: ${tRem.countdownDays}d ${tRem.countdownHours}h ${tRem.countdownMinutes}m ${tRem.countdownSeconds}s`
-      };
-      if (isGoingLive) goingLiveTimers.push(item); else data.push(item);
-    });
-
-    if (hypeTrainData?.hypeTrainActive) {
-      const cur = Number(hypeTrainData.currentLevel) || 0;
-      const goal = Number(hypeTrainData.goalLevel) || 1;
-      data.push({ label:'Hype Train', percentage: Math.min(1, cur/goal), color:hypeHex, allowOut:true, isGoal:true, statLabel:`Hype Train: level ${cur}/${goal}` });
-    }
-
-    data.sort((a,b)=>b.percentage - a.percentage);
-    goingLiveTimers.sort((a,b)=>b.percentage - a.percentage);
-
-    const ringZoneStart = cameraRadiusPx + 20;
-    const canvasOuterEdge = ringZoneStart + outerSpacePx;
-    const outerSpace = outerSpacePx;
-    const innerSpace = 20; // ringZoneStart - cameraRadiusPx, matches GoingLive's fixed inner gap
-
-    const BASE_WIDTH = cameraRadiusPx - 20;
-    const BASE_SPACING = 15;
-    const MIN_WIDTH = 3;
-    const MAX_WIDTH = cameraRadiusPx - 20;
-
-    // STEP 1: outward
-    let outward = data.filter(d => d.allowOut);
-    const baseStepOut = BASE_WIDTH + BASE_SPACING;
-    const maxOuterRingsAtBaseSize = Math.floor(outerSpace / baseStepOut);
-    let donutWidthOut, donutSpacingOut;
-    if (outward.length <= maxOuterRingsAtBaseSize) {
-      donutWidthOut = BASE_WIDTH; donutSpacingOut = BASE_SPACING;
-    } else {
-      const totalSpacePerRing = outerSpace / outward.length;
-      donutWidthOut = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing*0.8)));
-      donutSpacingOut = Math.max(0, Math.floor(totalSpacePerRing*0.2));
-    }
-    const stepOut = donutWidthOut + donutSpacingOut;
-
-    let inward = [];
-    outward.forEach((item, i) => {
-      const r = ringZoneStart + (i*stepOut) + donutWidthOut/2;
-      if (r + donutWidthOut/2 > canvasOuterEdge) {
-        inward.push(item);
-        item.finalRadiusPx = null;
-      } else {
-        item.finalRadiusPx = r;
-        item.widthPx = donutWidthOut;
-      }
-    });
-    outward = outward.filter(item => item.finalRadiusPx !== null);
-
-    // STEP 2: spillover
-    let donutWidthSpillover, donutSpacingSpillover;
-    if (inward.length === 0) {
-      donutWidthSpillover = BASE_WIDTH; donutSpacingSpillover = BASE_SPACING;
-    } else {
-      const baseStepSpillover = BASE_WIDTH + BASE_SPACING;
-      const maxSpilloverAtBaseSize = Math.floor(innerSpace / baseStepSpillover);
-      if (inward.length <= maxSpilloverAtBaseSize) {
-        donutWidthSpillover = BASE_WIDTH; donutSpacingSpillover = BASE_SPACING;
-      } else {
-        const totalSpacePerRing = innerSpace / inward.length;
-        donutWidthSpillover = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.floor(totalSpacePerRing*0.8)));
-        donutSpacingSpillover = Math.max(0, Math.floor(totalSpacePerRing*0.2));
-      }
-    }
-    const stepSpillover = donutWidthSpillover + donutSpacingSpillover;
-
-    // STEP 3: where spillover ends
-    let goingLiveStartPoint = ringZoneStart;
-    if (inward.length > 0) {
-      inward.forEach((item, i) => {
-        item.finalRadiusPx = ringZoneStart - (i*stepSpillover) - donutWidthSpillover/2;
-        item.widthPx = donutWidthSpillover;
-      });
-      const lastSpilloverCenter = ringZoneStart - ((inward.length-1)*stepSpillover) - donutWidthSpillover/2;
-      goingLiveStartPoint = lastSpilloverCenter - donutWidthSpillover/2;
-    }
-
-    // STEP 4: GoingLive/subathon timers fill remaining space to CENTER
-    let donutWidthGoingLive, donutSpacingGoingLive;
-    if (goingLiveTimers.length === 0) {
-      donutWidthGoingLive = BASE_WIDTH; donutSpacingGoingLive = 2;
-    } else {
-      const availableSpaceForGoingLive = goingLiveStartPoint - 0;
-      const totalSpacePerRing = Math.floor(availableSpaceForGoingLive / goingLiveTimers.length);
-      donutSpacingGoingLive = BASE_SPACING;
-      const calculatedWidth = totalSpacePerRing - donutSpacingGoingLive;
-      if (calculatedWidth >= MIN_WIDTH && calculatedWidth <= MAX_WIDTH) {
-        donutWidthGoingLive = calculatedWidth;
-      } else if (calculatedWidth > MAX_WIDTH) {
-        donutWidthGoingLive = MAX_WIDTH;
-      } else {
-        donutWidthGoingLive = MIN_WIDTH;
-        donutSpacingGoingLive = Math.max(0, totalSpacePerRing - MIN_WIDTH);
-      }
-    }
-    const stepGoingLive = donutWidthGoingLive + donutSpacingGoingLive;
-
-    if (goingLiveTimers.length > 0) {
-      goingLiveTimers.forEach((item, i) => {
-        item.finalRadiusPx = goingLiveStartPoint - (i*stepGoingLive) - donutWidthGoingLive/2;
-        item.widthPx = donutWidthGoingLive;
-
-        let startAngleOffset = 0;
-        if (i === 0) {
-          startAngleOffset = 0; item.ccw = true;
-        } else if (i === 1) {
-          startAngleOffset = 180; item.ccw = false;
-        } else if (i % 2 === 0) {
-          const prevOddItem = goingLiveTimers[i-2];
-          const prevArcDegrees = prevOddItem.percentage * 360;
-          startAngleOffset = prevOddItem.startAngleOffset - prevArcDegrees;
-          item.ccw = true;
-        } else {
-          const prevEvenItem = goingLiveTimers[i-2];
-          const prevArcDegrees = prevEvenItem.percentage * 360;
-          startAngleOffset = prevEvenItem.startAngleOffset + prevArcDegrees;
-          item.ccw = false;
-        }
-        item.startAngleOffset = startAngleOffset;
-      });
-    }
-
-    return { outward, inward, goingLiveTimers };
-  }
-
-  // --- 3D arc-ring construction ---
-  // radiusWorld/tubeWorld already converted from px; startAngleDeg/ccw follow the
-  // same span convention GoingLive's drawDonut uses: cw spans [start, start+sweep],
-  // ccw spans [start-sweep, start]. The wrapper's rotation.y anchors that span's
-  // lower bound so cascading rings (GoingLive/subathon set) stay continuous.
-  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup, hingeAxis, hingeBeta, hingeOffsetScalar){
-    const pct = Math.max(0.004, Math.min(1, percentage));
-    const sweepDeg = pct*360;
-    const beginDeg = (ccw ? (startAngleDeg - sweepDeg) : startAngleDeg) - 90; // -90: 0° reads as "top"
-    const segs = Math.max(6, Math.round(96*pct));
-    const geo = new THREE.TorusGeometry(radiusWorld, tubeWorld, 10, segs, THREE.MathUtils.degToRad(sweepDeg));
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colorHex), metalness:0.5, roughness:0.35,
-      emissive: new THREE.Color(colorHex), emissiveIntensity:0.22
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI/2;
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    const wrapper = new THREE.Group();
-    wrapper.rotation.y = -THREE.MathUtils.degToRad(beginDeg);
-    wrapper.add(mesh);
-
-    // Same fixed-hinge-axis tilt the manual rings use (see buildRings' N-loop):
-    // a pivot group, offset outward along its own axis and rotated once with a
-    // single axis-angle quaternion, so each data ring gets a distinct plane
-    // instead of every arc lying flat in the same XZ plane. animate() then
-    // spins this quaternion further every frame via betaBase + pitchAngle,
-    // exactly like the manual rings.
-    const pivot = new THREE.Group();
-    pivot.position.copy(hingeAxis).multiplyScalar(hingeOffsetScalar);
-    pivot.quaternion.setFromAxisAngle(hingeAxis, hingeBeta);
-    pivot.add(wrapper);
-    parentGroup.add(pivot);
-
-    // Marker at the arc's "progress tip" — the leading edge of the visible sweep,
-    // same point drawLabelWithLine() in the 2D version anchors its connector line
-    // to. TorusGeometry's outer-rim vertex at sweep angle `u` sits at
-    // (radius*cos(u), radius*sin(u), 0) in the geometry's own local space, BEFORE
-    // any transform is applied — so parenting this directly to the mesh (rather
-    // than hand-computing world position from hinge/wrapper math) means it
-    // automatically inherits every transform the visible ring gets: hinge tilt,
-    // pitch animation, spin, and the assembly's turntable rotation.
-    const tip = new THREE.Object3D();
-    const sweepRad = THREE.MathUtils.degToRad(sweepDeg);
-    tip.position.set(radiusWorld * Math.cos(sweepRad), radiusWorld * Math.sin(sweepRad), 0);
-    mesh.add(tip);
-
-    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0, tip };
-  }
-
-  function disposeDataRingSet(set){
-    set.forEach(rr=>{ rr.geo.dispose(); rr.mat.dispose(); });
-  }
-
-  // Builds the outward (External) data-ring set from an already-computed layout
-  // (see computeGoingLiveLayout) — split out so Internal rings can reuse the same
-  // layout object even when External rings happen to be toggled off.
-  // Shared with the manual N-loop's per-ring hinge math (see buildRings): each
-  // ring gets its own fixed axis in the horizontal plane, at azimuth i*(360/count),
-  // tilted by i*baseTiltDeg. count is the ring's own set size, not a global N, so
-  // a live layout with e.g. 4 outward rings spaces those 4 evenly regardless of
-  // whatever N the manual-mode slider happens to be set to.
-  function hingeFor(i, count, baseTiltDeg){
-    const alphaDeg = i * (360 / Math.max(count, 1));
-    const betaDeg = i * baseTiltDeg;
-    const alpha = THREE.MathUtils.degToRad(alphaDeg);
-    const beta = THREE.MathUtils.degToRad(betaDeg);
-    const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
-    return { axis, beta };
-  }
-
-  function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup, baseTiltDeg, offsetWorld){
-    // Snapshot the outgoing ring set's animation state, keyed by stable identity
-    // (not array index — percentage-sort/spillover can reorder items between
-    // rebuilds). Restoring this onto whichever new ring matches the same item is
-    // what keeps spin/pitch running continuously through a rebuild instead of
-    // snapping back to rest — see clearAssembly() for the matching fix on the
-    // overall assembly rotation.
-    const savedState = new Map();
-    dataRingsExternal.forEach(rr=>{
-      if(rr.item) savedState.set(ringKey(rr.item), { spinZ: rr.mesh.rotation.z, pitchAngle: rr.pitchAngle });
-    });
-
-    disposeDataRingSet(dataRingsExternal);
-    dataRingsExternal = [];
-    const worldPerPx = 1/pxPerUnit;
-    const count = layout.outward.length;
-
-    layout.outward.forEach((item, i)=>{
-      const radiusWorld = item.finalRadiusPx * worldPerPx;
-      const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const { axis, beta } = hingeFor(i, count, baseTiltDeg);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i);
-      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
-
-      const prev = savedState.get(ringKey(item));
-      if(prev){
-        rr.mesh.rotation.z = prev.spinZ;
-        rr.pitchAngle = prev.pitchAngle;
-        rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
-      }
-
-      dataRingsExternal.push(rr);
-      ringData.push(rr); // so animate()'s per-ring spin/pitch picks these up too
-
-      if(item.statLabel && !item.noLabel){
-        labelTargets.push({ key: ringKey(item), text: item.statLabel, tip: rr.tip, color: item.color });
-      }
-    });
-  }
-
-  // Builds the inward (Internal) data-ring set: spillover items near the surface,
-  // then GoingLive/subathon timers filling the rest down to true center.
-  function buildInternalDataRings(pxPerUnit, parentGroup, layout, baseTiltDegI, offsetWorldI){
-    // Same continuity fix as buildExternalDataRingsFromLayout — see the comment
-    // there for why identity-keyed snapshot/restore is needed instead of index.
-    const savedState = new Map();
-    dataRingsInternal.forEach(rr=>{
-      if(rr.item) savedState.set(ringKey(rr.item), { spinZ: rr.mesh.rotation.z, pitchAngle: rr.pitchAngle });
-    });
-
-    disposeDataRingSet(dataRingsInternal);
-    dataRingsInternal = [];
-    const worldPerPx = 1/pxPerUnit;
-    const count = layout.inward.length + layout.goingLiveTimers.length;
-    let i = 0;
-
-    function restoreState(rr, item){
-      const prev = savedState.get(ringKey(item));
-      if(prev){
-        rr.mesh.rotation.z = prev.spinZ;
-        rr.pitchAngle = prev.pitchAngle;
-        rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
-      }
-    }
-
-    layout.inward.forEach(item=>{
-      const radiusWorld = item.finalRadiusPx * worldPerPx;
-      const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i);
-      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
-      restoreState(rr, item);
-      dataRingsInternal.push(rr);
-      innerRingData.push(rr);
-      if(item.statLabel && !item.noLabel){
-        labelTargets.push({ key: ringKey(item), text: item.statLabel, tip: rr.tip, color: item.color });
-      }
-      i++;
-    });
-    layout.goingLiveTimers.forEach(item=>{
-      const radiusWorld = item.finalRadiusPx * worldPerPx;
-      const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i);
-      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
-      restoreState(rr, item);
-      dataRingsInternal.push(rr);
-      innerRingData.push(rr);
-      // goingLiveTimers are deliberately unlabeled (matches 2D's noLabel:true for
-      // subathon timers), so no labelTargets entry here.
-      i++;
-    });
-  }
-
-  // Full layout+geometry rebuild — cheap enough to run on a 1s tick (see below)
-  // without going all the way through buildRings()'s sphere/lighting/etc. setup.
-  let lastLiveLayout = null;
-  function rebuildDataRings(){
-    if(!liveDataOn) return;
-    buildRings(); // simplest correct path — re-runs the whole scene build, which
-                   // branches into the live-data ring builders below
-  }
-
-  // Ported from the 2D overlay's drawLabelWithLine: a fixed stack of label boxes
-  // with a line running from each box out to its ring's current progress point.
-  // Difference from 2D: the 2D canvas draws both the box and the line fresh every
-  // frame at whatever angle the (static) 2D arc currently is. Here the boxes are
-  // real DOM elements stacked once per rebuild (labelTargets is rebuilt by
-  // buildExternalDataRingsFromLayout/buildInternalDataRings), but the LINE has to
-  // be recomputed every animate() frame in updateLabelLines() below, since the
-  // ring's tip point keeps moving continuously (spin/pitch/camera orbit) between
-  // rebuilds — that continuity is the whole point of the fix above.
-  function updateDataLabels(){
-    const el = document.getElementById('liveLabels');
-    const svg = document.getElementById('labelLinesSvg');
-    const linesGroup = document.getElementById('labelLinesGroup');
-    if(!el || !svg || !linesGroup) return;
-    if(!liveDataOn || labelTargets.length===0){ el.innerHTML=''; linesGroup.innerHTML=''; return; }
-
-    // Anchored past the settings panel (280px wide + margin), then nudged
-    // further right and pulled up into the upper third of the screen — per
-    // the user's reference screenshot marking roughly where the stack should
-    // sit (around 34% across, vertically centered around 25% down), rather
-    // than the panel-clearance minimum or a full viewport vertical center.
-    const boxLeft = Math.max(310, window.innerWidth * 0.34);
-    const rowGap = 10;
-
-    el.innerHTML = '';
-    // NOTE: clear linesGroup, not the whole svg — the svg's <defs><mask> lives
-    // outside this group and must survive every rebuild (see camMaskHole in
-    // updateLabelLines(), which punches a hole over the webcam disc so lines
-    // never draw on top of the streamer's face).
-    linesGroup.innerHTML = '';
-
-    labelTargets.forEach((lt, i)=>{
-      const box = document.createElement('div');
-      box.className = 'liveLabelBox';
-      box.id = 'labelBox_' + i;
-      box.style.left = boxLeft + 'px';
-      box.style.setProperty('--box-border', lt.color || 'var(--gold)');
-      box.textContent = lt.text;
-      el.appendChild(box);
-
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('id', 'labelLine_' + i);
-      line.setAttribute('stroke', lt.color || '#d4a95a');
-      line.setAttribute('stroke-width', '2');
-      line.setAttribute('opacity', '0.85');
-      linesGroup.appendChild(line);
-    });
-
-    // Stack top-to-bottom using each box's real rendered height (label text
-    // length varies, so a fixed row height would either clip or leave gaps),
-    // then center the whole stack around ~25% down the viewport — matching
-    // the upper-left zone from the reference screenshot, not a full 50%
-    // vertical center (which was still noticeably lower than intended).
-    let totalHeight = 0;
-    labelTargets.forEach((lt, i)=>{
-      const box = document.getElementById('labelBox_' + i);
-      if(box) totalHeight += box.offsetHeight;
-    });
-    totalHeight += rowGap * Math.max(0, labelTargets.length - 1);
-
-    let top = Math.max(20, window.innerHeight * 0.25 - totalHeight / 2);
-    labelTargets.forEach((lt, i)=>{
-      const box = document.getElementById('labelBox_' + i);
-      if(!box) return;
-      box.style.top = top + 'px';
-      top += box.offsetHeight + rowGap;
-    });
-
-    updateLabelLines(); // position lines immediately rather than waiting for next frame
-  }
-
-  function updateLabelLines(){
-    const svg = document.getElementById('labelLinesSvg');
-    if(!svg || !liveDataOn || labelTargets.length===0) return;
-    camera.updateMatrixWorld(); // ensure this frame's camera transform is current before projecting
-    const vec = new THREE.Vector3();
-
-    // Punch a hole in the connector-line mask over wherever the webcam/OBS
-    // disc currently projects on screen, so lines always draw behind it
-    // rather than crossing over the streamer's face. The disc is a billboard
-    // fixed at world origin (see animate()'s flatCircleWebcam.position.set(0,0,0)
-    // + quaternion.copy(camera.quaternion)), so its screen-space edge is found
-    // by projecting a point one disc-radius along the camera's own right axis.
-    const maskHole = document.getElementById('camMaskHole');
-    if(maskHole){
-      if(flatCircleWebcam){
-        const discR = flatCircleWebcam.geometry.parameters.radius;
-        const center = new THREE.Vector3(0, 0, 0).project(camera);
-        const camRight = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).normalize();
-        const edge = camRight.multiplyScalar(discR).project(camera);
-
-        const cx = (center.x * 0.5 + 0.5) * window.innerWidth;
-        const cy = (1 - (center.y * 0.5 + 0.5)) * window.innerHeight;
-        const ex = (edge.x * 0.5 + 0.5) * window.innerWidth;
-        const ey = (1 - (edge.y * 0.5 + 0.5)) * window.innerHeight;
-
-        maskHole.setAttribute('cx', cx);
-        maskHole.setAttribute('cy', cy);
-        maskHole.setAttribute('r', Math.hypot(ex - cx, ey - cy));
-      } else {
-        maskHole.setAttribute('r', 0); // no disc active — nothing to hide behind
-      }
-    }
-
-    labelTargets.forEach((lt, i)=>{
-      const box = document.getElementById('labelBox_' + i);
-      const line = document.getElementById('labelLine_' + i);
-      if(!box || !line || !lt.tip) return;
-
-      lt.tip.getWorldPosition(vec);
-      vec.project(camera);
-
-      // Tip is behind the camera (or right at the clip plane) — hide the line
-      // rather than draw a garbage streak across the screen.
-      if(vec.z > 1){
-        line.setAttribute('opacity', '0');
-        return;
-      }
-      line.setAttribute('opacity', '0.85');
-
-      const sx = (vec.x * 0.5 + 0.5) * window.innerWidth;
-      const sy = (1 - (vec.y * 0.5 + 0.5)) * window.innerHeight;
-
-      const rect = box.getBoundingClientRect();
-      line.setAttribute('x1', sx);
-      line.setAttribute('y1', sy);
-      line.setAttribute('x2', rect.right);
-      line.setAttribute('y2', rect.top + rect.height / 2);
-    });
-  }
-
-  // --- StreamElements websocket relay (tips → Apps Script) — ported as-is ---
-  let seSocket = null;
-  let seReconnectToken = null;
-  let seReconnectAttempts = 0;
-  function connectSEWebSocket() {
-    const wsUrl = seReconnectToken
-      ? `wss://astro.streamelements.com/?reconnect_token=${seReconnectToken}`
-      : 'wss://astro.streamelements.com/';
-    seSocket = new WebSocket(wsUrl);
-    seSocket.addEventListener('open', () => { seReconnectAttempts = 0; });
-    seSocket.addEventListener('message', (event) => {
-      const msg = JSON.parse(event.data);
-      switch (msg.type) {
-        case 'welcome':
-          seReconnectToken = null;
-          seSocket.send(JSON.stringify({
-            type: 'subscribe',
-            nonce: crypto.randomUUID(),
-            data: {
-              topic: 'channel.tips',
-              room: document.getElementById('seChannelId').value.trim(),
-              token: document.getElementById('seJwt').value.trim(),
-              token_type: 'jwt'
-            }
-          }));
-          break;
-        case 'message':
-          if (msg.topic !== 'channel.tips') return;
-          if (msg.data?.status !== 'success' || msg.data?.approved !== 'allowed') return;
-          const donation = msg.data.donation;
-          const tipPayload = {
-            type: 'tip',
-            event: {
-              _id: msg.data._id,
-              user: donation?.user?.username || 'Anonymous',
-              amount: donation?.amount || 0,
-              currency: donation?.currency || 'USD',
-              message: donation?.message || ''
-            }
-          };
-          fetch(gasUrl(), {
-            method: 'POST', mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(tipPayload)
-          }).catch(err => console.error('Forward failed:', err));
-          break;
-        case 'reconnect':
-          seReconnectToken = msg.data?.reconnect_token || null;
-          seSocket.close();
-          break;
-      }
-    });
-    seSocket.addEventListener('close', () => {
-      if(!seRelayOn) return; // don't auto-reconnect once the user has turned the relay off
-      const delay = Math.min(1000 * Math.pow(2, seReconnectAttempts), 30000);
-      seReconnectAttempts++;
-      setTimeout(()=>{ if(seRelayOn) connectSEWebSocket(); }, delay);
-    });
-  }
-  function disconnectSEWebSocket(){
-    if(seSocket){ seSocket.close(); seSocket = null; }
-  }
-
   // --- Animation ---
   let spinOn = true;
   let pitchOn = true;
@@ -2143,13 +1316,32 @@
   let internalPitchOn = true;
   let internalSpinSpeed = 1.0;
   let internalPitchSpeed = 1.0;
+  let cartwheelOn = false;
+  let cartwheelStepDeg = 30;
+  let internalCartwheelOn = false;
+  let internalCartwheelStepDeg = 30;
   const clock = new THREE.Clock();
+
+  // Adapted from the 2D overlay's arc-cascade layout: ring 0 sits at 0°, ring 1
+  // at 180°, and every ring after that continues from the ring two slots back
+  // (same parity), alternating which direction it steps in. There the cascade
+  // was driven by each arc's live percentage; here there's no data-driven arc
+  // length, so a fixed step-per-ring stands in for it, producing the same
+  // alternating spiral fan, just frozen instead of growing.
+  function cartwheelAngleDeg(index, stepDeg){
+    if(index === 0) return 0;
+    if(index === 1) return 180;
+    const prev = cartwheelAngleDeg(index - 2, stepDeg);
+    return (index % 2 === 0) ? prev + stepDeg : prev - stepDeg;
+  }
+
 
   function animate(){
     requestAnimationFrame(animate);
     const dt = clock.getDelta();
 
     ringData.forEach((r)=>{
+      if(cartwheelOn) return; // frozen fan — angle already baked into the pivot quaternion at build time
       if(spinOn){
         // spin about the ring's own normal — flat rotation, doesn't change its plane
         r.mesh.rotation.z += dt * spinSpeed * (0.4 + 0.08*r.index);
@@ -2164,6 +1356,7 @@
     });
 
     innerRingData.forEach((r)=>{
+      if(internalCartwheelOn) return;
       if(internalSpinOn){
         r.mesh.rotation.z += dt * internalSpinSpeed * (0.4 + 0.08*r.index);
       }
@@ -2173,12 +1366,11 @@
       }
     });
 
-    if(spinOn || pitchOn){
+    if((spinOn || pitchOn) && !cartwheelOn){
       assembly.rotation.y += dt * spinSpeed * 0.05;
     }
 
     updateCamera();
-    updateLabelLines();
 
     // Billboard the flat disc to the camera every frame, AFTER updateCamera() so it
     // uses this frame's fresh orientation. This is the actual fix for "shouldn't
@@ -2230,13 +1422,6 @@
   const discRadius_in = document.getElementById('discRadius');
   const discColor_in = document.getElementById('discColor');
   const discAlpha_in = document.getElementById('discAlpha');
-  const gasUrl_in = document.getElementById('gasUrl');
-  const outwardSpacePx_in = document.getElementById('outwardSpacePx');
-  const seJwt_in = document.getElementById('seJwt');
-  const seChannelId_in = document.getElementById('seChannelId');
-  const pulseWhite_in = document.getElementById('pulseWhite');
-  const pulseCharcoal_in = document.getElementById('pulseCharcoal');
-  const pulseGold_in = document.getElementById('pulseGold');
 
   function syncLabels(){
     document.getElementById('vN').textContent = N_in.value;
@@ -2249,6 +1434,7 @@
     document.getElementById('vSphereGap').textContent = sphereGap_in.value + 'px';
     document.getElementById('vSpeed').textContent = parseFloat(speed_in.value).toFixed(1) + '×';
     document.getElementById('vPitchSpeed').textContent = parseFloat(pitchSpeed_in.value).toFixed(1) + '×';
+    document.getElementById('vCartwheelStep').textContent = parseFloat(document.getElementById('cartwheelStep').value).toFixed(1) + '°';
     document.getElementById('vRingAlpha').textContent = 'alpha ' + parseFloat(ringAlpha_in.value).toFixed(2);
     document.getElementById('vSphereAlpha').textContent = 'alpha ' + parseFloat(sphereAlpha_in.value).toFixed(2);
     document.getElementById('vNi').textContent = Ni_in.value;
@@ -2259,11 +1445,11 @@
     document.getElementById('vOffsetI').textContent = offsetI_in.value + 'px';
     document.getElementById('vSpeedI').textContent = parseFloat(speedI_in.value).toFixed(1) + '×';
     document.getElementById('vPitchSpeedI').textContent = parseFloat(pitchSpeedI_in.value).toFixed(1) + '×';
+    document.getElementById('vCartwheelStepI').textContent = parseFloat(document.getElementById('cartwheelStepI').value).toFixed(1) + '°';
     document.getElementById('vRingAlphaI').textContent = 'alpha ' + parseFloat(ringAlphaI_in.value).toFixed(2);
     const discR = parseFloat(discRadius_in.value) || 0;
     document.getElementById('vDiscRadius').textContent = discR + 'px (Ø' + (discR*2) + 'px)';
     document.getElementById('vDiscAlpha').textContent = 'alpha ' + parseFloat(discAlpha_in.value).toFixed(2);
-    document.getElementById('vOutwardSpace').textContent = outwardSpacePx_in.value + 'px';
   }
 
   [N_in, step_in, pxRadius_in, tube_in, offset_in, growth_in, sphereGap_in, ringColor_in, ringAlpha_in, sphereColor_in, sphereAlpha_in,
@@ -2273,10 +1459,6 @@
       if(Ni_in.value === '' || parseInt(Ni_in.value) < 1) return; // same guard for internal count
       syncLabels(); buildRings();
     });
-  });
-
-  [pulseWhite_in, pulseCharcoal_in, pulseGold_in].forEach(el=>{
-    el.addEventListener('input', ()=>{ if(liveDataOn) rebuildDataRings(); });
   });
 
   document.querySelectorAll('.toggles button[data-mode]').forEach(btn=>{
@@ -2302,6 +1484,21 @@
       btn.classList.add('active');
       pitchOn = btn.dataset.pitch === 'on';
     });
+  });
+
+  document.querySelectorAll('.toggles button[data-cartwheel]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-cartwheel]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      cartwheelOn = btn.dataset.cartwheel === 'on';
+      buildRings(); // re-bake every ring's frozen fan angle (or hand back to spin/pitch) immediately
+    });
+  });
+
+  document.getElementById('cartwheelStep').addEventListener('input', (e)=>{
+    cartwheelStepDeg = parseFloat(e.target.value) || 0;
+    syncLabels();
+    if(cartwheelOn) buildRings();
   });
 
   speed_in.addEventListener('input', ()=>{
@@ -2346,6 +1543,21 @@
     });
   });
 
+  document.querySelectorAll('.toggles button[data-icartwheel]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-icartwheel]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      internalCartwheelOn = btn.dataset.icartwheel === 'on';
+      buildRings();
+    });
+  });
+
+  document.getElementById('cartwheelStepI').addEventListener('input', (e)=>{
+    internalCartwheelStepDeg = parseFloat(e.target.value) || 0;
+    syncLabels();
+    if(internalCartwheelOn) buildRings();
+  });
+
   speedI_in.addEventListener('input', ()=>{
     internalSpinSpeed = parseFloat(speedI_in.value);
     syncLabels();
@@ -2354,58 +1566,6 @@
   pitchSpeedI_in.addEventListener('input', ()=>{
     internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
     syncLabels();
-  });
-
-  function stopLiveDataTimers(){
-    if(liveRefreshTimer){ clearInterval(liveRefreshTimer); liveRefreshTimer = null; }
-    if(liveTickTimer){ clearInterval(liveTickTimer); liveTickTimer = null; }
-  }
-  function liveTick(){
-    removeExpiredTimers(); // cleanly removes any timer that just hit 0 and rebuilds immediately
-    rebuildDataRings();    // otherwise, periodic re-layout for smooth-ish countdown/cascade/color pulse
-  }
-  function startLiveDataTimers(){
-    stopLiveDataTimers();
-    refreshLiveData(); // fetch immediately rather than waiting the first 5s
-    liveRefreshTimer = setInterval(refreshLiveData, 5000);
-    liveTickTimer = setInterval(liveTick, 1000);
-  }
-
-  document.querySelectorAll('.toggles button[data-livedata]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.toggles button[data-livedata]').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      liveDataOn = btn.dataset.livedata === 'on';
-      N_in.disabled = liveDataOn;
-      Ni_in.disabled = liveDataOn;
-      if(liveDataOn){
-        setLiveStatus('Connecting…');
-        startLiveDataTimers();
-      } else {
-        stopLiveDataTimers();
-        setLiveStatus('Off');
-        lastLiveLayout = null;
-        buildRings(); // falls back to the manual decorative ring systems
-      }
-    });
-  });
-
-  gasUrl_in.addEventListener('change', ()=>{
-    if(liveDataOn) refreshLiveData();
-  });
-
-  outwardSpacePx_in.addEventListener('input', ()=>{
-    syncLabels();
-    if(liveDataOn) rebuildDataRings();
-  });
-
-  document.querySelectorAll('.toggles button[data-serelay]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      seRelayOn = btn.dataset.serelay === 'on';
-      if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
-    });
   });
 
   document.getElementById('enableCamBtn').addEventListener('click', requestCameraAccess);
@@ -2513,7 +1673,6 @@
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    updateDataLabels(); // re-center the label stack for the new viewport height
   });
 
   // --- Collapsible settings panel ---
@@ -2524,10 +1683,63 @@
     collapseBtn.textContent = collapsed ? '▸' : '▾';
   });
 
+  // Resets every ring's accumulated spin (mesh.rotation.z) and pitch/cartwheel
+  // (pitchAngle, reapplied through the pivot quaternion) back to each ring's
+  // original resting pose, and zeroes the slow overall assembly turntable too.
+  // This is a manual action (button), not automatic on toggle-off, so turning
+  // spin/pitch off still freezes rings wherever they currently are — click this
+  // whenever you want them back at a clean starting position.
+  function resetRotations(){
+    ringData.forEach((r)=>{
+      r.mesh.rotation.z = 0;
+      r.pitchAngle = 0;
+      r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase + (cartwheelOn ? r.cartwheelAngle : 0));
+    });
+    innerRingData.forEach((r)=>{
+      r.mesh.rotation.z = 0;
+      r.pitchAngle = 0;
+      r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase + (internalCartwheelOn ? r.cartwheelAngle : 0));
+    });
+    assembly.rotation.y = 0;
+  }
+  document.getElementById('resetRotationBtn').addEventListener('click', resetRotations);
+
+
   // --- Settings export / import ---
-  // Browser localStorage isn't reliable inside this preview sandbox, so persistence
-  // is handled as an explicit settings file instead — download it, then load it back
-  // any time (including in a future session) to restore every control exactly.
+  // A real webpage can't reach into your Downloads folder and auto-read an
+  // arbitrary file on load — browsers deliberately block that for security,
+  // and OBS's embedded browser doesn't support the newer file-handle-permission
+  // APIs that could get closer to it anyway. localStorage is the practical
+  // substitute: it's tied to this page and persists across reloads/OBS restarts
+  // in the same browser profile (OBS keeps a persistent profile per Browser
+  // Source unless you clear its cache), so this auto-saves every change here
+  // and auto-restores it on load, no manual Load click needed. The Save/Load
+  // JSON file buttons still work exactly as before, for backing up a config or
+  // moving it to a different PC/OBS install.
+  const LOCAL_STORAGE_KEY = 'ringSettings3D_v1';
+  let localSaveTimer = null;
+  function scheduleLocalSave(){
+    clearTimeout(localSaveTimer);
+    localSaveTimer = setTimeout(()=>{
+      try{
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(collectSettings()));
+      }catch(err){
+        console.warn('Auto-save to localStorage failed (private/incognito mode or storage disabled):', err);
+      }
+    }, 400);
+  }
+  function loadFromLocalStorage(){
+    try{
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if(!raw) return false;
+      applySettings(JSON.parse(raw));
+      return true;
+    }catch(err){
+      console.warn('Auto-load from localStorage failed:', err);
+      return false;
+    }
+  }
+
   function collectSettings(){
     return {
       N: N_in.value,
@@ -2542,6 +1754,8 @@
       spinSpeed: speed_in.value,
       pitch: pitchOn,
       pitchSpeed: pitchSpeed_in.value,
+      cartwheel: cartwheelOn,
+      cartwheelStep: cartwheelStepDeg,
       ringColor: ringColor_in.value,
       ringAlpha: ringAlpha_in.value,
       sphereColor: sphereColor_in.value,
@@ -2555,35 +1769,15 @@
       internalSpinSpeed: speedI_in.value,
       internalPitch: internalPitchOn,
       internalPitchSpeed: pitchSpeedI_in.value,
+      internalCartwheel: internalCartwheelOn,
+      internalCartwheelStep: internalCartwheelStepDeg,
       ringColorI: ringColorI_in.value,
       ringAlphaI: ringAlphaI_in.value,
       discRadius: discRadius_in.value,
       discColor: discColor_in.value,
       discAlpha: discAlpha_in.value,
       camFillOn: document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on',
-      camMirrorOn: camMirrorOn,
-      gasUrl: gasUrl_in.value,
-      outwardSpacePx: outwardSpacePx_in.value,
-      seChannelId: seChannelId_in.value,
-      pulseWhite: pulseWhite_in.value,
-      pulseCharcoal: pulseCharcoal_in.value,
-      pulseGold: pulseGold_in.value,
-      pageBgMode: document.querySelector('.toggles button[data-pagebg].active').dataset.pagebg,
-      pageBgColor: document.getElementById('pageBgColor').value,
-      obsBgMode: document.querySelector('.toggles button[data-obsbg].active').dataset.obsbg,
-      obsBgColor: document.getElementById('obsBgColor').value,
-      obsUrl: document.getElementById('obsUrl').value,
-      obsSourceSelect: document.getElementById('obsSourceSelect').value,
-      captureMode: captureMode,
-      camDeviceId: document.getElementById('camDevice').value,
-      liveDataOn: liveDataOn,
-      seRelayOn: seRelayOn
-      // Note: obsPassword and the SE JWT token are deliberately NOT saved here —
-      // they're credentials, and they already come from the WEB_SOCKET_P /
-      // SE_JWT_TOKEN GitHub secrets at deploy time (see the top of this script).
-      // Writing them into a downloadable settings file would mean a copy of
-      // your OBS password and StreamElements token sitting in plain text
-      // wherever that file goes.
+      camMirrorOn: camMirrorOn
     };
   }
 
@@ -2614,6 +1808,16 @@
       pitchOn = s.pitch;
       document.querySelectorAll('.toggles button[data-pitch]').forEach(b=>{
         b.classList.toggle('active', (b.dataset.pitch === 'on') === s.pitch);
+      });
+    }
+    if(s.cartwheelStep != null){
+      cartwheelStepDeg = parseFloat(s.cartwheelStep);
+      document.getElementById('cartwheelStep').value = s.cartwheelStep;
+    }
+    if(typeof s.cartwheel === 'boolean'){
+      cartwheelOn = s.cartwheel;
+      document.querySelectorAll('.toggles button[data-cartwheel]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.cartwheel === 'on') === s.cartwheel);
       });
     }
     if(s.ringColor) ringColor_in.value = s.ringColor;
@@ -2651,6 +1855,16 @@
         b.classList.toggle('active', (b.dataset.ipitch === 'on') === s.internalPitch);
       });
     }
+    if(s.internalCartwheelStep != null){
+      internalCartwheelStepDeg = parseFloat(s.internalCartwheelStep);
+      document.getElementById('cartwheelStepI').value = s.internalCartwheelStep;
+    }
+    if(typeof s.internalCartwheel === 'boolean'){
+      internalCartwheelOn = s.internalCartwheel;
+      document.querySelectorAll('.toggles button[data-icartwheel]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.icartwheel === 'on') === s.internalCartwheel);
+      });
+    }
     if(s.ringColorI) ringColorI_in.value = s.ringColorI;
     if(s.ringAlphaI != null) ringAlphaI_in.value = s.ringAlphaI;
     if(s.discRadius != null) discRadius_in.value = s.discRadius;
@@ -2672,112 +1886,13 @@
       });
       applyCameraMirror();
     }
-    if(s.gasUrl) gasUrl_in.value = s.gasUrl;
-    if(s.outwardSpacePx != null) outwardSpacePx_in.value = s.outwardSpacePx;
-    if(s.seChannelId) seChannelId_in.value = s.seChannelId;
-    if(s.pulseWhite) pulseWhite_in.value = s.pulseWhite;
-    if(s.pulseCharcoal) pulseCharcoal_in.value = s.pulseCharcoal;
-    if(s.pulseGold) pulseGold_in.value = s.pulseGold;
-    if(s.pageBgMode){
-      document.querySelectorAll('.toggles button[data-pagebg]').forEach(b=>{
-        b.classList.toggle('active', b.dataset.pagebg === s.pageBgMode);
-      });
-      document.getElementById('pageBgColorRow').style.display = (s.pageBgMode === 'transparent') ? 'none' : '';
-    }
-    if(s.pageBgColor) document.getElementById('pageBgColor').value = s.pageBgColor;
-    applyPageBackground(
-      s.pageBgMode || document.querySelector('.toggles button[data-pagebg].active').dataset.pagebg,
-      document.getElementById('pageBgColor').value
-    );
-    if(s.obsBgMode){
-      document.querySelectorAll('.toggles button[data-obsbg]').forEach(b=>{
-        b.classList.toggle('active', b.dataset.obsbg === s.obsBgMode);
-      });
-      document.getElementById('obsBgColorRow').style.display = (s.obsBgMode === 'color') ? '' : 'none';
-      obsBgMode = s.obsBgMode;
-    }
-    if(s.obsBgColor){
-      document.getElementById('obsBgColor').value = s.obsBgColor;
-      obsBgColor = s.obsBgColor;
-    }
-    if(s.obsUrl != null) document.getElementById('obsUrl').value = s.obsUrl;
-    if(s.obsSourceSelect){
-      const obsSel = document.getElementById('obsSourceSelect');
-      const hasOption = Array.from(obsSel.options).some(o=>o.value === s.obsSourceSelect);
-      if(hasOption){
-        obsSel.value = s.obsSourceSelect;
-        if(captureMode === 'obs' || s.captureMode === 'obs') startOBSPolling(s.obsSourceSelect);
-      } else {
-        pendingObsSourceName = s.obsSourceSelect;
-      }
-    }
-    // obsPassword and seJwt are NOT restored from the settings file — they're
-    // credentials that come from GitHub secrets at deploy time (see the
-    // WEB_SOCKET_P / SE_JWT_TOKEN prefill at the bottom of this script), and
-    // loading a settings file shouldn't ever overwrite that with a stale or
-    // blank value.
-
-    if(s.captureMode){
-      captureMode = s.captureMode;
-      document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
-        b.classList.toggle('active', b.dataset.capturemode === s.captureMode);
-      });
-    }
-    if(s.camDeviceId){
-      // The <select> is populated asynchronously by device enumeration
-      // (requestCameraAccess(), fired once on page load) — if it hasn't
-      // finished yet, stash the id and let populateCameraList() pick it up;
-      // if the options are already there, apply it immediately.
-      const camSel = document.getElementById('camDevice');
-      const hasOption = Array.from(camSel.options).some(o=>o.value === s.camDeviceId);
-      if(hasOption){
-        camSel.value = s.camDeviceId;
-        startCamera(s.camDeviceId);
-      } else {
-        pendingCamDeviceId = s.camDeviceId;
-      }
-    }
 
     spinSpeed = parseFloat(speed_in.value);
     pitchSpeed = parseFloat(pitchSpeed_in.value);
     internalSpinSpeed = parseFloat(speedI_in.value);
     internalPitchSpeed = parseFloat(pitchSpeedI_in.value);
     syncLabels();
-
-    // Live data: restoring this as "on" is the whole point of saving it —
-    // reproduces the same startLiveDataTimers() path the On/Off toggle uses,
-    // so a loaded settings file immediately starts pulling from gasUrl rather
-    // than sitting on the manual decorative rings until someone clicks On.
-    // startLiveDataTimers() triggers its own refreshLiveData() -> rebuildDataRings()
-    // cycle, so the buildRings() call below only needs to run for the "off" /
-    // manual-mode case — same split the data-livedata click handler uses.
-    let needsBuildRings = true;
-    if(typeof s.liveDataOn === 'boolean'){
-      document.querySelectorAll('.toggles button[data-livedata]').forEach(b=>{
-        b.classList.toggle('active', (b.dataset.livedata === 'on') === s.liveDataOn);
-      });
-      liveDataOn = s.liveDataOn;
-      N_in.disabled = liveDataOn;
-      Ni_in.disabled = liveDataOn;
-      if(liveDataOn){
-        setLiveStatus('Connecting…');
-        startLiveDataTimers();
-        needsBuildRings = false;
-      } else {
-        stopLiveDataTimers();
-        setLiveStatus('Off');
-        lastLiveLayout = null;
-      }
-    }
-    if(typeof s.seRelayOn === 'boolean'){
-      document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>{
-        b.classList.toggle('active', (b.dataset.serelay === 'on') === s.seRelayOn);
-      });
-      seRelayOn = s.seRelayOn;
-      if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
-    }
-
-    if(needsBuildRings) buildRings();
+    buildRings();
   }
 
   document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
@@ -2791,6 +1906,7 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    try{ localStorage.setItem(LOCAL_STORAGE_KEY, data); }catch(err){ console.warn('localStorage save failed:', err); }
   });
 
   const loadSettingsFile = document.getElementById('loadSettingsFile');
@@ -2802,6 +1918,7 @@
     reader.onload = (evt)=>{
       try{
         applySettings(JSON.parse(evt.target.result));
+        scheduleLocalSave(); // loading a file becomes the new auto-restore baseline too
       }catch(err){
         alert('Could not read settings file: ' + err.message);
       }
@@ -2810,32 +1927,19 @@
     reader.readAsText(file);
   });
 
-  syncLabels();
-  buildRings();
+  // Catches every slider/color/toggle change across the whole panel in one place
+  // (capture phase, so it fires even for controls added or re-bound later) and
+  // queues a debounced write to localStorage — this is what makes the page come
+  // back looking the way you left it, without touching the Downloads folder at all.
+  document.getElementById('panel').addEventListener('input', scheduleLocalSave, true);
+  document.getElementById('panel').addEventListener('click', (e)=>{
+    if(e.target.closest('.toggles button')) scheduleLocalSave();
+  }, true);
 
-  // --- Auto-connect on load ---
-  // OBS password: only prefill if a real build step actually substituted
-  // WEB_SOCKET_P — if this file is opened directly (no build), the placeholder
-  // string is still literally the raw sentinel and must NOT be sent as a
-  // password. obsUrl already defaults to ws://localhost:4455 in the markup,
-  // so a bare connect attempt is meaningful even with no password.
-  if(WEB_SOCKET_P && WEB_SOCKET_P !== UNBUILT_SENTINEL){
-    document.getElementById('obsPassword').value = WEB_SOCKET_P;
+  if(!loadFromLocalStorage()){
+    syncLabels();
+    buildRings();
   }
-  connectToOBS(); // setOBSStatus() reports Connecting… / Connected / any failure either way
-
-  // Same story for the StreamElements JWT: only prefill if the deploy step
-  // actually substituted SE_JWT_TOKEN, never send the literal placeholder.
-  if(SE_JWT_TOKEN && SE_JWT_TOKEN !== UNBUILT_SENTINEL_SE_JWT){
-    document.getElementById('seJwt').value = SE_JWT_TOKEN;
-  }
-
-  // Camera: this rig's device is always RazerCam, so skip the manual "Enable
-  // Camera Access" click and go straight for permission + enumeration. Per the
-  // existing error text in requestCameraAccess(), a Browser Source in OBS may
-  // still need one manual Interact → grant the first time regardless.
-  requestCameraAccess();
-
   animate();
 })();
 </script>
