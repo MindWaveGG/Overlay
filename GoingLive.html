@@ -1320,6 +1320,13 @@
   let cartwheelStepDeg = 30;
   let internalCartwheelOn = false;
   let internalCartwheelStepDeg = 30;
+  // Replaced by the GitHub Actions deploy step (see deploy.yml) with the real
+  // OBS WebSocket password from repo secrets. Left as this literal placeholder
+  // text when the file is opened directly/unbuilt — the check below treats an
+  // unreplaced placeholder as "nothing was injected" and skips auto-connect,
+  // so opening the raw file locally never tries to connect with garbage creds.
+  const INJECTED_WS_PASSWORD = "__WEB_SOCKET_P__";
+
   const clock = new THREE.Clock();
 
   // Adapted from the 2D overlay's arc-cascade layout: ring 0 sits at 0°, ring 1
@@ -1588,6 +1595,40 @@
       buildWebcamDisc(); // rebuild disc so its material picks up the newly-active texture
     });
   });
+
+  // The OBS URL/password get their own storage key, deliberately kept OUT of
+  // collectSettings()/applySettings() — that JSON is meant to be saved as a file
+  // and potentially shared or moved between machines, and a password has no
+  // business riding along in a file like that. This key persists purely in this
+  // browser's local storage (same mechanism as the rest of the settings), so it
+  // survives reloads/OBS restarts without ever touching the page's public source
+  // or a file anyone else could open.
+  const OBS_CREDS_KEY = 'obsWsCreds_v1';
+  function saveOBSCreds(){
+    try{
+      localStorage.setItem(OBS_CREDS_KEY, JSON.stringify({
+        url: document.getElementById('obsUrl').value,
+        password: document.getElementById('obsPassword').value
+      }));
+    }catch(err){
+      console.warn('Saving OBS credentials failed:', err);
+    }
+  }
+  function loadOBSCreds(){
+    try{
+      const raw = localStorage.getItem(OBS_CREDS_KEY);
+      if(!raw) return null;
+      const creds = JSON.parse(raw);
+      if(creds.url) document.getElementById('obsUrl').value = creds.url;
+      if(creds.password) document.getElementById('obsPassword').value = creds.password;
+      return creds;
+    }catch(err){
+      console.warn('Loading OBS credentials failed:', err);
+      return null;
+    }
+  }
+  document.getElementById('obsUrl').addEventListener('input', saveOBSCreds);
+  document.getElementById('obsPassword').addEventListener('input', saveOBSCreds);
 
   document.getElementById('obsConnectBtn').addEventListener('click', connectToOBS);
 
@@ -1939,6 +1980,15 @@
   if(!loadFromLocalStorage()){
     syncLabels();
     buildRings();
+  }
+  const savedCreds = loadOBSCreds();
+  const hadSavedPassword = !!(savedCreds && savedCreds.password);
+  if(!hadSavedPassword && INJECTED_WS_PASSWORD !== "__WEB_SOCKET_P__"){
+    // No manual override saved yet — use the password this deploy was built with.
+    document.getElementById('obsPassword').value = INJECTED_WS_PASSWORD;
+  }
+  if(hadSavedPassword || INJECTED_WS_PASSWORD !== "__WEB_SOCKET_P__"){
+    connectToOBS(); // reconnect automatically so OBS source capture works right after a reload with no manual re-entry
   }
   animate();
 })();
