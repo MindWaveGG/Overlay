@@ -230,6 +230,14 @@
   </div>
 
   <div class="row">
+    <label>Counter-spin (alternate rings reverse)</label>
+    <div class="toggles">
+      <button data-counterspin="on">On</button>
+      <button data-counterspin="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
     <label>Pitch / cartwheel (about hinge)</label>
     <div class="toggles">
       <button data-pitch="on" class="active">On</button>
@@ -243,16 +251,16 @@
   </div>
 
   <div class="row">
-    <label>Cartwheel build (frozen fan, overrides spin/pitch)</label>
+    <label>Cartwheel build (flat/concentric, freezes pitch)</label>
     <div class="toggles">
       <button data-cartwheelbuild="on">On</button>
       <button data-cartwheelbuild="off" class="active">Off</button>
     </div>
   </div>
 
-  <div class="row">
-    <label>Cartwheel step per ring <span class="val" id="vCartwheelStep">0°</span></label>
-    <input type="range" id="cartwheelStep" min="0" max="90" step="1" value="0">
+  <div class="row" style="opacity:0.55;">
+    <label>Cartwheel step (unused — flat mode has no fan angle)</label>
+    <input type="range" id="cartwheelStep" min="0" max="90" step="1" value="0" disabled>
   </div>
 
   <hr>
@@ -432,14 +440,14 @@
   <div class="row">
     <label>Internal cartwheel build (frozen fan)</label>
     <div class="toggles">
-      <button data-cartwheelbuildI="on">On</button>
-      <button data-cartwheelbuildI="off" class="active">Off</button>
+      <button data-cartwheelbuildi="on">On</button>
+      <button data-cartwheelbuildi="off" class="active">Off</button>
     </div>
   </div>
 
   <div class="row">
-    <label>Internal cartwheel step per ring <span class="val" id="vCartwheelStepI">0°</span></label>
-    <input type="range" id="cartwheelStepI" min="0" max="90" step="1" value="0">
+    <label>Simulated loop duration (unused — Frozen now billboards real live data, not a simulated loop) <span class="val" id="vCartwheelStepI">45s</span></label>
+    <input type="range" id="cartwheelStepI" min="10" max="120" step="5" value="45">
   </div>
 
   <div class="row">
@@ -1210,13 +1218,15 @@
     labelTargets = [];
   }
 
-  // --- Cartwheel build (frozen spiral/pinwheel fan) ---
-  // Closed-form so it doesn't need a shared array: ring 0 sits at 0°, ring 1 at
-  // 180° — these seed two interleaved sequences (even indices, odd indices).
-  // Each sequence then spirals outward in ITS OWN direction (even -> increasing,
-  // odd -> decreasing), so the two winds oppose each other like a pinwheel.
-  // cascade = 180 - stepDeg: at step 0 each ring in a sequence jumps a full 180°
-  // per step (maximum spiral); at step 90 it's a tighter quarter-turn cascade.
+  // --- Cartwheel build fan formula (DEPRECATED, no longer called) ---
+  // This was the original guessed approximation of "cascading" for both
+  // external and internal cartwheel-build modes, before the real 2D layout
+  // math was found and ported in. External now uses a flat/concentric pose
+  // (betaDeg = 0) and internal now flattens/billboards whatever the real
+  // live computeGoingLiveLayout cascade is (Frozen no longer swaps in fake
+  // data from generateSimulatedTimers() — see buildInnerRings). Left here
+  // unused rather than deleted in case an old saved settings file references
+  // cartwheelStep/cartwheelStepI in a way that expects this to still exist.
   function cartwheelAngleDeg(i, stepDeg){
     const cascade = 180 - stepDeg;
     const k = Math.floor(i / 2);
@@ -1285,6 +1295,13 @@
 
     const externalOn = document.querySelector('.toggles button[data-external].active').dataset.external === 'on';
 
+    // Moved up from below so it's in scope for the live-data arc build too —
+    // hingeFor() (used inside buildExternalDataRingsFromLayout) had no way to
+    // know about Cartwheel Build at all, so live-data arc rings stayed tilted
+    // even with the toggle on. Only the separate manual-loop rings ever
+    // actually flattened.
+    const cartwheelBuildOn = document.querySelector('.toggles button[data-cartwheelbuild].active').dataset.cartwheelbuild === 'on';
+
     let liveLayoutForThisBuild = null;
     if(liveDataOn){
       const cameraRadiusPx = parseFloat(document.getElementById('pxRadius').value) || 670;
@@ -1293,7 +1310,10 @@
       if(externalOn){
         // Live data drives ring count/percentage/color directly — the manual
         // N-loop below is skipped entirely in favor of the live layout's rings.
-        buildExternalDataRingsFromLayout(liveLayoutForThisBuild, PX_PER_WORLD_UNIT/0.55, assembly, baseTiltDeg, offsetWorld);
+        // Tilt is flattened to 0 here too when Cartwheel Build is on — this is
+        // the actual fix; hingeFor() itself still just does i*baseTiltDeg
+        // unconditionally, so the flattening has to happen at the call site.
+        buildExternalDataRingsFromLayout(liveLayoutForThisBuild, PX_PER_WORLD_UNIT/0.55, assembly, cartwheelBuildOn ? 0 : baseTiltDeg, offsetWorld, cartwheelBuildOn);
       } else {
         disposeDataRingSet(dataRingsExternal);
         dataRingsExternal = [];
@@ -1303,19 +1323,16 @@
       dataRingsExternal = [];
     }
 
-    const cartwheelBuildOn = document.querySelector('.toggles button[data-cartwheelbuild].active').dataset.cartwheelbuild === 'on';
-    const cartwheelStepDeg = parseFloat(document.getElementById('cartwheelStep').value) || 0;
-
     for(let i=0; externalOn && !liveDataOn && i<N; i++){
       const alphaDeg = i * (360/N);              // azimuthal spacing — determines each ring's own hinge axis direction
-      let betaDeg  = i * baseTiltDeg;             // static tilt offset, animated further by pitch
-      if(cartwheelBuildOn){
-        // Cartwheel build REPLACES the usual precession-per-index tilt with the
-        // fixed fan angle instead — it's a different static layout, not an
-        // addition on top of the existing one, so the two don't compound into
-        // something unpredictable when both sliders are nonzero.
-        betaDeg = cartwheelAngleDeg(i, cartwheelStepDeg);
-      }
+      // Cartwheel build now means flat/concentric: every ring shares the same
+      // equatorial plane (betaDeg = 0), differing only by radius and hinge
+      // stagger. This replaces the earlier fixed-fan pose, which turned out not
+      // to match anything in the real 2D layout — goal/timer rings there are
+      // just plain stacked concentric arcs at a single shared angle. Motion on
+      // top of this flat pose comes from Spin/Counter-spin below (Pitch stays
+      // skipped in animate() — tumbling would immediately break "flat").
+      const betaDeg = cartwheelBuildOn ? 0 : i * baseTiltDeg;
 
       const alpha = THREE.MathUtils.degToRad(alphaDeg);
       const beta  = THREE.MathUtils.degToRad(betaDeg);
@@ -1337,13 +1354,23 @@
       const mesh = new THREE.Mesh(torusGeo, goldMaterial(i));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      // Torus defaults to lying in XY plane (normal along Z); rotate to lie flat in XZ
-      // (normal along Y) as the shared reference "resting" plane before hinge tilt.
-      mesh.rotation.x = Math.PI/2;
+      // Torus defaults to lying in XY plane (normal along Z). Normal 3D-fan
+      // rings rotate that into the XZ "ground" plane (mesh.rotation.x = PI/2)
+      // before the hinge tilt is layered on top. Cartwheel-build rings SKIP
+      // this — they stay in their default XY/normal-Z orientation, the same
+      // convention flatCircle/the webcam disc use, so that animate() can
+      // billboard this ring's pivot to the camera's quaternion every frame —
+      // facing the viewer like a picture on a wall, not lying flat like a
+      // plate on a table.
+      if(!cartwheelBuildOn){
+        mesh.rotation.x = Math.PI/2;
+      }
       pivot.add(mesh);
 
       // Apply the static tilt immediately as a single axis-angle rotation about this
       // ring's own fixed axis — pitch animation will update this quaternion each frame.
+      // In cartwheel-build mode, beta is always 0 here anyway, and animate()
+      // overwrites this pivot's quaternion with the camera's every frame instead.
       pivot.quaternion.setFromAxisAngle(axis, beta);
 
       ringData.push({
@@ -1351,7 +1378,8 @@
         index: i,
         betaBase: beta,      // static hinge tilt from layout math — pitch animates on top of this
         pitchAngle: 0,
-        spinAngle: 0
+        spinAngle: 0,
+        billboard: cartwheelBuildOn
       });
     }
 
@@ -1405,15 +1433,40 @@
     const offsetWorldI = offsetPxI * OFFSET_SCALE;
     const baseTiltDegI = (360/Ni - stepI);
 
+    // Frozen (Cartwheel Build, internal) is now purely a "flatten + billboard"
+    // rendering flag, not a separate data source. It used to unconditionally
+    // swap in a fake, perpetually-looping simulated cascade the moment it was
+    // switched on — which meant turning Frozen on while real Live Data/GoingLive
+    // was also on silently threw away the real countdown/cascade and showed
+    // made-up timers instead, and turning Frozen on with no live connection at
+    // all fabricated rings out of nothing. Neither matches the 2D reference:
+    // there, the GoingLive cascade is always driven by the real timer feed: no
+    // feed with GoingLive-named timers, no rings. Frozen here now just controls
+    // HOW the real data is rendered (flat/billboarded vs tilted fan) — same
+    // computeGoingLiveLayout math, same live liveLayout passed in, still
+    // recomputed and re-passed in on every rebuild so it keeps counting down
+    // and re-filling exactly like the 2D version.
+    const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildi].active').dataset.cartwheelbuildi === 'on';
+
     if(liveDataOn){
       const innerGroup = new THREE.Group();
       assembly.add(innerGroup);
-      buildInternalDataRings(pxPerUnit, innerGroup, liveLayout, baseTiltDegI, offsetWorldI);
-      return [``, `Internal rings — live data (spillover + GoingLive/subathon, fills to center)`,
+      // Frozen just flattens tilt to 0 and billboards; live/off toggles which
+      // real data path feeds it. Nothing here is simulated.
+      buildInternalDataRings(pxPerUnit, innerGroup, liveLayout, cartwheelBuildOnI ? 0 : baseTiltDegI, offsetWorldI, cartwheelBuildOnI);
+      return [``, `Internal rings — live data (spillover + GoingLive/subathon, fills to center)${cartwheelBuildOnI ? ' — Frozen/billboard' : ''}`,
               `spillover: ${liveLayout.inward.length}   subathon: ${liveLayout.goingLiveTimers.length}`];
     } else {
       disposeDataRingSet(dataRingsInternal);
       dataRingsInternal = [];
+    }
+
+    if(cartwheelBuildOnI){
+      // Frozen with no live connection: there's no real GoingLive/spillover
+      // data to flatten and billboard, so — matching the 2D reference's
+      // "no GoingLive-named timers, no rings" behavior — show nothing rather
+      // than fabricating a fake cascade. Turn Live Data on to see it populate.
+      return [``, `Internal rings — Live Data is off, nothing to show (Frozen has no real data to flatten)`];
     }
 
     // Divide the entire interior — from just under the visible shell down to the
@@ -1449,15 +1502,9 @@
     const innerGroup = new THREE.Group();
     assembly.add(innerGroup); // nested under the main assembly — inherits the slow overall spin
 
-    const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildI].active').dataset.cartwheelbuildI === 'on';
-    const cartwheelStepDegI = parseFloat(document.getElementById('cartwheelStepI').value) || 0;
-
     for(let i=0; i<Ni; i++){
       const alphaDeg = i * (360/Ni);
-      let betaDeg  = i * baseTiltDegI;
-      if(cartwheelBuildOnI){
-        betaDeg = cartwheelAngleDeg(i, cartwheelStepDegI); // same fixed fan formula as external rings
-      }
+      const betaDeg  = i * baseTiltDegI;
       const alpha = THREE.MathUtils.degToRad(alphaDeg);
       const beta  = THREE.MathUtils.degToRad(betaDeg);
       const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
@@ -1599,6 +1646,46 @@
       percentage
     };
   }
+
+  // Synthetic "GoingLive"-named timers for the internal cartwheel-build demo
+  // mode — same shape getTimeRemaining()/computeGoingLiveLayout() already
+  // expect from a real fetched timer (name + startTime/endTime Dates), just
+  // generated locally instead of coming from a Sheets fetch. Each timer is
+  // phase-staggered across the shared loop so they don't all hit 0% in unison,
+  // and endTime is recomputed fresh on every call (buildRings() is re-invoked
+  // on an interval while this mode is active — see the cartwheelbuildI toggle
+  // handler) so the countdown genuinely advances rather than holding one pose.
+  function generateSimulatedTimers(count, loopSeconds){
+    const now = Date.now();
+    const loopMs = Math.max(5, loopSeconds) * 1000;
+    const phaseStepMs = loopMs / count;
+    const sims = [];
+    for(let i=0; i<count; i++){
+      const phase = (now + i*phaseStepMs) % loopMs;
+      sims.push({
+        name: `GoingLive Sim ${i+1}`,
+        startTime: new Date(now - phase),
+        endTime: new Date(now + (loopMs - phase))
+      });
+    }
+    return sims;
+  }
+
+  // Periodic rebuild while the internal cartwheel-build demo is active — this
+  // is what actually makes the countdown advance instead of holding one frozen
+  // pose. Same "cheap enough for a tick" reasoning as the live-data 1s refresh
+  // already uses; guarded against liveDataOn so it doesn't fight that path's
+  // own rebuild cadence if both ever end up on at once (real data wins either way
+  // since buildInnerRings checks liveDataOn before the simulated branch).
+  let simCascadeInterval = null;
+  function startSimCascadeTicker(){
+    stopSimCascadeTicker();
+    simCascadeInterval = setInterval(()=>{ if(!liveDataOn) buildRings(); }, 200);
+  }
+  function stopSimCascadeTicker(){
+    if(simCascadeInterval){ clearInterval(simCascadeInterval); simCascadeInterval = null; }
+  }
+
 
   function removeExpiredTimers() {
     const now = new Date().getTime();
@@ -1831,7 +1918,7 @@
   // same span convention GoingLive's drawDonut uses: cw spans [start, start+sweep],
   // ccw spans [start-sweep, start]. The wrapper's rotation.y anchors that span's
   // lower bound so cascading rings (GoingLive/subathon set) stay continuous.
-  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup, hingeAxis, hingeBeta, hingeOffsetScalar){
+  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup, hingeAxis, hingeBeta, hingeOffsetScalar, billboard){
     const pct = Math.max(0.004, Math.min(1, percentage));
     const sweepDeg = pct*360;
     const beginDeg = (ccw ? (startAngleDeg - sweepDeg) : startAngleDeg) - 90; // -90: 0° reads as "top"
@@ -1842,10 +1929,37 @@
       emissive: new THREE.Color(colorHex), emissiveIntensity:0.22
     });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI/2;
+    // TorusGeometry defaults to lying in the XY plane (normal along Z). The
+    // normal (non-billboard) 3D-fan rings rotate that into the XZ "ground"
+    // plane (mesh.rotation.x = PI/2) before the hinge tilt is layered on top.
+    // Billboard rings skip that rotation entirely and stay in their default
+    // XY/normal-Z orientation — the SAME convention flatCircle/the webcam
+    // disc use — so that copying the camera's quaternion onto this ring's
+    // pivot every frame (see animate()) makes it face the viewer like a
+    // picture on a wall, not lie flat like a plate on a table.
+    if(!billboard){
+      mesh.rotation.x = Math.PI/2;
+    }
     mesh.castShadow = true; mesh.receiveShadow = true;
     const wrapper = new THREE.Group();
-    wrapper.rotation.y = -THREE.MathUtils.degToRad(beginDeg);
+    // The "begin angle" rotation has to spin the ring about its OWN normal axis,
+    // whichever axis that currently is — not always Y. In non-billboard/ground-
+    // plane mode the mesh was just tipped so its normal points along Y (see
+    // mesh.rotation.x above), so rotating the wrapper about Y correctly spins
+    // the arc's start position within its own XZ plane. In billboard mode the
+    // mesh is left at its default orientation, normal along Z — so rotating
+    // about Y there was rotating about an axis that lies IN the ring's plane
+    // (not perpendicular to it), which tips the disc up onto its edge instead
+    // of spinning it in-plane. That's the "vertical pitch" bug: every ring's
+    // begin-angle differs (percentage/cascade-driven), so each one tipped a
+    // different amount, reading as rings flipping/duplicating rather than
+    // sitting flat and facing the camera. Billboard rings must rotate about Z
+    // (their own normal) instead.
+    if(billboard){
+      wrapper.rotation.z = -THREE.MathUtils.degToRad(beginDeg);
+    } else {
+      wrapper.rotation.y = -THREE.MathUtils.degToRad(beginDeg);
+    }
     wrapper.add(mesh);
 
     // Same fixed-hinge-axis tilt the manual rings use (see buildRings' N-loop):
@@ -1853,7 +1967,9 @@
     // single axis-angle quaternion, so each data ring gets a distinct plane
     // instead of every arc lying flat in the same XZ plane. animate() then
     // spins this quaternion further every frame via betaBase + pitchAngle,
-    // exactly like the manual rings.
+    // exactly like the manual rings. In billboard mode, hingeBeta is always 0
+    // (see call sites), and animate() overwrites this pivot's quaternion with
+    // the camera's every frame instead of using betaBase/pitchAngle at all.
     const pivot = new THREE.Group();
     pivot.position.copy(hingeAxis).multiplyScalar(hingeOffsetScalar);
     pivot.quaternion.setFromAxisAngle(hingeAxis, hingeBeta);
@@ -1873,7 +1989,7 @@
     tip.position.set(radiusWorld * Math.cos(sweepRad), radiusWorld * Math.sin(sweepRad), 0);
     mesh.add(tip);
 
-    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0, tip };
+    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0, tip, billboard: !!billboard };
   }
 
   function disposeDataRingSet(set){
@@ -1897,7 +2013,7 @@
     return { axis, beta };
   }
 
-  function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup, baseTiltDeg, offsetWorld){
+  function buildExternalDataRingsFromLayout(layout, pxPerUnit, parentGroup, baseTiltDeg, offsetWorld, billboard){
     // Snapshot the outgoing ring set's animation state, keyed by stable identity
     // (not array index — percentage-sort/spillover can reorder items between
     // rebuilds). Restoring this onto whichever new ring matches the same item is
@@ -1918,14 +2034,20 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       const { axis, beta } = hingeFor(i, count, baseTiltDeg);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i, billboard);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
 
       const prev = savedState.get(ringKey(item));
       if(prev){
         rr.mesh.rotation.z = prev.spinZ;
-        rr.pitchAngle = prev.pitchAngle;
-        rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
+        // Pitch/hinge restore only applies to the normal 3D-fan pose — in
+        // billboard mode the pivot's quaternion gets overwritten by the
+        // camera's every frame in animate() anyway, so setting it here from
+        // stale axis-angle math would just be immediately discarded.
+        if(!billboard){
+          rr.pitchAngle = prev.pitchAngle;
+          rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
+        }
       }
 
       dataRingsExternal.push(rr);
@@ -1939,7 +2061,7 @@
 
   // Builds the inward (Internal) data-ring set: spillover items near the surface,
   // then GoingLive/subathon timers filling the rest down to true center.
-  function buildInternalDataRings(pxPerUnit, parentGroup, layout, baseTiltDegI, offsetWorldI){
+  function buildInternalDataRings(pxPerUnit, parentGroup, layout, baseTiltDegI, offsetWorldI, billboard){
     // Same continuity fix as buildExternalDataRingsFromLayout — see the comment
     // there for why identity-keyed snapshot/restore is needed instead of index.
     const savedState = new Map();
@@ -1957,8 +2079,14 @@
       const prev = savedState.get(ringKey(item));
       if(prev){
         rr.mesh.rotation.z = prev.spinZ;
-        rr.pitchAngle = prev.pitchAngle;
-        rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
+        // See buildExternalDataRingsFromLayout's identical guard: in billboard
+        // mode the pivot's quaternion is overwritten by the camera's every
+        // frame in animate(), so restoring a stale axis-angle here would just
+        // be discarded on the very next frame anyway.
+        if(!billboard){
+          rr.pitchAngle = prev.pitchAngle;
+          rr.pivot.quaternion.setFromAxisAngle(rr.axis, rr.betaBase + rr.pitchAngle);
+        }
       }
     }
 
@@ -1966,7 +2094,7 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i, billboard);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       restoreState(rr, item);
       dataRingsInternal.push(rr);
@@ -1980,7 +2108,7 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i, billboard);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       restoreState(rr, item);
       dataRingsInternal.push(rr);
@@ -2196,6 +2324,7 @@
 
   // --- Animation ---
   let spinOn = true;
+  let counterSpinOn = false;
   let pitchOn = true;
   let spinSpeed = 1.0;
   let pitchSpeed = 1.0;
@@ -2212,14 +2341,22 @@
     // Cartwheel build freezes everything it applies to — read live so toggling
     // it takes effect immediately without needing a rebuild.
     const cartwheelBuildOn = document.querySelector('.toggles button[data-cartwheelbuild].active').dataset.cartwheelbuild === 'on';
-    const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildI].active').dataset.cartwheelbuildI === 'on';
+    const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildi].active').dataset.cartwheelbuildi === 'on';
 
+    // Cartwheel build (external) is now a true billboard pose, not a
+    // ground-plane pose — see the billboard update below, after
+    // updateCamera(). Pitch stays frozen here (tumbling would fight the
+    // billboard orientation every frame), but Spin keeps running: with the
+    // ring's plane facing the camera like a picture on a wall, spinning it
+    // about its own face-normal is now genuinely visible — it reads like a
+    // clock hand or a dartboard segment rotating in place, not an invisible
+    // no-op the way it would be lying flat on the ground.
     ringData.forEach((r)=>{
-      if(cartwheelBuildOn) return; // frozen fan — skip spin AND pitch entirely
+      const dir = (counterSpinOn && r.index % 2 === 1) ? -1 : 1;
       if(spinOn){
-        // spin about the ring's own normal — flat rotation, doesn't change its plane
-        r.mesh.rotation.z += dt * spinSpeed * (0.4 + 0.08*r.index);
+        r.mesh.rotation.z += dt * spinSpeed * dir * (0.4 + 0.08*r.index);
       }
+      if(cartwheelBuildOn) return; // pitch frozen — billboard orientation is set below instead
       if(pitchOn){
         // pitch/cartwheel about the ring's own fixed hinge axis — a single axis-angle
         // rotation, so sweeping through a full 360° never causes it to collapse onto
@@ -2229,8 +2366,14 @@
       }
     });
 
+    // Internal cartwheel-build (simulated cascade) is genuinely animated via
+    // periodic geometry rebuild (see startSimCascadeTicker), not spin/pitch —
+    // both stay skipped here so the rebuilt arc geometry isn't fighting a
+    // stale pivot rotation left over from before the mode was toggled on.
+    // Its billboard orientation is set below, after updateCamera(), same as
+    // external.
     innerRingData.forEach((r)=>{
-      if(cartwheelBuildOnI) return; // frozen fan — skip spin AND pitch entirely
+      if(cartwheelBuildOnI) return;
       if(internalSpinOn){
         r.mesh.rotation.z += dt * internalSpinSpeed * (0.4 + 0.08*r.index);
       }
@@ -2240,15 +2383,34 @@
       }
     });
 
-    // Cartwheel build is meant to be a genuinely frozen, static arrangement —
-    // if EITHER ring set is in that mode, hold the whole assembly still too,
-    // rather than having a static ring fan slowly turntable-spin regardless.
+    // Both cartwheel-build modes are labeled "frozen" in the UI, so both need
+    // the ambient turntable held still too — previously only the external
+    // flag was checked here, so turning on ONLY Internal cartwheel-build still
+    // left the whole assembly slowly turntabling, which reads as "still
+    // spinning" even though the individual internal rings themselves were
+    // correctly frozen.
     if((spinOn || pitchOn) && !cartwheelBuildOn && !cartwheelBuildOnI){
       assembly.rotation.y += dt * spinSpeed * 0.05;
     }
 
     updateCamera();
     updateLabelLines();
+
+    // Billboard step for cartwheel-build rings: this is the actual "flat"
+    // fix — every ring's pivot gets the CAMERA's world quaternion copied onto
+    // it, every frame, exactly like flatCircle/the webcam disc below. That's
+    // what makes a ring face the viewer like a picture on a wall as you
+    // orbit, instead of the earlier ground-plane pose (a plate lying flat on
+    // a table) which only ever looked "flat" from directly overhead. The
+    // ring's own hinge-offset stagger (small sideways shift so concentric
+    // rings don't share one literal center point) is a position, not a
+    // rotation, so it's untouched by this and keeps working the same way.
+    if(cartwheelBuildOn){
+      ringData.forEach(r=>{ r.pivot.quaternion.copy(camera.quaternion); });
+    }
+    if(cartwheelBuildOnI){
+      innerRingData.forEach(r=>{ r.pivot.quaternion.copy(camera.quaternion); });
+    }
 
     // Billboard the flat disc to the camera every frame, AFTER updateCamera() so it
     // uses this frame's fresh orientation. This is the actual fix for "shouldn't
@@ -2339,7 +2501,8 @@
     document.getElementById('vSphereGap').textContent = sphereGap_in.value + 'px';
     document.getElementById('vSpeed').textContent = parseFloat(speed_in.value).toFixed(1) + '×';
     document.getElementById('vPitchSpeed').textContent = parseFloat(pitchSpeed_in.value).toFixed(1) + '×';
-    document.getElementById('vCartwheelStep').textContent = document.getElementById('cartwheelStep').value + '°';
+    // cartwheelStep is now disabled/unused (external cartwheel-build is flat/
+    // concentric with no fan angle) — no label to sync for it anymore.
     document.getElementById('vRingAlpha').textContent = 'alpha ' + parseFloat(ringAlpha_in.value).toFixed(2);
     document.getElementById('vSphereAlpha').textContent = 'alpha ' + parseFloat(sphereAlpha_in.value).toFixed(2);
     document.getElementById('vNi').textContent = Ni_in.value;
@@ -2350,7 +2513,7 @@
     document.getElementById('vOffsetI').textContent = offsetI_in.value + 'px';
     document.getElementById('vSpeedI').textContent = parseFloat(speedI_in.value).toFixed(1) + '×';
     document.getElementById('vPitchSpeedI').textContent = parseFloat(pitchSpeedI_in.value).toFixed(1) + '×';
-    document.getElementById('vCartwheelStepI').textContent = document.getElementById('cartwheelStepI').value + '°';
+    document.getElementById('vCartwheelStepI').textContent = document.getElementById('cartwheelStepI').value + 's';
     document.getElementById('vRingAlphaI').textContent = 'alpha ' + parseFloat(ringAlphaI_in.value).toFixed(2);
     const discR = parseFloat(discRadius_in.value) || 0;
     document.getElementById('vDiscRadius').textContent = discR + 'px (Ø' + (discR*2) + 'px)';
@@ -2385,6 +2548,14 @@
       document.querySelectorAll('.toggles button[data-spin]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       spinOn = btn.dataset.spin === 'on';
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-counterspin]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-counterspin]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      counterSpinOn = btn.dataset.counterspin === 'on';
     });
   });
 
@@ -2443,6 +2614,7 @@
       document.querySelectorAll('.toggles button[data-cartwheelbuild]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       buildRings(); // cartwheel-build state is read live inside the external ring loop
+      if(btn.dataset.cartwheelbuild === 'on') resetRotations(); // snap straight into the flat pose, no manual Reset click needed
     });
   });
 
@@ -2451,11 +2623,13 @@
     buildRings();
   });
 
-  document.querySelectorAll('.toggles button[data-cartwheelbuildI]').forEach(btn=>{
+  document.querySelectorAll('.toggles button[data-cartwheelbuildi]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.toggles button[data-cartwheelbuildI]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.toggles button[data-cartwheelbuildi]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
+      if(btn.dataset.cartwheelbuildi === 'on'){ startSimCascadeTicker(); } else { stopSimCascadeTicker(); }
       buildRings(); // cartwheel-build state is read live inside buildInnerRings
+      if(btn.dataset.cartwheelbuildi === 'on') resetRotations(); // snap into the cascade's base pose immediately
     });
   });
 
@@ -2690,6 +2864,7 @@
       growth: growth_in.value,
       sphereGap: sphereGap_in.value,
       spin: spinOn,
+      counterSpin: counterSpinOn,
       spinSpeed: speed_in.value,
       pitch: pitchOn,
       pitchSpeed: pitchSpeed_in.value,
@@ -2708,7 +2883,7 @@
       internalSpinSpeed: speedI_in.value,
       internalPitch: internalPitchOn,
       internalPitchSpeed: pitchSpeedI_in.value,
-      cartwheelBuildOnI: document.querySelector('.toggles button[data-cartwheelbuildI].active').dataset.cartwheelbuildI === 'on',
+      cartwheelBuildOnI: document.querySelector('.toggles button[data-cartwheelbuildi].active').dataset.cartwheelbuildi === 'on',
       cartwheelStepI: document.getElementById('cartwheelStepI').value,
       ringColorI: ringColorI_in.value,
       ringAlphaI: ringAlphaI_in.value,
@@ -2765,6 +2940,12 @@
         b.classList.toggle('active', (b.dataset.spin === 'on') === s.spin);
       });
     }
+    if(typeof s.counterSpin === 'boolean'){
+      counterSpinOn = s.counterSpin;
+      document.querySelectorAll('.toggles button[data-counterspin]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.counterspin === 'on') === s.counterSpin);
+      });
+    }
     if(typeof s.pitch === 'boolean'){
       pitchOn = s.pitch;
       document.querySelectorAll('.toggles button[data-pitch]').forEach(b=>{
@@ -2813,9 +2994,10 @@
       });
     }
     if(typeof s.cartwheelBuildOnI === 'boolean'){
-      document.querySelectorAll('.toggles button[data-cartwheelbuildI]').forEach(b=>{
-        b.classList.toggle('active', (b.dataset.cartwheelbuildI === 'on') === s.cartwheelBuildOnI);
+      document.querySelectorAll('.toggles button[data-cartwheelbuildi]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.cartwheelbuildi === 'on') === s.cartwheelBuildOnI);
       });
+      if(s.cartwheelBuildOnI){ startSimCascadeTicker(); } else { stopSimCascadeTicker(); }
     }
     if(s.cartwheelStepI != null) document.getElementById('cartwheelStepI').value = s.cartwheelStepI;
     if(s.ringColorI) ringColorI_in.value = s.ringColorI;
