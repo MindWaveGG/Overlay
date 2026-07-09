@@ -242,6 +242,19 @@
     <input type="range" id="pitchSpeed" min="0" max="3" step="0.1" value="1.0">
   </div>
 
+  <div class="row">
+    <label>Cartwheel build (frozen fan, overrides spin/pitch)</label>
+    <div class="toggles">
+      <button data-cartwheelbuild="on">On</button>
+      <button data-cartwheelbuild="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Cartwheel step per ring <span class="val" id="vCartwheelStep">0°</span></label>
+    <input type="range" id="cartwheelStep" min="0" max="90" step="1" value="0">
+  </div>
+
   <hr>
 
   <div class="row">
@@ -417,6 +430,19 @@
   </div>
 
   <div class="row">
+    <label>Internal cartwheel build (frozen fan)</label>
+    <div class="toggles">
+      <button data-cartwheelbuildI="on">On</button>
+      <button data-cartwheelbuildI="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Internal cartwheel step per ring <span class="val" id="vCartwheelStepI">0°</span></label>
+    <input type="range" id="cartwheelStepI" min="0" max="90" step="1" value="0">
+  </div>
+
+  <div class="row">
     <label>Internal ring color <span class="val" id="vRingAlphaI">alpha 1.00</span></label>
     <div class="color-row">
       <input type="color" id="ringColorI" value="#3fc9b8">
@@ -483,6 +509,11 @@
   </div>
 
   <hr>
+
+  <div class="row">
+    <label>Reset rotation/spin position</label>
+    <button id="resetRotationBtn" type="button" style="width:100%; background:transparent; border:1px solid var(--panel-border); color:var(--text-dim); padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px; text-transform:uppercase; letter-spacing:0.03em;">Reset Rotation / Spin</button>
+  </div>
 
   <div class="row">
     <label>Settings file</label>
@@ -1179,6 +1210,19 @@
     labelTargets = [];
   }
 
+  // --- Cartwheel build (frozen spiral/pinwheel fan) ---
+  // Closed-form so it doesn't need a shared array: ring 0 sits at 0°, ring 1 at
+  // 180° — these seed two interleaved sequences (even indices, odd indices).
+  // Each sequence then spirals outward in ITS OWN direction (even -> increasing,
+  // odd -> decreasing), so the two winds oppose each other like a pinwheel.
+  // cascade = 180 - stepDeg: at step 0 each ring in a sequence jumps a full 180°
+  // per step (maximum spiral); at step 90 it's a tighter quarter-turn cascade.
+  function cartwheelAngleDeg(i, stepDeg){
+    const cascade = 180 - stepDeg;
+    const k = Math.floor(i / 2);
+    return (i % 2 === 0) ? (k * cascade) : (180 - k * cascade);
+  }
+
   function buildRings(){
     clearAssembly();
 
@@ -1259,9 +1303,19 @@
       dataRingsExternal = [];
     }
 
+    const cartwheelBuildOn = document.querySelector('.toggles button[data-cartwheelbuild].active').dataset.cartwheelbuild === 'on';
+    const cartwheelStepDeg = parseFloat(document.getElementById('cartwheelStep').value) || 0;
+
     for(let i=0; externalOn && !liveDataOn && i<N; i++){
       const alphaDeg = i * (360/N);              // azimuthal spacing — determines each ring's own hinge axis direction
-      const betaDeg  = i * baseTiltDeg;           // static tilt offset, animated further by pitch
+      let betaDeg  = i * baseTiltDeg;             // static tilt offset, animated further by pitch
+      if(cartwheelBuildOn){
+        // Cartwheel build REPLACES the usual precession-per-index tilt with the
+        // fixed fan angle instead — it's a different static layout, not an
+        // addition on top of the existing one, so the two don't compound into
+        // something unpredictable when both sliders are nonzero.
+        betaDeg = cartwheelAngleDeg(i, cartwheelStepDeg);
+      }
 
       const alpha = THREE.MathUtils.degToRad(alphaDeg);
       const beta  = THREE.MathUtils.degToRad(betaDeg);
@@ -1395,9 +1449,15 @@
     const innerGroup = new THREE.Group();
     assembly.add(innerGroup); // nested under the main assembly — inherits the slow overall spin
 
+    const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildI].active').dataset.cartwheelbuildI === 'on';
+    const cartwheelStepDegI = parseFloat(document.getElementById('cartwheelStepI').value) || 0;
+
     for(let i=0; i<Ni; i++){
       const alphaDeg = i * (360/Ni);
-      const betaDeg  = i * baseTiltDegI;
+      let betaDeg  = i * baseTiltDegI;
+      if(cartwheelBuildOnI){
+        betaDeg = cartwheelAngleDeg(i, cartwheelStepDegI); // same fixed fan formula as external rings
+      }
       const alpha = THREE.MathUtils.degToRad(alphaDeg);
       const beta  = THREE.MathUtils.degToRad(betaDeg);
       const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
@@ -2149,7 +2209,13 @@
     requestAnimationFrame(animate);
     const dt = clock.getDelta();
 
+    // Cartwheel build freezes everything it applies to — read live so toggling
+    // it takes effect immediately without needing a rebuild.
+    const cartwheelBuildOn = document.querySelector('.toggles button[data-cartwheelbuild].active').dataset.cartwheelbuild === 'on';
+    const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildI].active').dataset.cartwheelbuildI === 'on';
+
     ringData.forEach((r)=>{
+      if(cartwheelBuildOn) return; // frozen fan — skip spin AND pitch entirely
       if(spinOn){
         // spin about the ring's own normal — flat rotation, doesn't change its plane
         r.mesh.rotation.z += dt * spinSpeed * (0.4 + 0.08*r.index);
@@ -2164,6 +2230,7 @@
     });
 
     innerRingData.forEach((r)=>{
+      if(cartwheelBuildOnI) return; // frozen fan — skip spin AND pitch entirely
       if(internalSpinOn){
         r.mesh.rotation.z += dt * internalSpinSpeed * (0.4 + 0.08*r.index);
       }
@@ -2173,7 +2240,10 @@
       }
     });
 
-    if(spinOn || pitchOn){
+    // Cartwheel build is meant to be a genuinely frozen, static arrangement —
+    // if EITHER ring set is in that mode, hold the whole assembly still too,
+    // rather than having a static ring fan slowly turntable-spin regardless.
+    if((spinOn || pitchOn) && !cartwheelBuildOn && !cartwheelBuildOnI){
       assembly.rotation.y += dt * spinSpeed * 0.05;
     }
 
@@ -2204,6 +2274,26 @@
     }
 
     renderer.render(scene, camera);
+  }
+
+  // Snaps every ring back to its resting pose: accumulated spin (mesh.rotation.z)
+  // and pitch (pivot quaternion) both zeroed, for both external and internal ring
+  // sets, plus the slow overall turntable rotation. Respects cartwheel build mode
+  // rather than fighting it — if a ring set is in that frozen-fan mode, "resting
+  // pose" means the fan angle (betaBase already includes it, see buildRings/
+  // buildInnerRings), not a plain zero that would visually undo the fan.
+  function resetRotations(){
+    ringData.forEach((r)=>{
+      r.pitchAngle = 0;
+      r.mesh.rotation.z = 0;
+      r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase);
+    });
+    innerRingData.forEach((r)=>{
+      r.pitchAngle = 0;
+      r.mesh.rotation.z = 0;
+      r.pivot.quaternion.setFromAxisAngle(r.axis, r.betaBase);
+    });
+    assembly.rotation.y = 0;
   }
 
   // --- UI wiring ---
@@ -2249,6 +2339,7 @@
     document.getElementById('vSphereGap').textContent = sphereGap_in.value + 'px';
     document.getElementById('vSpeed').textContent = parseFloat(speed_in.value).toFixed(1) + '×';
     document.getElementById('vPitchSpeed').textContent = parseFloat(pitchSpeed_in.value).toFixed(1) + '×';
+    document.getElementById('vCartwheelStep').textContent = document.getElementById('cartwheelStep').value + '°';
     document.getElementById('vRingAlpha').textContent = 'alpha ' + parseFloat(ringAlpha_in.value).toFixed(2);
     document.getElementById('vSphereAlpha').textContent = 'alpha ' + parseFloat(sphereAlpha_in.value).toFixed(2);
     document.getElementById('vNi').textContent = Ni_in.value;
@@ -2259,6 +2350,7 @@
     document.getElementById('vOffsetI').textContent = offsetI_in.value + 'px';
     document.getElementById('vSpeedI').textContent = parseFloat(speedI_in.value).toFixed(1) + '×';
     document.getElementById('vPitchSpeedI').textContent = parseFloat(pitchSpeedI_in.value).toFixed(1) + '×';
+    document.getElementById('vCartwheelStepI').textContent = document.getElementById('cartwheelStepI').value + '°';
     document.getElementById('vRingAlphaI').textContent = 'alpha ' + parseFloat(ringAlphaI_in.value).toFixed(2);
     const discR = parseFloat(discRadius_in.value) || 0;
     document.getElementById('vDiscRadius').textContent = discR + 'px (Ø' + (discR*2) + 'px)';
@@ -2345,6 +2437,34 @@
       internalPitchOn = btn.dataset.ipitch === 'on';
     });
   });
+
+  document.querySelectorAll('.toggles button[data-cartwheelbuild]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-cartwheelbuild]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildRings(); // cartwheel-build state is read live inside the external ring loop
+    });
+  });
+
+  document.getElementById('cartwheelStep').addEventListener('input', ()=>{
+    syncLabels();
+    buildRings();
+  });
+
+  document.querySelectorAll('.toggles button[data-cartwheelbuildI]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-cartwheelbuildI]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildRings(); // cartwheel-build state is read live inside buildInnerRings
+    });
+  });
+
+  document.getElementById('cartwheelStepI').addEventListener('input', ()=>{
+    syncLabels();
+    buildRings();
+  });
+
+  document.getElementById('resetRotationBtn').addEventListener('click', resetRotations);
 
   speedI_in.addEventListener('input', ()=>{
     internalSpinSpeed = parseFloat(speedI_in.value);
@@ -2525,9 +2645,40 @@
   });
 
   // --- Settings export / import ---
-  // Browser localStorage isn't reliable inside this preview sandbox, so persistence
-  // is handled as an explicit settings file instead — download it, then load it back
-  // any time (including in a future session) to restore every control exactly.
+  // Everything here still works as an explicit JSON file (Save/Load buttons) for
+  // backups or moving config to another PC. On top of that, every change now
+  // also auto-saves (debounced) to this browser's own localStorage and auto-
+  // restores on page load — no more needing to click Load manually every time.
+  // This runs fine in a real browser tab (Chrome, or OBS's embedded Chromium
+  // once a source has loaded the page at least once) since it's this page's own
+  // storage, not an attempt to reach into the Downloads folder. Note: obsPassword
+  // and seJwt are deliberately excluded from what gets auto-saved/restored here —
+  // same reasoning as the JSON export below, credentials don't belong sitting in
+  // any persisted settings blob.
+  const LOCAL_STORAGE_KEY = '3d-rings-settings-autosave';
+  let localSaveTimer = null;
+  function scheduleLocalSave(){
+    clearTimeout(localSaveTimer);
+    localSaveTimer = setTimeout(()=>{
+      try{
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(collectSettings()));
+      }catch(err){
+        console.warn('Auto-save to localStorage failed:', err);
+      }
+    }, 400); // debounced so dragging a slider doesn't write on every single tick
+  }
+  function tryAutoLoadFromLocalStorage(){
+    try{
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if(!raw) return false;
+      applySettings(JSON.parse(raw));
+      return true;
+    }catch(err){
+      console.warn('Auto-load from localStorage failed:', err);
+      return false;
+    }
+  }
+
   function collectSettings(){
     return {
       N: N_in.value,
@@ -2542,6 +2693,8 @@
       spinSpeed: speed_in.value,
       pitch: pitchOn,
       pitchSpeed: pitchSpeed_in.value,
+      cartwheelBuildOn: document.querySelector('.toggles button[data-cartwheelbuild].active').dataset.cartwheelbuild === 'on',
+      cartwheelStep: document.getElementById('cartwheelStep').value,
       ringColor: ringColor_in.value,
       ringAlpha: ringAlpha_in.value,
       sphereColor: sphereColor_in.value,
@@ -2555,6 +2708,8 @@
       internalSpinSpeed: speedI_in.value,
       internalPitch: internalPitchOn,
       internalPitchSpeed: pitchSpeedI_in.value,
+      cartwheelBuildOnI: document.querySelector('.toggles button[data-cartwheelbuildI].active').dataset.cartwheelbuildI === 'on',
+      cartwheelStepI: document.getElementById('cartwheelStepI').value,
       ringColorI: ringColorI_in.value,
       ringAlphaI: ringAlphaI_in.value,
       discRadius: discRadius_in.value,
@@ -2616,6 +2771,12 @@
         b.classList.toggle('active', (b.dataset.pitch === 'on') === s.pitch);
       });
     }
+    if(typeof s.cartwheelBuildOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-cartwheelbuild]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.cartwheelbuild === 'on') === s.cartwheelBuildOn);
+      });
+    }
+    if(s.cartwheelStep != null) document.getElementById('cartwheelStep').value = s.cartwheelStep;
     if(s.ringColor) ringColor_in.value = s.ringColor;
     if(s.ringAlpha != null) ringAlpha_in.value = s.ringAlpha;
     if(s.sphereColor) sphereColor_in.value = s.sphereColor;
@@ -2651,6 +2812,12 @@
         b.classList.toggle('active', (b.dataset.ipitch === 'on') === s.internalPitch);
       });
     }
+    if(typeof s.cartwheelBuildOnI === 'boolean'){
+      document.querySelectorAll('.toggles button[data-cartwheelbuildI]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.cartwheelbuildI === 'on') === s.cartwheelBuildOnI);
+      });
+    }
+    if(s.cartwheelStepI != null) document.getElementById('cartwheelStepI').value = s.cartwheelStepI;
     if(s.ringColorI) ringColorI_in.value = s.ringColorI;
     if(s.ringAlphaI != null) ringAlphaI_in.value = s.ringAlphaI;
     if(s.discRadius != null) discRadius_in.value = s.discRadius;
@@ -2778,6 +2945,7 @@
     }
 
     if(needsBuildRings) buildRings();
+    scheduleLocalSave();
   }
 
   document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
@@ -2791,6 +2959,7 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    scheduleLocalSave(); // manual export is also a good moment to refresh the auto-save snapshot
   });
 
   const loadSettingsFile = document.getElementById('loadSettingsFile');
@@ -2801,7 +2970,7 @@
     const reader = new FileReader();
     reader.onload = (evt)=>{
       try{
-        applySettings(JSON.parse(evt.target.result));
+        applySettings(JSON.parse(evt.target.result)); // applySettings() already calls scheduleLocalSave() at its end
       }catch(err){
         alert('Could not read settings file: ' + err.message);
       }
@@ -2810,18 +2979,82 @@
     reader.readAsText(file);
   });
 
-  syncLabels();
-  buildRings();
+  // Global delegated listener: rather than threading scheduleLocalSave() into
+  // every individual slider/toggle/color-picker handler above, catch every
+  // control change at the panel level. Every input in this panel lives inside
+  // #panelBody, so this one pair of listeners covers all of them, including any
+  // added later without needing to remember to wire auto-save into it too.
+  document.getElementById('panelBody').addEventListener('input', scheduleLocalSave);
+  document.getElementById('panelBody').addEventListener('click', (e)=>{
+    if(e.target.closest('.toggles button') || e.target.closest('button')){
+      scheduleLocalSave();
+    }
+  });
+
+  // Auto-restore from localStorage if a prior auto-save exists — this replaces
+  // needing to manually click Load every time the page opens. Falls through to
+  // the normal syncLabels()/buildRings() defaults below if there's nothing saved
+  // yet (first run) or the read fails for any reason.
+  const restoredFromLocalStorage = tryAutoLoadFromLocalStorage();
+  if(!restoredFromLocalStorage){
+    syncLabels();
+    buildRings();
+  }
 
   // --- Auto-connect on load ---
-  // OBS password: only prefill if a real build step actually substituted
-  // WEB_SOCKET_P — if this file is opened directly (no build), the placeholder
-  // string is still literally the raw sentinel and must NOT be sent as a
-  // password. obsUrl already defaults to ws://localhost:4455 in the markup,
-  // so a bare connect attempt is meaningful even with no password.
-  if(WEB_SOCKET_P && WEB_SOCKET_P !== UNBUILT_SENTINEL){
+  // Local override for OBS URL/password: same principle as WEB_SOCKET_P/SE_JWT_TOKEN
+  // above (and why those are excluded from collectSettings/scheduleLocalSave) —
+  // real credentials should never live in a JSON file you might share or a page
+  // source you might publish. This is a SEPARATE, manually-set localStorage key
+  // (not part of the settings auto-save blob) so you can type your real password
+  // once in a normal browser tab and have it persist for this machine/profile
+  // only, without ever touching collectSettings() or a saved/shared settings file.
+  const OBS_OVERRIDE_KEY = '3d-rings-obs-override';
+  function getOBSOverride(){
+    try{
+      const raw = localStorage.getItem(OBS_OVERRIDE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(err){
+      return null;
+    }
+  }
+  function setOBSOverride(url, password){
+    try{
+      localStorage.setItem(OBS_OVERRIDE_KEY, JSON.stringify({url, password}));
+    }catch(err){
+      console.warn('Could not save OBS override:', err);
+    }
+  }
+  window.setOBSCredentials = function(url, password){
+    // Console helper: run setOBSCredentials('ws://localhost:4455', 'yourRealPassword')
+    // once in this page's DevTools console (or OBS's Interact → right-click →
+    // Inspect), then reload — persists locally from then on.
+    setOBSOverride(url, password);
+    location.reload();
+  };
+
+  const obsOverride = getOBSOverride();
+  if(obsOverride){
+    if(obsOverride.url) document.getElementById('obsUrl').value = obsOverride.url;
+    if(obsOverride.password) document.getElementById('obsPassword').value = obsOverride.password;
+  } else if(WEB_SOCKET_P && WEB_SOCKET_P !== UNBUILT_SENTINEL){
+    // OBS password: only prefill from the build-injected secret if a real build
+    // step actually substituted WEB_SOCKET_P — if this file is opened directly
+    // (no build, and no local override above either), the placeholder string is
+    // still literally the raw sentinel and must NOT be sent as a password.
     document.getElementById('obsPassword').value = WEB_SOCKET_P;
   }
+
+  // The actual root cause of "missing an authentication string": there was
+  // previously no way to get a REAL password into this field at all when
+  // opened outside the GitHub Pages build (no WEB_SOCKET_P substitution
+  // happens locally), so it stayed blank while your OBS instance still had
+  // auth enabled and rejected the connection. The override above fixes that
+  // by giving you a way to actually set a real password locally. connectToOBS()
+  // itself still fires unconditionally here on purpose — a blank password is
+  // legitimately correct for OBS instances with auth disabled, so this can't
+  // safely guess whether to skip the attempt; it can only make sure a real
+  // password is available when you have one.
   connectToOBS(); // setOBSStatus() reports Connecting… / Connected / any failure either way
 
   // Same story for the StreamElements JWT: only prefill if the deploy step
