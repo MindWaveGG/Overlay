@@ -1411,7 +1411,11 @@
     // center sphere
     const sphGeo = new THREE.SphereGeometry(sphereR*0.55, 48, 48);
     centerSphere = new THREE.Mesh(sphGeo, sphereMaterial());
-    centerSphere.castShadow = true;
+    // Same fix as the arc rings: castShadow ignores material opacity by default,
+    // so a transparent sphere would still cast a fully opaque shadow. Gate it
+    // on the same alpha threshold sphereMaterial() already uses for depthWrite.
+    const sphereAlphaForShadow = parseFloat(document.getElementById('sphereAlpha').value);
+    centerSphere.castShadow = sphereAlphaForShadow >= 0.999;
     centerSphere.receiveShadow = true;
     assembly.add(centerSphere);
 
@@ -1481,7 +1485,9 @@
 
       const torusGeo = buildRingProfileGeometry(ringR0 + i*effectiveGrowth, tube, 128, Math.PI*2, ringShape);
       const mesh = new THREE.Mesh(torusGeo, goldMaterial(i));
-      mesh.castShadow = true;
+      // Same fix as the arc rings: castShadow ignores material opacity by
+      // default, so a transparent ring would still cast a fully opaque shadow.
+      mesh.castShadow = parseFloat(document.getElementById('ringAlpha').value) >= 0.999;
       mesh.receiveShadow = true;
       // Torus defaults to lying in XY plane (normal along Z). Normal 3D-fan
       // rings rotate that into the XZ "ground" plane (mesh.rotation.x = PI/2)
@@ -1686,7 +1692,9 @@
 
       const torusGeo = buildRingProfileGeometry(r, tubeR, 96, Math.PI*2, ringShape);
       const mesh = new THREE.Mesh(torusGeo, innerMaterial(i));
-      mesh.castShadow = true;
+      // Same fix as the arc rings: castShadow ignores material opacity by
+      // default, so a transparent ring would still cast a fully opaque shadow.
+      mesh.castShadow = parseFloat(document.getElementById('ringAlphaI').value) >= 0.999;
       mesh.receiveShadow = true;
       mesh.rotation.x = Math.PI/2;
       mesh.rotation.z = carried ? carried.spinZ : 0;
@@ -2268,7 +2276,19 @@
     if(!billboard){
       mesh.rotation.x = Math.PI/2;
     }
-    mesh.castShadow = true; mesh.receiveShadow = true;
+    // Shadows are depth-only in three.js by default — a mesh's castShadow
+    // produces a FULLY OPAQUE-looking shadow no matter how transparent its
+    // actual material is, unless you set up alpha-aware shadow materials
+    // (which this file doesn't). At alpha 1.0 that's invisible as a bug,
+    // since an opaque ring casting an opaque shadow looks completely normal.
+    // Drop that same ring's alpha to, say, 0.3 and it goes nearly invisible
+    // while STILL casting the exact same full-strength shadow onto whatever's
+    // behind it — including other rings near the webcam disc — which is
+    // exactly the "mysterious transparent circle cutting rings out" bug:
+    // it's not transparency doing that, it's an invisible object's leftover
+    // opaque shadow. Tying castShadow to the same threshold depthWrite/
+    // transparent already use fixes this at the source.
+    mesh.castShadow = a >= 0.999; mesh.receiveShadow = true;
     const wrapper = new THREE.Group();
     // The "begin angle" rotation has to spin the ring about its OWN normal axis,
     // whichever axis that currently is — not always Y. In non-billboard/ground-
@@ -2330,8 +2350,8 @@
       capGeoEnd = buildRingCapGeometry(radiusWorld, tubeWorld, ringShape, sweepRad);
       const capStart = new THREE.Mesh(capGeoStart, capMat);
       const capEnd = new THREE.Mesh(capGeoEnd, capMat);
-      capStart.castShadow = true; capStart.receiveShadow = true;
-      capEnd.castShadow = true; capEnd.receiveShadow = true;
+      capStart.castShadow = a >= 0.999; capStart.receiveShadow = true;
+      capEnd.castShadow = a >= 0.999; capEnd.receiveShadow = true;
       // Same trick as the tip marker: parent directly to mesh so the caps
       // automatically inherit every transform the visible arc gets (hinge
       // tilt, pitch, spin, billboard, assembly turntable) with zero extra
