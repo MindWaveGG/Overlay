@@ -838,7 +838,22 @@
       transparent: useAlpha,
       opacity: 1,
       depthWrite: true,
-      depthTest: true, // normal depth testing — see buildWebcamDisc for why this now works correctly
+      depthTest: true, // normal depth testing — front rings correctly show over this, back rings correctly hide behind it
+      // WebGL depth writes are NOT automatically gated by a fragment's alpha —
+      // even a fully-transparent (background-removed) OBS pixel still writes a
+      // normal, solid depth value here since depthWrite is unconditionally true
+      // above. That's invisible as a bug as long as this disc and every ring
+      // stay in different render passes (opaque vs transparent), since opaque
+      // always finishes first and draw order is then guaranteed. But the moment
+      // a ring's OWN alpha drops below 1, that ring becomes transparent:true
+      // too and moves into the SAME transparent queue as this disc — now sorted
+      // by distance, not guaranteed order. If the disc happens to render before
+      // that ring, its "invisible" cutout pixels still silently block the ring
+      // via the depth test, which reads exactly as "a circle is masking the
+      // rings behind the webcam." alphaTest discards near-zero-alpha fragments
+      // outright — no depth write, no color write — so a truly cut-out pixel
+      // isn't there to collide with anything, regardless of render order.
+      alphaTest: useAlpha ? 0.05 : 0,
       toneMapped: false
     });
   }
@@ -1286,13 +1301,15 @@
   // webcam fill is on and a video texture is ready — otherwise it's simply not
   // built, which is what makes it "transparent" when off (nothing there to draw,
   // rather than a mesh with alpha applied). It's also NOT positioned at dead
-  // center like flatCircle: a flat plane through the exact middle of a solid,
-  // opaque sphere is geometrically behind the sphere's near surface from every
-  // viewing angle, so it gets correctly depth-tested away — that was the actual
-  // "not showing at all" bug. Every frame in animate(), this mesh gets repositioned
-  // just outside the sphere's visible surface, straight toward the camera, so
-  // normal depth testing keeps it visible without needing to disable depth test
-  // (which would have broken correct occlusion against the rings instead).
+  // center like flatCircle. Position is pinned to the exact same origin the
+  // internal rings are built around (0,0,0) — see animate()'s
+  // flatCircleWebcam.position.set(0,0,0) — which is exactly what caused the
+  // disc to disappear entirely back when depth testing was still on (an opaque
+  // sphere sitting between dead-center and the camera correctly occludes
+  // anything behind it). Now that webcamMaterial() has depth test/write off
+  // and this mesh renders first (see renderOrder below), dead-center position
+  // no longer matters for occlusion at all — it can't be hidden behind
+  // anything, and it can't hide anything either.
   let flatCircleWebcam = null;
   function clearWebcamDisc(){
     if(flatCircleWebcam){ scene.remove(flatCircleWebcam); flatCircleWebcam = null; }
@@ -2406,9 +2423,24 @@
     const worldPerPx = 1/pxPerUnit;
     const count = layout.outward.length;
 
+    // Same "filled disc behind the webcam" guard buildInternalDataRings uses —
+    // see the comment there for why this exists. It was previously applied
+    // ONLY to internal rings, on the assumption external rings always start
+    // outside the disc radius. That assumption doesn't hold once cascading/
+    // spillover shrinks an outward ring's radius down near the disc's own
+    // size, so external rings need the identical check.
+    const camDiscRadiusWorldExt = flatCircleWebcam
+      ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
+      : 0;
+    const hiddenMarginWorldExt = camDiscRadiusWorldExt * 0.12;
+    function hiddenBehindWebcamExt(radiusWorld, tubeWorld){
+      return camDiscRadiusWorldExt > 0 && (radiusWorld + tubeWorld) <= (camDiscRadiusWorldExt + hiddenMarginWorldExt);
+    }
+
     layout.outward.forEach((item, i)=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
+      if(hiddenBehindWebcamExt(radiusWorld, tubeWorld)) return; // fully behind the disc — don't build it
       const { axis, beta } = hingeFor(i, count, baseTiltDeg);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i, billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
@@ -2463,11 +2495,19 @@
     // it anyway — so skip building a mesh for it rather than let it read as
     // a mystery opaque circle. Only applies while the webcam disc actually
     // exists; internal rings behave exactly as before when webcam fill is off.
+    // Margin added below the "zero clearance" version of this check: a ring
+    // whose outer edge clears the disc radius by only a hair is still, for
+    // on-screen purposes, mostly a filled disc — the visible band between its
+    // outer edge and the disc's edge is too thin to read as a ring, so at low
+    // alpha it looks exactly like the "mysterious transparent circle" bug even
+    // though technically it clears. Requiring a real clearance (12% of the
+    // disc radius) before treating a ring as "actually visible" fixes that.
     const camDiscRadiusWorld = flatCircleWebcam
       ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
       : 0;
+    const hiddenMarginWorld = camDiscRadiusWorld * 0.12;
     function hiddenBehindWebcam(radiusWorld, tubeWorld){
-      return camDiscRadiusWorld > 0 && (radiusWorld + tubeWorld) <= camDiscRadiusWorld;
+      return camDiscRadiusWorld > 0 && (radiusWorld + tubeWorld) <= (camDiscRadiusWorld + hiddenMarginWorld);
     }
 
     function restoreState(rr, item){
