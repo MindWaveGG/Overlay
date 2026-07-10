@@ -3605,6 +3605,28 @@
     document.getElementById('obsPassword').value = WEB_SOCKET_P;
   }
 
+  // OBS's own WebSocket server can take a few seconds to actually start
+  // listening after OBS itself launches — if this browser source loads
+  // before that happens (common when OBS opens fresh, e.g. on machine
+  // startup or right after adding the source), the very first connectToOBS()
+  // call fails even though clicking "Connect to OBS" by hand a moment later
+  // works fine. This retries a few times on a delay to cover that startup
+  // race, so it isn't a spam-loop, it stops the moment obsConnected is true
+  // (checked via a live callback rather than only right after the call, since
+  // connectToOBS() itself can be slow to resolve).
+  function connectToOBSWithRetry(attempt, maxAttempts, delayMs){
+    attempt = attempt || 1;
+    maxAttempts = maxAttempts || 8;
+    delayMs = delayMs || 3000;
+    setTimeout(async ()=>{
+      if(obsConnected) return; // a manual Connect click or an earlier retry already succeeded
+      await connectToOBS();
+      if(!obsConnected && attempt < maxAttempts){
+        connectToOBSWithRetry(attempt + 1, maxAttempts, delayMs);
+      }
+    }, delayMs);
+  }
+
   // The actual root cause of "missing an authentication string": there was
   // previously no way to get a REAL password into this field at all when
   // opened outside the GitHub Pages build (no WEB_SOCKET_P substitution
@@ -3615,7 +3637,7 @@
   // legitimately correct for OBS instances with auth disabled, so this can't
   // safely guess whether to skip the attempt; it can only make sure a real
   // password is available when you have one.
-  connectToOBS(); // setOBSStatus() reports Connecting… / Connected / any failure either way
+  connectToOBSWithRetry(); // setOBSStatus() reports Connecting… / Connected / any failure either way, per attempt
 
   // Same story for the StreamElements JWT: only prefill if the deploy step
   // actually substituted SE_JWT_TOKEN, never send the literal placeholder.
