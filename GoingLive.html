@@ -2423,23 +2423,9 @@
     const worldPerPx = 1/pxPerUnit;
     const count = layout.outward.length;
 
-    // Same "filled disc behind the webcam" guard buildInternalDataRings uses —
-    // see the comment there for why this exists. It was previously applied
-    // ONLY to internal rings, on the assumption external rings always start
-    // outside the disc radius. That assumption doesn't hold once cascading/
-    // spillover shrinks an outward ring's radius down near the disc's own
-    // size, so external rings need the identical check.
-    const camDiscRadiusWorldExt = flatCircleWebcam
-      ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
-      : 0;
-    function hiddenBehindWebcamExt(radiusWorld, tubeWorld){
-      return camDiscRadiusWorldExt > 0 && (radiusWorld + tubeWorld) <= camDiscRadiusWorldExt;
-    }
-
     layout.outward.forEach((item, i)=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
-      if(hiddenBehindWebcamExt(radiusWorld, tubeWorld)) return; // fully behind the disc — don't build it
       const { axis, beta } = hingeFor(i, count, baseTiltDeg);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i, billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
@@ -2482,33 +2468,20 @@
     const count = layout.inward.length + layout.goingLiveTimers.length;
     let i = 0;
 
-    // Fix for "solid circle behind the webcam": as GoingLive/subathon rings
-    // cascade inward toward true center, the innermost ones can end up with
-    // a tube radius comparable to (or larger than) their own centerline
-    // radius — geometrically still a torus, but visually indistinguishable
-    // from a filled disc. Since the webcam disc is ALSO centered at world
-    // origin, that filled-looking ring sits directly behind it and becomes
-    // visible the moment its pulse-color alpha is raised above ~0. Any ring
-    // whose outer edge (radiusWorld + tubeWorld) doesn't clear the webcam
-    // disc's own radius is, for on-screen purposes, entirely hidden behind
-    // it anyway — so skip building a mesh for it rather than let it read as
-    // a mystery opaque circle. Only applies while the webcam disc actually
-    // exists; internal rings behave exactly as before when webcam fill is off.
-    // A clearance margin was tried here at one point (require a ring's outer
-    // edge to clear the disc radius by ~12%, not just barely clear it), on the
-    // theory that a ring which only just clears still reads as a filled disc.
-    // Reverted — GoingLive/subathon timer rings are DESIGNED to cascade all
-    // the way in toward true center as their countdown progresses (the "fill
-    // to center" effect), so they're legitimately near/at the disc's radius
-    // by design, not by bug. The margin culled them outright instead of just
-    // the genuinely-fully-hidden ones. Back to zero-clearance: only skip a
-    // ring whose outer edge doesn't clear the disc radius at all.
-    const camDiscRadiusWorld = flatCircleWebcam
-      ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
-      : 0;
-    function hiddenBehindWebcam(radiusWorld, tubeWorld){
-      return camDiscRadiusWorld > 0 && (radiusWorld + tubeWorld) <= camDiscRadiusWorld;
-    }
+    // A "skip building rings that are fully behind the webcam disc" guard used
+    // to live here. Removed: it compared only a ring's flat, untilted radius
+    // against the disc radius, with no awareness of hinge tilt at all — but a
+    // tilted torus's actual on-screen silhouette can extend well past its flat
+    // radius, so the check was culling rings that were genuinely still partly
+    // visible once tilt was applied. That's what was eating the inner rings in
+    // the non-billboard/3D-spin pose. It was originally added to work around a
+    // "hidden" ring's transparent material still showing through as a solid
+    // circle — but that was actually caused by the webcam disc's material
+    // writing depth on fully-transparent (background-removed) OBS pixels
+    // regardless of alpha, which is now fixed directly in webcamMaterial() via
+    // alphaTest. Ordinary per-pixel depth testing already hides whatever part
+    // of a ring is truly behind the disc, correctly, without needing to guess
+    // up front which whole rings to skip.
 
     function restoreState(rr, item){
       const prev = savedState.get(ringKey(item));
@@ -2529,7 +2502,6 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       i++;
-      if(hiddenBehindWebcam(radiusWorld, tubeWorld)) return; // fully behind the disc — don't build it
       const { axis, beta } = hingeFor(i-1, count, baseTiltDegI);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*(i-1), billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i-1;
@@ -2544,7 +2516,6 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       i++;
-      if(hiddenBehindWebcam(radiusWorld, tubeWorld)) return; // fully behind the disc — don't build it
       const { axis, beta } = hingeFor(i-1, count, baseTiltDegI);
       const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*(i-1), billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i-1;
