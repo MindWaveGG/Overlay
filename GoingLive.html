@@ -371,6 +371,25 @@
     </div>
   </div>
 
+  <div class="row">
+    <label>Webcam aspect ratio (fixes stretching)</label>
+    <select id="camAspectMode" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+      <option value="auto" selected>Auto-detect from source</option>
+      <option value="16:9">Force 16:9</option>
+      <option value="4:3">Force 4:3</option>
+      <option value="1:1">Force 1:1 (square)</option>
+      <option value="custom">Custom…</option>
+    </select>
+  </div>
+  <div class="row" id="camAspectCustomRow" style="display:none;">
+    <label>Custom aspect (width : height) <span class="val" id="vCamAspectCustom">16 : 9</span></label>
+    <div class="color-row">
+      <input type="number" id="camAspectCustomW" min="1" step="1" value="16" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:13px;">
+      <input type="number" id="camAspectCustomH" min="1" step="1" value="9" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:13px;">
+    </div>
+  </div>
+  <p class="sub" style="margin:2px 0 0; font-size:11px;">If your feed looks stretched, it usually means the source's real proportions don't match what was auto-detected (very common when the OBS source you picked is itself a Scene, or has already been resized inside OBS). Overriding the aspect here forces the correct crop regardless of what the source reports.</p>
+
   <hr>
   <p class="sub" style="margin-bottom:12px;">OBS source capture — instead of the raw OS camera, pulls a live screenshot feed of a named OBS source via obs-websocket. Shows exactly what OBS is compositing (chroma key, color correction, crop, etc. all included), at the cost of choppier ~8-10fps. Requires OBS 28+ with <b>Tools → WebSocket Server Settings → Enable WebSocket server</b> turned on.</p>
 
@@ -909,6 +928,29 @@
   // texture is a known spot where some WebGL contexts silently fail to display
   // the texture at all. The math below never actually samples outside [0,1], so
   // clamp mode works fine here and sidesteps that whole class of bug.
+  // Manual override for the source's aspect ratio. 'auto' trusts whatever
+  // pixel dimensions the source reports (videoWidth/videoHeight for the raw
+  // webcam, or the screenshot's own width/height for OBS capture) — this is
+  // correct UNLESS the source itself has already been stretched/resized
+  // before we ever see it (e.g. the chosen OBS "source" is actually a Scene
+  // or a scene item with a non-native transform applied, so the screenshot
+  // we get back is already distorted pixels — no amount of correct crop math
+  // on our end can recover the true proportions from an already-baked-in
+  // stretch). Forcing a known-good ratio here (16:9, 4:3, 1:1, or a custom
+  // W:H) bypasses the unreliable reported dimensions entirely and always
+  // produces a correctly proportioned crop.
+  function getCamAspectOverride(){
+    const mode = document.getElementById('camAspectMode').value;
+    if(mode === 'auto') return null;
+    if(mode === 'custom'){
+      const w = parseFloat(document.getElementById('camAspectCustomW').value) || 16;
+      const h = parseFloat(document.getElementById('camAspectCustomH').value) || 9;
+      return w / h;
+    }
+    const [w, h] = mode.split(':').map(Number);
+    return w / h;
+  }
+
   function updateMediaTransform(texture, srcWidth, srcHeight){
     if(!texture) return;
     texture.wrapS = THREE.ClampToEdgeWrapping;
@@ -921,7 +963,13 @@
     // object-fit:cover) so the image fills the square without distortion,
     // just cropping the excess on whichever axis is longer.
     let rx = 1, ry = 1, ox = 0, oy = 0;
-    if(srcWidth && srcHeight){
+    const override = getCamAspectOverride();
+    if(override){
+      // Forced ratio wins outright — ignore whatever the source reported.
+      const srcAspect = override;
+      if(srcAspect > 1){ rx = 1/srcAspect; ry = 1; ox = (1-rx)/2; oy = 0; }
+      else { rx = 1; ry = srcAspect; ox = 0; oy = (1-ry)/2; }
+    } else if(srcWidth && srcHeight){
       const srcAspect = srcWidth / srcHeight;
       if(srcAspect > 1){
         rx = 1 / srcAspect; ry = 1;
@@ -2376,6 +2424,25 @@
     const count = layout.inward.length + layout.goingLiveTimers.length;
     let i = 0;
 
+    // Fix for "solid circle behind the webcam": as GoingLive/subathon rings
+    // cascade inward toward true center, the innermost ones can end up with
+    // a tube radius comparable to (or larger than) their own centerline
+    // radius — geometrically still a torus, but visually indistinguishable
+    // from a filled disc. Since the webcam disc is ALSO centered at world
+    // origin, that filled-looking ring sits directly behind it and becomes
+    // visible the moment its pulse-color alpha is raised above ~0. Any ring
+    // whose outer edge (radiusWorld + tubeWorld) doesn't clear the webcam
+    // disc's own radius is, for on-screen purposes, entirely hidden behind
+    // it anyway — so skip building a mesh for it rather than let it read as
+    // a mystery opaque circle. Only applies while the webcam disc actually
+    // exists; internal rings behave exactly as before when webcam fill is off.
+    const camDiscRadiusWorld = flatCircleWebcam
+      ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
+      : 0;
+    function hiddenBehindWebcam(radiusWorld, tubeWorld){
+      return camDiscRadiusWorld > 0 && (radiusWorld + tubeWorld) <= camDiscRadiusWorld;
+    }
+
     function restoreState(rr, item){
       const prev = savedState.get(ringKey(item));
       if(prev){
@@ -2394,29 +2461,31 @@
     layout.inward.forEach(item=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i, billboard, item.alpha);
-      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
+      i++;
+      if(hiddenBehindWebcam(radiusWorld, tubeWorld)) return; // fully behind the disc — don't build it
+      const { axis, beta } = hingeFor(i-1, count, baseTiltDegI);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*(i-1), billboard, item.alpha);
+      rr.item = item; rr.lastPct = item.percentage; rr.index = i-1;
       restoreState(rr, item);
       dataRingsInternal.push(rr);
       innerRingData.push(rr);
       if(item.statLabel && !item.noLabel){
         labelTargets.push({ key: ringKey(item), text: item.statLabel, tip: rr.tip, color: item.color });
       }
-      i++;
     });
     layout.goingLiveTimers.forEach(item=>{
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
-      const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i, billboard, item.alpha);
-      rr.item = item; rr.lastPct = item.percentage; rr.index = i;
+      i++;
+      if(hiddenBehindWebcam(radiusWorld, tubeWorld)) return; // fully behind the disc — don't build it
+      const { axis, beta } = hingeFor(i-1, count, baseTiltDegI);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*(i-1), billboard, item.alpha);
+      rr.item = item; rr.lastPct = item.percentage; rr.index = i-1;
       restoreState(rr, item);
       dataRingsInternal.push(rr);
       innerRingData.push(rr);
       // goingLiveTimers are deliberately unlabeled (matches 2D's noLabel:true for
       // subathon timers), so no labelTargets entry here.
-      i++;
     });
   }
 
@@ -3033,6 +3102,27 @@
   });
 
   document.getElementById('enableCamBtn').addEventListener('click', requestCameraAccess);
+
+  const camAspectMode_in = document.getElementById('camAspectMode');
+  const camAspectCustomRow = document.getElementById('camAspectCustomRow');
+  const camAspectCustomW_in = document.getElementById('camAspectCustomW');
+  const camAspectCustomH_in = document.getElementById('camAspectCustomH');
+  function syncCamAspectUI(){
+    camAspectCustomRow.style.display = (camAspectMode_in.value === 'custom') ? '' : 'none';
+    document.getElementById('vCamAspectCustom').textContent =
+      camAspectCustomW_in.value + ' : ' + camAspectCustomH_in.value;
+  }
+  camAspectMode_in.addEventListener('change', ()=>{
+    syncCamAspectUI();
+    applyCameraMirror(); // re-applies transform on whichever source is active right now
+  });
+  [camAspectCustomW_in, camAspectCustomH_in].forEach(el=>{
+    el.addEventListener('input', ()=>{
+      syncCamAspectUI();
+      if(camAspectMode_in.value === 'custom') applyCameraMirror();
+    });
+  });
+  syncCamAspectUI();
 
   document.getElementById('camDevice').addEventListener('change', (e)=>{
     startCamera(e.target.value);
