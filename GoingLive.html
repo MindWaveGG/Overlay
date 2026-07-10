@@ -708,10 +708,12 @@
     lastX = e.clientX; lastY = e.clientY;
     camTheta -= dx * 0.005;
     camPhi = Math.min(Math.max(camPhi - dy*0.005, 0.15), Math.PI-0.15);
+    scheduleLocalSave();
   });
   renderer.domElement.addEventListener('wheel', e=>{
     camDist = Math.min(Math.max(camDist + e.deltaY*0.003, 2.5), 16);
     e.preventDefault();
+    scheduleLocalSave();
   }, {passive:false});
   function updateCamera(){
     camera.position.set(
@@ -3250,7 +3252,10 @@
       captureMode: captureMode,
       camDeviceId: document.getElementById('camDevice').value,
       liveDataOn: liveDataOn,
-      seRelayOn: seRelayOn
+      seRelayOn: seRelayOn,
+      camDist: camDist,
+      camTheta: camTheta,
+      camPhi: camPhi
       // Note: obsPassword and the SE JWT token are deliberately NOT saved here —
       // they're credentials, and they already come from the WEB_SOCKET_P /
       // SE_JWT_TOKEN GitHub secrets at deploy time (see the top of this script).
@@ -3492,6 +3497,12 @@
       seRelayOn = s.seRelayOn;
       if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
     }
+    // Camera zoom/orbit: updateCamera() runs every animate() frame regardless,
+    // so just restoring these three numbers is enough — no rebuild needed,
+    // the very next frame picks them up and re-positions the camera.
+    if(s.camDist != null) camDist = parseFloat(s.camDist);
+    if(s.camTheta != null) camTheta = parseFloat(s.camTheta);
+    if(s.camPhi != null) camPhi = parseFloat(s.camPhi);
 
     if(needsBuildRings) buildRings();
     scheduleLocalSave();
