@@ -1943,12 +1943,19 @@
     const colorHex = rgbToHex(lerpColor(LD_RED(), LD_BLUE(), t));
     const hypeHex  = rgbToHex(lerpColor(LD_RED(), LD_GOLD(), t));
     const goliveHex = rgbToHex(lerpColor(LD_BLACK(), LD_RED(), t));
-    // Alpha lerps the same endpoints its matching color does, so a ring's
-    // transparency pulses in lockstep with its color instead of sitting fixed
-    // while the color underneath it keeps shifting.
-    const mainAlpha  = LD_WHITE_ALPHA() + (LD_CHARCOAL_ALPHA() - LD_WHITE_ALPHA()) * t;
-    const hypeAlpha   = LD_WHITE_ALPHA() + (LD_GOLD_ALPHA() - LD_WHITE_ALPHA()) * t;
-    const goliveAlpha = LD_CHARCOAL_ALPHA() + (LD_WHITE_ALPHA() - LD_CHARCOAL_ALPHA()) * t;
+    // Alpha used to lerp the same endpoints its matching color does, so a
+    // ring's opacity kept riding the same sine wave as its color (t). That
+    // meant dragging one alpha slider below 1.0 only made the ring transparent
+    // for HALF the pulse cycle — the other half, t swung back toward the
+    // OTHER endpoint's alpha (often still 1.0 by default), so the ring kept
+    // reverting to fully opaque and the slider looked like it wasn't doing
+    // anything. Fix: opacity no longer rides the color pulse at all — it's
+    // just the lower of the two paired sliders, so lowering EITHER one always
+    // makes the ring more transparent and keeps it that way, while the color
+    // itself is still free to keep pulsing independently.
+    const mainAlpha   = Math.min(LD_WHITE_ALPHA(), LD_CHARCOAL_ALPHA());
+    const hypeAlpha    = Math.min(LD_WHITE_ALPHA(), LD_GOLD_ALPHA());
+    const goliveAlpha  = Math.min(LD_CHARCOAL_ALPHA(), LD_WHITE_ALPHA());
 
     let data = [
       { label:'Followers', percentage: followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, alpha:mainAlpha, allowOut:true, isGoal:true, statLabel:`Followers: ${followerCurrent}/${followerGoal}` },
