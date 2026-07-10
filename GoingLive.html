@@ -200,6 +200,31 @@
   </div>
 
   <div class="row">
+    <label>Ring shape (external + internal, shared)</label>
+    <select id="ringShape" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
+      <option value="round" selected>Round (cylindrical / torus)</option>
+      <option value="cubic">Cubic (square, flat face outward)</option>
+      <option value="diamond">Diamond (square rotated 45°, point outward)</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <label>End caps (seals the two open ends of each arc — round/cubic/diamond, external + internal)</label>
+    <div class="toggles">
+      <button data-endcaps="on">On</button>
+      <button data-endcaps="off" class="active">Off</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Shading</label>
+    <div class="toggles">
+      <button data-shading="flat">Flat matte</button>
+      <button data-shading="metallic" class="active">Metallic</button>
+    </div>
+  </div>
+
+  <div class="row">
     <label>Ring offset — hinge stagger <span class="val" id="vOffset">3px</span></label>
     <input type="range" id="offset" min="0" max="20" step="1" value="3">
   </div>
@@ -277,7 +302,7 @@
     <label>Sphere color <span class="val" id="vSphereAlpha">alpha 1.00</span></label>
     <div class="color-row">
       <input type="color" id="sphereColor" value="#dba85a">
-      <input type="range" id="sphereAlpha" min="0" max="1" step="0.01" value="1">
+      <input type="range" id="sphereAlpha" min="0" max="1" step="0.01" value="0.35">
     </div>
   </div>
 
@@ -294,6 +319,14 @@
     <div class="color-row">
       <input type="color" id="discColor" value="#4fa3d1">
       <input type="range" id="discAlpha" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Flat circle</label>
+    <div class="toggles">
+      <button data-flatcircle="on">On</button>
+      <button data-flatcircle="off" class="active">Off</button>
     </div>
   </div>
 
@@ -483,15 +516,27 @@
     <label>Pulse color — white end</label>
     <input type="color" id="pulseWhite" value="#ffffff">
   </div>
+  <div class="row">
+    <label>Pulse color — white end alpha <span class="val" id="vPulseWhiteAlpha">alpha 1.00</span></label>
+    <input type="range" id="pulseWhiteAlpha" min="0" max="1" step="0.01" value="1">
+  </div>
 
   <div class="row">
     <label>Pulse color — charcoal end (goal / GoingLive fill)</label>
     <input type="color" id="pulseCharcoal" value="#36454f">
   </div>
+  <div class="row">
+    <label>Pulse color — charcoal end alpha <span class="val" id="vPulseCharcoalAlpha">alpha 1.00</span></label>
+    <input type="range" id="pulseCharcoalAlpha" min="0" max="1" step="0.01" value="1">
+  </div>
 
   <div class="row">
     <label>Pulse color — gold end (hype train)</label>
     <input type="color" id="pulseGold" value="#ffaf37">
+  </div>
+  <div class="row">
+    <label>Pulse color — gold end alpha <span class="val" id="vPulseGoldAlpha">alpha 1.00</span></label>
+    <input type="range" id="pulseGoldAlpha" min="0" max="1" step="0.01" value="1">
   </div>
 
   <div class="row">
@@ -676,10 +721,11 @@
     const hsl = {h:0,s:0,l:0};
     base.getHSL(hsl);
     const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
+    const shaded = applyShading(0.9, 0.24 + (index % 4)*0.02);
     return new THREE.MeshStandardMaterial({
       color: color,
-      metalness: 0.9,
-      roughness: 0.24 + (index % 4)*0.02,
+      metalness: shaded.metalness,
+      roughness: shaded.roughness,
       emissive: 0x2a1a05,
       emissiveIntensity: 0.12,
       transparent: ringAlpha < 0.999,
@@ -690,10 +736,11 @@
   function sphereMaterial(){
     const sphereColorHex = document.getElementById('sphereColor').value;
     const sphereAlpha = parseFloat(document.getElementById('sphereAlpha').value);
+    const shaded = applyShading(0.85, 0.35);
     return new THREE.MeshStandardMaterial({
       color: sphereColorHex,
-      metalness: 0.85,
-      roughness: 0.35,
+      metalness: shaded.metalness,
+      roughness: shaded.roughness,
       transparent: sphereAlpha < 0.999,
       opacity: sphereAlpha,
       depthWrite: sphereAlpha >= 0.999
@@ -709,10 +756,11 @@
     const hsl = {h:0,s:0,l:0};
     base.getHSL(hsl);
     const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
+    const shaded = applyShading(0.7, 0.3 + (index % 4)*0.02);
     return new THREE.MeshStandardMaterial({
       color: color,
-      metalness: 0.7,
-      roughness: 0.3 + (index % 4)*0.02,
+      metalness: shaded.metalness,
+      roughness: shaded.roughness,
       emissive: 0x0a2a28,
       emissiveIntensity: 0.15,
       transparent: alpha < 0.999,
@@ -1222,11 +1270,12 @@
   // This was the original guessed approximation of "cascading" for both
   // external and internal cartwheel-build modes, before the real 2D layout
   // math was found and ported in. External now uses a flat/concentric pose
-  // (betaDeg = 0) and internal now flattens/billboards whatever the real
-  // live computeGoingLiveLayout cascade is (Frozen no longer swaps in fake
-  // data from generateSimulatedTimers() — see buildInnerRings). Left here
-  // unused rather than deleted in case an old saved settings file references
-  // cartwheelStep/cartwheelStepI in a way that expects this to still exist.
+  // (betaDeg = 0) and internal now flattens/billboards whatever cascade is
+  // active — the real live computeGoingLiveLayout cascade when Live Data is
+  // on, or a synthesized demo cascade from generateSimulatedTimers() when
+  // it's off (see buildInnerRings). Left here unused rather than deleted in
+  // case an old saved settings file references cartwheelStep/cartwheelStepI
+  // in a way that expects this to still exist.
   function cartwheelAngleDeg(i, stepDeg){
     const cascade = 180 - stepDeg;
     const k = Math.floor(i / 2);
@@ -1234,6 +1283,20 @@
   }
 
   function buildRings(){
+    // Snapshot the outgoing MANUAL ring set's spin/pitch state before
+    // clearAssembly() wipes ringData/innerRingData, keyed by ring index (a
+    // stable identity here since manual N/Ni rings never reorder between
+    // rebuilds, unlike the live-data path's percentage-sorted items). Without
+    // this, any full rebuild — most visibly the every-200ms simulated-cascade
+    // ticker that runs while Live Data is off (see startSimCascadeTicker) —
+    // reset every manual ring's pitch/spin straight back to rest, and animate()
+    // would only get to re-accumulate a tiny dt's worth before the NEXT
+    // rebuild reset it again: the result reads as a "wiggle" near rest instead
+    // of a continuous rotation. Same fix buildExternalDataRingsFromLayout/
+    // buildInternalDataRings already apply to the live-data path via ringKey.
+    const savedExternalState = ringData.map(r => ({ index: r.index, spinZ: r.mesh.rotation.z, pitchAngle: r.pitchAngle }));
+    const savedInternalState = innerRingData.map(r => ({ index: r.index, spinZ: r.mesh.rotation.z, pitchAngle: r.pitchAngle }));
+
     clearAssembly();
 
     const N = parseInt(document.getElementById('N').value);
@@ -1337,6 +1400,11 @@
       const alpha = THREE.MathUtils.degToRad(alphaDeg);
       const beta  = THREE.MathUtils.degToRad(betaDeg);
 
+      // Carry forward this ring's spin/pitch progress from before the rebuild
+      // (see savedExternalState above) instead of starting back at rest.
+      const carried = savedExternalState.find(s => s.index === i);
+      const pitchAngle = carried ? carried.pitchAngle : 0;
+
       // Each ring gets its own FIXED hinge axis lying in the horizontal plane, pointed at
       // its azimuth slot. Rotating around this single unique axis (instead of composing
       // two Euler rotations around shared world axes) has no gimbal-lock singularity —
@@ -1350,7 +1418,7 @@
       pivot.position.copy(axis).multiplyScalar(offsetWorld * i);
       assembly.add(pivot);
 
-      const torusGeo = new THREE.TorusGeometry(ringR0 + i*effectiveGrowth, tube, 28, 128);
+      const torusGeo = buildRingProfileGeometry(ringR0 + i*effectiveGrowth, tube, 128, Math.PI*2, ringShape);
       const mesh = new THREE.Mesh(torusGeo, goldMaterial(i));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
@@ -1365,19 +1433,25 @@
       if(!cartwheelBuildOn){
         mesh.rotation.x = Math.PI/2;
       }
+      // Restore spin phase immediately (rather than waiting for next frame's
+      // tiny dt increment) so a rebuild never visibly snaps the ring back to
+      // zero rotation for even one frame.
+      mesh.rotation.z = carried ? carried.spinZ : 0;
       pivot.add(mesh);
 
-      // Apply the static tilt immediately as a single axis-angle rotation about this
-      // ring's own fixed axis — pitch animation will update this quaternion each frame.
-      // In cartwheel-build mode, beta is always 0 here anyway, and animate()
-      // overwrites this pivot's quaternion with the camera's every frame instead.
-      pivot.quaternion.setFromAxisAngle(axis, beta);
+      // Apply the static tilt PLUS any carried pitch progress immediately as a
+      // single axis-angle rotation about this ring's own fixed axis — pitch
+      // animation will keep updating this quaternion each frame from here.
+      // In cartwheel-build mode, beta is always 0 and animate() overwrites
+      // this pivot's quaternion with the camera's every frame anyway, so the
+      // carried pitch is harmless there (it's discarded next frame regardless).
+      pivot.quaternion.setFromAxisAngle(axis, beta + pitchAngle);
 
       ringData.push({
         mesh, pivot, axis: axis.clone(),
         index: i,
         betaBase: beta,      // static hinge tilt from layout math — pitch animates on top of this
-        pitchAngle: 0,
+        pitchAngle,
         spinAngle: 0,
         billboard: cartwheelBuildOn
       });
@@ -1391,7 +1465,7 @@
     // this same constant regardless of the current px value.
     const pxPerUnit = PX_PER_WORLD_UNIT / 0.55;
 
-    const innerLines = buildInnerRings(visibleSphereR, pxPerUnit, liveLayoutForThisBuild);
+    const innerLines = buildInnerRings(visibleSphereR, pxPerUnit, liveLayoutForThisBuild, savedInternalState);
     buildFlatCircle(PX_PER_WORLD_UNIT);
 
     lastLiveLayout = liveLayoutForThisBuild;
@@ -1402,6 +1476,16 @@
 
   function buildFlatCircle(PX_PER_WORLD_UNIT){
     clearFlatCircle();
+    // Previously unconditional — this decorative disc had no real off switch,
+    // only an alpha slider defaulting to 1.0 (fully opaque). Since it's a lit
+    // MeshStandardMaterial sitting dead-center facing the camera at up to
+    // 670px radius, a strong highlight on it can read as a plain white circle
+    // — and neither "Webcam fill: Off" nor "OBS Background: Transparent"
+    // touched it at all (those only ever affected the SEPARATE webcam-feed
+    // disc/compositing), so turning those off did nothing to remove it. This
+    // toggle is the actual off switch.
+    const flatCircleOn = document.querySelector('.toggles button[data-flatcircle].active').dataset.flatcircle === 'on';
+    if(!flatCircleOn) return; // stays absent — same "not built at all" pattern buildWebcamDisc() uses
     const discPx = parseFloat(document.getElementById('discRadius').value) || 670;
     // Same 0.55 visual-scale factor the sphere mesh uses, so a disc radius slider
     // value equal to the sphere's radius slider value produces a genuinely matching
@@ -1418,7 +1502,7 @@
     scene.add(flatCircle);
   }
 
-  function buildInnerRings(visibleSphereR, pxPerUnit, liveLayout){
+  function buildInnerRings(visibleSphereR, pxPerUnit, liveLayout, savedInternalState){
     const internalOn = document.querySelector('.toggles button[data-internal].active').dataset.internal === 'on';
     if(!internalOn){
       disposeDataRingSet(dataRingsInternal);
@@ -1433,19 +1517,17 @@
     const offsetWorldI = offsetPxI * OFFSET_SCALE;
     const baseTiltDegI = (360/Ni - stepI);
 
-    // Frozen (Cartwheel Build, internal) is now purely a "flatten + billboard"
-    // rendering flag, not a separate data source. It used to unconditionally
-    // swap in a fake, perpetually-looping simulated cascade the moment it was
-    // switched on — which meant turning Frozen on while real Live Data/GoingLive
-    // was also on silently threw away the real countdown/cascade and showed
-    // made-up timers instead, and turning Frozen on with no live connection at
-    // all fabricated rings out of nothing. Neither matches the 2D reference:
-    // there, the GoingLive cascade is always driven by the real timer feed: no
-    // feed with GoingLive-named timers, no rings. Frozen here now just controls
-    // HOW the real data is rendered (flat/billboarded vs tilted fan) — same
-    // computeGoingLiveLayout math, same live liveLayout passed in, still
-    // recomputed and re-passed in on every rebuild so it keeps counting down
-    // and re-filling exactly like the 2D version.
+    // Frozen (Cartwheel Build, internal) is a "flatten + billboard" rendering
+    // flag layered on top of whichever data source is active — it no longer
+    // unconditionally swaps in a fake, perpetually-looping simulated cascade
+    // the instant it's switched on, which used to mean turning Frozen on
+    // while real Live Data was ALSO on silently threw away the real
+    // countdown/cascade in favor of made-up timers. That case is still fixed:
+    // below, `if(liveDataOn)` always renders the real feed regardless of
+    // Frozen. Only the genuinely-no-data case (Live Data off) falls through
+    // to a synthesized demo cascade (see the cartwheelBuildOnI branch further
+    // down) — matching the 2D reference's "no feed, no rings" rule for the
+    // real thing, while still giving Frozen something to preview live.
     const cartwheelBuildOnI = document.querySelector('.toggles button[data-cartwheelbuildi].active').dataset.cartwheelbuildi === 'on';
 
     if(liveDataOn){
@@ -1463,10 +1545,29 @@
 
     if(cartwheelBuildOnI){
       // Frozen with no live connection: there's no real GoingLive/spillover
-      // data to flatten and billboard, so — matching the 2D reference's
-      // "no GoingLive-named timers, no rings" behavior — show nothing rather
-      // than fabricating a fake cascade. Turn Live Data on to see it populate.
-      return [``, `Internal rings — Live Data is off, nothing to show (Frozen has no real data to flatten)`];
+      // feed to flatten and billboard, so synthesize a small demo cascade
+      // using generateSimulatedTimers() fed through the SAME computeGoingLiveLayout
+      // math the real feed uses (temporarily swapping the global `timers` array,
+      // then restoring it immediately — this is synchronous, nothing else reads
+      // `timers` in between). That keeps every ring/color/arc rule identical to
+      // the real thing, just counting down fake timers instead of real ones, so
+      // Frozen can be previewed without a live connection. startSimCascadeTicker()
+      // re-runs this via buildRings() on a 200ms interval so the countdown
+      // genuinely advances rather than holding one frozen pose (see
+      // savedInternalState above for why that no longer also disturbs the
+      // external rings).
+      const cameraRadiusPx = parseFloat(document.getElementById('pxRadius').value) || 670;
+      const outerSpacePx = parseFloat(document.getElementById('outwardSpacePx').value) || 400;
+      const realTimers = timers;
+      timers = generateSimulatedTimers(3, 30); // 3 cascading demo timers on a 30s loop
+      const simLayout = computeGoingLiveLayout(cameraRadiusPx, outerSpacePx);
+      timers = realTimers;
+
+      const innerGroup = new THREE.Group();
+      assembly.add(innerGroup);
+      buildInternalDataRings(pxPerUnit, innerGroup, simLayout, 0, offsetWorldI, true);
+      return [``, `Internal rings — simulated cascade demo (Live Data is off; Frozen previews with fake timers)`,
+              `demo timers: ${simLayout.goingLiveTimers.length}`];
     }
 
     // Divide the entire interior — from just under the visible shell down to the
@@ -1509,26 +1610,34 @@
       const beta  = THREE.MathUtils.degToRad(betaDeg);
       const axis = new THREE.Vector3(Math.cos(alpha), 0, Math.sin(alpha)).normalize();
 
+      // Carry forward this ring's spin/pitch progress from before the rebuild
+      // (see savedInternalState, snapshotted in buildRings() before
+      // clearAssembly() wiped it) instead of starting back at rest — same fix
+      // as the external manual loop above.
+      const carried = savedInternalState && savedInternalState.find(s => s.index === i);
+      const pitchAngle = carried ? carried.pitchAngle : 0;
+
       const { r, tubeR } = geom[i];
 
       const pivot = new THREE.Group();
       pivot.position.copy(axis).multiplyScalar(offsetWorldI * i);
       innerGroup.add(pivot);
 
-      const torusGeo = new THREE.TorusGeometry(r, tubeR, 20, 96);
+      const torusGeo = buildRingProfileGeometry(r, tubeR, 96, Math.PI*2, ringShape);
       const mesh = new THREE.Mesh(torusGeo, innerMaterial(i));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.rotation.x = Math.PI/2;
+      mesh.rotation.z = carried ? carried.spinZ : 0;
       pivot.add(mesh);
 
-      pivot.quaternion.setFromAxisAngle(axis, beta);
+      pivot.quaternion.setFromAxisAngle(axis, beta + pitchAngle);
 
       innerRingData.push({
         mesh, pivot, axis: axis.clone(),
         index: i,
         betaBase: beta,
-        pitchAngle: 0
+        pitchAngle
       });
     }
 
@@ -1593,6 +1702,9 @@
   // GoingLive's fixed `cameraRadius = 670`.
 
   let liveDataOn = false;
+  let ringShape = 'round'; // 'round' | 'cubic' | 'diamond' — shared preset for both external and internal ring tube cross-sections
+  let endCapsOn = false;   // seals the two open ends of a partial arc (round/cubic/diamond, external + internal)
+  let shadingMode = 'metallic'; // 'metallic' | 'flat' — matte kills reflectivity/shine, metallic keeps the original tuned look
   let seRelayOn = false;
   let timers = [];
   let followerCurrent=0, followerGoal=0;
@@ -1757,6 +1869,9 @@
   function LD_BLUE(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
   function LD_GOLD(){ return hexToRgb(document.getElementById('pulseGold').value); }
   function LD_BLACK(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
+  function LD_WHITE_ALPHA(){ return parseFloat(document.getElementById('pulseWhiteAlpha').value); }
+  function LD_CHARCOAL_ALPHA(){ return parseFloat(document.getElementById('pulseCharcoalAlpha').value); }
+  function LD_GOLD_ALPHA(){ return parseFloat(document.getElementById('pulseGoldAlpha').value); }
 
   // --- Layout: ports GoingLive's Steps 1–4 (outward → spillover → GoingLive
   // fill-to-center → cascading spiral angles) almost line-for-line, operating in
@@ -1767,12 +1882,18 @@
     const colorHex = rgbToHex(lerpColor(LD_RED(), LD_BLUE(), t));
     const hypeHex  = rgbToHex(lerpColor(LD_RED(), LD_GOLD(), t));
     const goliveHex = rgbToHex(lerpColor(LD_BLACK(), LD_RED(), t));
+    // Alpha lerps the same endpoints its matching color does, so a ring's
+    // transparency pulses in lockstep with its color instead of sitting fixed
+    // while the color underneath it keeps shifting.
+    const mainAlpha  = LD_WHITE_ALPHA() + (LD_CHARCOAL_ALPHA() - LD_WHITE_ALPHA()) * t;
+    const hypeAlpha   = LD_WHITE_ALPHA() + (LD_GOLD_ALPHA() - LD_WHITE_ALPHA()) * t;
+    const goliveAlpha = LD_CHARCOAL_ALPHA() + (LD_WHITE_ALPHA() - LD_CHARCOAL_ALPHA()) * t;
 
     let data = [
-      { label:'Followers', percentage: followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Followers: ${followerCurrent}/${followerGoal}` },
-      { label:'Subs', percentage: subGoal ? subCurrent/subGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Subs: ${subCurrent}/${subGoal}` },
-      { label:'Donations', percentage: donationGoal ? donationCurrent/donationGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Donations: $${donationCurrent}/$${donationGoal}` },
-      { label:'Bits', percentage: bitsGoal ? bitsCurrent/bitsGoal : 0, color:colorHex, allowOut:true, isGoal:true, statLabel:`Bits: ${bitsCurrent}/${bitsGoal}` }
+      { label:'Followers', percentage: followerGoal ? followerCurrent/followerGoal : 0, color:colorHex, alpha:mainAlpha, allowOut:true, isGoal:true, statLabel:`Followers: ${followerCurrent}/${followerGoal}` },
+      { label:'Subs', percentage: subGoal ? subCurrent/subGoal : 0, color:colorHex, alpha:mainAlpha, allowOut:true, isGoal:true, statLabel:`Subs: ${subCurrent}/${subGoal}` },
+      { label:'Donations', percentage: donationGoal ? donationCurrent/donationGoal : 0, color:colorHex, alpha:mainAlpha, allowOut:true, isGoal:true, statLabel:`Donations: $${donationCurrent}/$${donationGoal}` },
+      { label:'Bits', percentage: bitsGoal ? bitsCurrent/bitsGoal : 0, color:colorHex, alpha:mainAlpha, allowOut:true, isGoal:true, statLabel:`Bits: ${bitsCurrent}/${bitsGoal}` }
     ];
 
     let goingLiveTimers = [];
@@ -1783,6 +1904,7 @@
       const item = {
         timer, percentage: tRem.percentage,
         color: isGoingLive ? goliveHex : colorHex,
+        alpha: isGoingLive ? goliveAlpha : mainAlpha,
         allowOut: !isGoingLive,
         noLabel: isGoingLive,
         label: timer.name,
@@ -1794,7 +1916,7 @@
     if (hypeTrainData?.hypeTrainActive) {
       const cur = Number(hypeTrainData.currentLevel) || 0;
       const goal = Number(hypeTrainData.goalLevel) || 1;
-      data.push({ label:'Hype Train', percentage: Math.min(1, cur/goal), color:hypeHex, allowOut:true, isGoal:true, statLabel:`Hype Train: level ${cur}/${goal}` });
+      data.push({ label:'Hype Train', percentage: Math.min(1, cur/goal), color:hypeHex, alpha:hypeAlpha, allowOut:true, isGoal:true, statLabel:`Hype Train: level ${cur}/${goal}` });
     }
 
     data.sort((a,b)=>b.percentage - a.percentage);
@@ -1913,20 +2035,158 @@
     return { outward, inward, goingLiveTimers };
   }
 
+  // --- Ring cross-section shape presets ---
+  // THREE.TorusGeometry always sweeps a smooth CIRCLE as its tube cross-section
+  // (that circle sampled at `radialSegments` points around v=0..2π). A square
+  // cross-section is just that same sweep sampled at exactly 4 points instead
+  // of many — the straight edges between 4 points ARE the flat faces of a
+  // square, no extra logic needed. Which square you get depends only on WHERE
+  // those 4 samples land (the "radial phase"):
+  //   - phase = π/4 (45°, 135°, 225°, 315°) → samples land on the square's
+  //     CORNERS at the diagonals, so the square's FLAT FACES land pointing
+  //     straight out/up/in/down → "Cubic" (flat face facing outward).
+  //   - phase = 0 (0°, 90°, 180°, 270°) → samples land ON the outward/up/
+  //     inward/down axes themselves, so those become the square's POINTS
+  //     (corners) → "Diamond" (a corner/point facing outward), i.e. exactly
+  //     the same square rotated 45°, same idea as a cube tilted onto a point.
+  // This mirrors THREE.TorusGeometry's own vertex/UV/normal generation almost
+  // exactly (see three.js TorusGeometry source) so it's a drop-in replacement
+  // for it at every call site, including partial `arc` sweeps for the % arcs.
+  function buildRingProfileGeometry(radius, tube, tubularSegments, arc, shape){
+    let radialSegments, radialPhase;
+    if(shape === 'cubic'){ radialSegments = 4; radialPhase = Math.PI/4; }
+    else if(shape === 'diamond'){ radialSegments = 4; radialPhase = 0; }
+    else { radialSegments = 10; radialPhase = 0; } // 'round' — same smoothness TorusGeometry used at every call site before this
+
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    const center = new THREE.Vector3();
+    const vertex = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+
+    for(let j = 0; j <= radialSegments; j++){
+      for(let i = 0; i <= tubularSegments; i++){
+        const u = i / tubularSegments * arc;
+        const v = j / radialSegments * Math.PI * 2 + radialPhase;
+
+        vertex.x = (radius + tube * Math.cos(v)) * Math.cos(u);
+        vertex.y = (radius + tube * Math.cos(v)) * Math.sin(u);
+        vertex.z = tube * Math.sin(v);
+        vertices.push(vertex.x, vertex.y, vertex.z);
+
+        center.x = radius * Math.cos(u);
+        center.y = radius * Math.sin(u);
+        normal.subVectors(vertex, center).normalize();
+        normals.push(normal.x, normal.y, normal.z);
+
+        uvs.push(i / tubularSegments, j / radialSegments);
+      }
+    }
+
+    for(let j = 1; j <= radialSegments; j++){
+      for(let i = 1; i <= tubularSegments; i++){
+        const a = (tubularSegments + 1) * j + (i - 1);
+        const b = (tubularSegments + 1) * (j - 1) + (i - 1);
+        const c = (tubularSegments + 1) * (j - 1) + i;
+        const d = (tubularSegments + 1) * j + i;
+        indices.push(a, b, d);
+        indices.push(b, c, d);
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setIndex(indices);
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    return geo;
+  }
+
+  // Flat/matte vs metallic is just two tuned (metalness, roughness) presets —
+  // every ring/sphere material routes its base values through this so the one
+  // toggle affects all of them uniformly, while still preserving each
+  // material's own per-index roughness jitter (callers add that on top of
+  // whatever this returns).
+  function applyShading(metalness, roughness){
+    if(shadingMode === 'flat'){
+      // Flat matte: near-zero reflectivity, high roughness — like a painted
+      // plaster cast instead of polished chrome. Per-index jitter from the
+      // caller still lands on top of this baseline.
+      return { metalness: 0.04, roughness: Math.max(0.75, roughness) };
+    }
+    return { metalness, roughness }; // 'metallic' — original tuned values, unchanged
+  }
+
+  // Builds a flat "end cap" disc that seals one open end of a partial arc —
+  // the same cross-sectional profile buildRingProfileGeometry sweeps around
+  // the ring (round/cubic/diamond), but as a single filled fan at one fixed
+  // sweep angle `u` instead of swept through the whole arc. Without this, a
+  // ring built at less than 100% shows a hollow open mouth at both the start
+  // and end of its visible arc — the same "hole in the donut where it was cut"
+  // look a real torus never has because it's always a closed loop.
+  function buildRingCapGeometry(radius, tube, shape, u){
+    let radialSegments, radialPhase;
+    if(shape === 'cubic'){ radialSegments = 4; radialPhase = Math.PI/4; }
+    else if(shape === 'diamond'){ radialSegments = 4; radialPhase = 0; }
+    else { radialSegments = 10; radialPhase = 0; }
+
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+
+    // The cap's face normal points along the arc's sweep tangent at this u —
+    // the direction you'd be looking straight down the tube if you sliced it
+    // here, same as looking into the cut end of a bagel.
+    const tangent = new THREE.Vector3(-Math.sin(u), Math.cos(u), 0);
+
+    // Center point of this cross-section, then a fan of rim vertices around it.
+    vertices.push(radius*Math.cos(u), radius*Math.sin(u), 0);
+    normals.push(tangent.x, tangent.y, tangent.z);
+    uvs.push(0.5, 0.5);
+
+    for(let j=0; j<=radialSegments; j++){
+      const v = j/radialSegments*Math.PI*2 + radialPhase;
+      const x = (radius + tube*Math.cos(v))*Math.cos(u);
+      const y = (radius + tube*Math.cos(v))*Math.sin(u);
+      const z = tube*Math.sin(v);
+      vertices.push(x, y, z);
+      normals.push(tangent.x, tangent.y, tangent.z);
+      uvs.push(0.5 + 0.5*Math.cos(v), 0.5 + 0.5*Math.sin(v));
+    }
+
+    for(let j=1; j<=radialSegments; j++){
+      indices.push(0, j, j+1);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setIndex(indices);
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    return geo;
+  }
+
   // --- 3D arc-ring construction ---
   // radiusWorld/tubeWorld already converted from px; startAngleDeg/ccw follow the
   // same span convention GoingLive's drawDonut uses: cw spans [start, start+sweep],
   // ccw spans [start-sweep, start]. The wrapper's rotation.y anchors that span's
   // lower bound so cascading rings (GoingLive/subathon set) stay continuous.
-  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup, hingeAxis, hingeBeta, hingeOffsetScalar, billboard){
+  function makeArcRing(radiusWorld, tubeWorld, percentage, colorHex, ccw, startAngleDeg, parentGroup, hingeAxis, hingeBeta, hingeOffsetScalar, billboard, alpha){
     const pct = Math.max(0.004, Math.min(1, percentage));
     const sweepDeg = pct*360;
+    const sweepRad = THREE.MathUtils.degToRad(sweepDeg);
     const beginDeg = (ccw ? (startAngleDeg - sweepDeg) : startAngleDeg) - 90; // -90: 0° reads as "top"
     const segs = Math.max(6, Math.round(96*pct));
-    const geo = new THREE.TorusGeometry(radiusWorld, tubeWorld, 10, segs, THREE.MathUtils.degToRad(sweepDeg));
+    const geo = buildRingProfileGeometry(radiusWorld, tubeWorld, segs, sweepRad, ringShape);
+    const a = (alpha == null) ? 1 : Math.max(0, Math.min(1, alpha));
+    const shaded = applyShading(0.5, 0.35);
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(colorHex), metalness:0.5, roughness:0.35,
-      emissive: new THREE.Color(colorHex), emissiveIntensity:0.22
+      color: new THREE.Color(colorHex), metalness: shaded.metalness, roughness: shaded.roughness,
+      emissive: new THREE.Color(colorHex), emissiveIntensity:0.22,
+      transparent: a < 0.999, opacity: a, depthWrite: a >= 0.999
     });
     const mesh = new THREE.Mesh(geo, mat);
     // TorusGeometry defaults to lying in the XY plane (normal along Z). The
@@ -1985,15 +2245,43 @@
     // automatically inherits every transform the visible ring gets: hinge tilt,
     // pitch animation, spin, and the assembly's turntable rotation.
     const tip = new THREE.Object3D();
-    const sweepRad = THREE.MathUtils.degToRad(sweepDeg);
     tip.position.set(radiusWorld * Math.cos(sweepRad), radiusWorld * Math.sin(sweepRad), 0);
     mesh.add(tip);
 
-    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0, tip, billboard: !!billboard };
+    // End caps: seal the two open ends of this arc (start u=0, end u=sweepRad).
+    // Only meaningful when there's an actual gap to seal — at pct===1 the arc
+    // is a full closed loop with no exposed cut face, same as a normal torus,
+    // so caps are skipped there even if the toggle is on. DoubleSide avoids
+    // any dependence on getting the fan's winding order exactly right for the
+    // viewing direction — cheap insurance for two small triangle fans.
+    let capGeoStart = null, capGeoEnd = null, capMat = null;
+    if(endCapsOn && pct < 0.999){
+      capMat = mat.clone();
+      capMat.side = THREE.DoubleSide;
+      capGeoStart = buildRingCapGeometry(radiusWorld, tubeWorld, ringShape, 0);
+      capGeoEnd = buildRingCapGeometry(radiusWorld, tubeWorld, ringShape, sweepRad);
+      const capStart = new THREE.Mesh(capGeoStart, capMat);
+      const capEnd = new THREE.Mesh(capGeoEnd, capMat);
+      capStart.castShadow = true; capStart.receiveShadow = true;
+      capEnd.castShadow = true; capEnd.receiveShadow = true;
+      // Same trick as the tip marker: parent directly to mesh so the caps
+      // automatically inherit every transform the visible arc gets (hinge
+      // tilt, pitch, spin, billboard, assembly turntable) with zero extra
+      // per-frame bookkeeping.
+      mesh.add(capStart);
+      mesh.add(capEnd);
+    }
+
+    return { pivot, wrapper, mesh, geo, mat, axis: hingeAxis.clone(), betaBase: hingeBeta, pitchAngle: 0, tip, billboard: !!billboard, capGeoStart, capGeoEnd, capMat };
   }
 
   function disposeDataRingSet(set){
-    set.forEach(rr=>{ rr.geo.dispose(); rr.mat.dispose(); });
+    set.forEach(rr=>{
+      rr.geo.dispose(); rr.mat.dispose();
+      if(rr.capGeoStart) rr.capGeoStart.dispose();
+      if(rr.capGeoEnd) rr.capGeoEnd.dispose();
+      if(rr.capMat) rr.capMat.dispose();
+    });
   }
 
   // Builds the outward (External) data-ring set from an already-computed layout
@@ -2034,7 +2322,7 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       const { axis, beta } = hingeFor(i, count, baseTiltDeg);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i, billboard);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorld*i, billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
 
       const prev = savedState.get(ringKey(item));
@@ -2094,7 +2382,7 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i, billboard);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, false, 0, parentGroup, axis, beta, offsetWorldI*i, billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       restoreState(rr, item);
       dataRingsInternal.push(rr);
@@ -2108,7 +2396,7 @@
       const radiusWorld = item.finalRadiusPx * worldPerPx;
       const tubeWorld = (item.widthPx/2) * worldPerPx;
       const { axis, beta } = hingeFor(i, count, baseTiltDegI);
-      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i, billboard);
+      const rr = makeArcRing(radiusWorld, tubeWorld, item.percentage, item.color, item.ccw, item.startAngleOffset, parentGroup, axis, beta, offsetWorldI*i, billboard, item.alpha);
       rr.item = item; rr.lastPct = item.percentage; rr.index = i;
       restoreState(rr, item);
       dataRingsInternal.push(rr);
@@ -2489,6 +2777,9 @@
   const pulseWhite_in = document.getElementById('pulseWhite');
   const pulseCharcoal_in = document.getElementById('pulseCharcoal');
   const pulseGold_in = document.getElementById('pulseGold');
+  const pulseWhiteAlpha_in = document.getElementById('pulseWhiteAlpha');
+  const pulseCharcoalAlpha_in = document.getElementById('pulseCharcoalAlpha');
+  const pulseGoldAlpha_in = document.getElementById('pulseGoldAlpha');
 
   function syncLabels(){
     document.getElementById('vN').textContent = N_in.value;
@@ -2519,6 +2810,9 @@
     document.getElementById('vDiscRadius').textContent = discR + 'px (Ø' + (discR*2) + 'px)';
     document.getElementById('vDiscAlpha').textContent = 'alpha ' + parseFloat(discAlpha_in.value).toFixed(2);
     document.getElementById('vOutwardSpace').textContent = outwardSpacePx_in.value + 'px';
+    document.getElementById('vPulseWhiteAlpha').textContent = 'alpha ' + parseFloat(pulseWhiteAlpha_in.value).toFixed(2);
+    document.getElementById('vPulseCharcoalAlpha').textContent = 'alpha ' + parseFloat(pulseCharcoalAlpha_in.value).toFixed(2);
+    document.getElementById('vPulseGoldAlpha').textContent = 'alpha ' + parseFloat(pulseGoldAlpha_in.value).toFixed(2);
   }
 
   [N_in, step_in, pxRadius_in, tube_in, offset_in, growth_in, sphereGap_in, ringColor_in, ringAlpha_in, sphereColor_in, sphereAlpha_in,
@@ -2530,8 +2824,31 @@
     });
   });
 
-  [pulseWhite_in, pulseCharcoal_in, pulseGold_in].forEach(el=>{
-    el.addEventListener('input', ()=>{ if(liveDataOn) rebuildDataRings(); });
+  [pulseWhite_in, pulseCharcoal_in, pulseGold_in, pulseWhiteAlpha_in, pulseCharcoalAlpha_in, pulseGoldAlpha_in].forEach(el=>{
+    el.addEventListener('input', ()=>{ syncLabels(); if(liveDataOn) rebuildDataRings(); });
+  });
+
+  document.getElementById('ringShape').addEventListener('change', ()=>{
+    ringShape = document.getElementById('ringShape').value;
+    buildRings();
+  });
+
+  document.querySelectorAll('.toggles button[data-endcaps]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-endcaps]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      endCapsOn = btn.dataset.endcaps === 'on';
+      buildRings();
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-shading]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-shading]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      shadingMode = btn.dataset.shading;
+      buildRings();
+    });
   });
 
   document.querySelectorAll('.toggles button[data-mode]').forEach(btn=>{
@@ -2788,9 +3105,15 @@
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
-      buildFlatCircle(PX_PER_WORLD_UNIT); // camfill state is read live inside discMaterial
-      buildWebcamDisc(); // also rebuild the actual webcam/OBS disc — this was previously missing,
-                          // so toggling "Webcam fill" alone never made the feed appear or disappear
+      buildWebcamDisc(); // rebuild the actual webcam/OBS disc so toggling this shows/hides the feed
+    });
+  });
+
+  document.querySelectorAll('.toggles button[data-flatcircle]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-flatcircle]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      buildFlatCircle(PX_PER_WORLD_UNIT);
     });
   });
 
@@ -2860,6 +3183,9 @@
       mode: document.querySelector('.toggles button[data-mode].active').dataset.mode,
       pxRadius: pxRadius_in.value,
       tube: tube_in.value,
+      ringShape: ringShape,
+      endCapsOn: endCapsOn,
+      shadingMode: shadingMode,
       offset: offset_in.value,
       growth: growth_in.value,
       sphereGap: sphereGap_in.value,
@@ -2890,6 +3216,7 @@
       discRadius: discRadius_in.value,
       discColor: discColor_in.value,
       discAlpha: discAlpha_in.value,
+      flatCircleOn: document.querySelector('.toggles button[data-flatcircle].active').dataset.flatcircle === 'on',
       camFillOn: document.querySelector('.toggles button[data-camfill].active').dataset.camfill === 'on',
       camMirrorOn: camMirrorOn,
       gasUrl: gasUrl_in.value,
@@ -2898,6 +3225,9 @@
       pulseWhite: pulseWhite_in.value,
       pulseCharcoal: pulseCharcoal_in.value,
       pulseGold: pulseGold_in.value,
+      pulseWhiteAlpha: pulseWhiteAlpha_in.value,
+      pulseCharcoalAlpha: pulseCharcoalAlpha_in.value,
+      pulseGoldAlpha: pulseGoldAlpha_in.value,
       pageBgMode: document.querySelector('.toggles button[data-pagebg].active').dataset.pagebg,
       pageBgColor: document.getElementById('pageBgColor').value,
       obsBgMode: document.querySelector('.toggles button[data-obsbg].active').dataset.obsbg,
@@ -2929,6 +3259,22 @@
     if(s.pxRadius != null) pxRadius_in.value = s.pxRadius;
     else if(s.radius != null) pxRadius_in.value = Math.round(s.radius * 670); // back-compat with old saved settings files
     if(s.tube != null) tube_in.value = s.tube;
+    if(s.ringShape != null){
+      ringShape = s.ringShape;
+      document.getElementById('ringShape').value = s.ringShape;
+    }
+    if(typeof s.endCapsOn === 'boolean'){
+      endCapsOn = s.endCapsOn;
+      document.querySelectorAll('.toggles button[data-endcaps]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.endcaps === 'on') === s.endCapsOn);
+      });
+    }
+    if(s.shadingMode != null){
+      shadingMode = s.shadingMode;
+      document.querySelectorAll('.toggles button[data-shading]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.shading === s.shadingMode);
+      });
+    }
     if(s.offset != null) offset_in.value = s.offset;
     if(s.growth != null) growth_in.value = s.growth;
     if(s.sphereGap != null) sphereGap_in.value = s.sphereGap;
@@ -3005,6 +3351,11 @@
     if(s.discRadius != null) discRadius_in.value = s.discRadius;
     if(s.discColor) discColor_in.value = s.discColor;
     if(s.discAlpha != null) discAlpha_in.value = s.discAlpha;
+    if(typeof s.flatCircleOn === 'boolean'){
+      document.querySelectorAll('.toggles button[data-flatcircle]').forEach(b=>{
+        b.classList.toggle('active', (b.dataset.flatcircle === 'on') === s.flatCircleOn);
+      });
+    }
     if(typeof s.camFillOn === 'boolean'){
       document.querySelectorAll('.toggles button[data-camfill]').forEach(b=>{
         b.classList.toggle('active', (b.dataset.camfill === 'on') === s.camFillOn);
@@ -3027,6 +3378,9 @@
     if(s.pulseWhite) pulseWhite_in.value = s.pulseWhite;
     if(s.pulseCharcoal) pulseCharcoal_in.value = s.pulseCharcoal;
     if(s.pulseGold) pulseGold_in.value = s.pulseGold;
+    if(s.pulseWhiteAlpha != null) pulseWhiteAlpha_in.value = s.pulseWhiteAlpha;
+    if(s.pulseCharcoalAlpha != null) pulseCharcoalAlpha_in.value = s.pulseCharcoalAlpha;
+    if(s.pulseGoldAlpha != null) pulseGoldAlpha_in.value = s.pulseGoldAlpha;
     if(s.pageBgMode){
       document.querySelectorAll('.toggles button[data-pagebg]').forEach(b=>{
         b.classList.toggle('active', b.dataset.pagebg === s.pageBgMode);
