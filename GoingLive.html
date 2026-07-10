@@ -2432,9 +2432,8 @@
     const camDiscRadiusWorldExt = flatCircleWebcam
       ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
       : 0;
-    const hiddenMarginWorldExt = camDiscRadiusWorldExt * 0.12;
     function hiddenBehindWebcamExt(radiusWorld, tubeWorld){
-      return camDiscRadiusWorldExt > 0 && (radiusWorld + tubeWorld) <= (camDiscRadiusWorldExt + hiddenMarginWorldExt);
+      return camDiscRadiusWorldExt > 0 && (radiusWorld + tubeWorld) <= camDiscRadiusWorldExt;
     }
 
     layout.outward.forEach((item, i)=>{
@@ -2495,19 +2494,20 @@
     // it anyway — so skip building a mesh for it rather than let it read as
     // a mystery opaque circle. Only applies while the webcam disc actually
     // exists; internal rings behave exactly as before when webcam fill is off.
-    // Margin added below the "zero clearance" version of this check: a ring
-    // whose outer edge clears the disc radius by only a hair is still, for
-    // on-screen purposes, mostly a filled disc — the visible band between its
-    // outer edge and the disc's edge is too thin to read as a ring, so at low
-    // alpha it looks exactly like the "mysterious transparent circle" bug even
-    // though technically it clears. Requiring a real clearance (12% of the
-    // disc radius) before treating a ring as "actually visible" fixes that.
+    // A clearance margin was tried here at one point (require a ring's outer
+    // edge to clear the disc radius by ~12%, not just barely clear it), on the
+    // theory that a ring which only just clears still reads as a filled disc.
+    // Reverted — GoingLive/subathon timer rings are DESIGNED to cascade all
+    // the way in toward true center as their countdown progresses (the "fill
+    // to center" effect), so they're legitimately near/at the disc's radius
+    // by design, not by bug. The margin culled them outright instead of just
+    // the genuinely-fully-hidden ones. Back to zero-clearance: only skip a
+    // ring whose outer edge doesn't clear the disc radius at all.
     const camDiscRadiusWorld = flatCircleWebcam
       ? ((parseFloat(document.getElementById('discRadius').value) || 670) / PX_PER_WORLD_UNIT) * 0.55
       : 0;
-    const hiddenMarginWorld = camDiscRadiusWorld * 0.12;
     function hiddenBehindWebcam(radiusWorld, tubeWorld){
-      return camDiscRadiusWorld > 0 && (radiusWorld + tubeWorld) <= (camDiscRadiusWorld + hiddenMarginWorld);
+      return camDiscRadiusWorld > 0 && (radiusWorld + tubeWorld) <= camDiscRadiusWorld;
     }
 
     function restoreState(rr, item){
