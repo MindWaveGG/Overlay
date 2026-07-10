@@ -35,14 +35,25 @@
     max-height: calc(100vh - 32px);
     overflow-y:auto;
   }
+  /* Collapsed: the whole panel shrinks to just the toggle arrow — width, padding,
+     background, border and blur all drop away, not just the body underneath.
+     Previously only #panelBody hid, so the outer #panel box (280px, padded,
+     bordered) stayed full-size with the header sitting inside an otherwise-empty
+     bar — this is what actually makes it collapse down to ~20x20px. */
+  #panel.collapsed{
+    width:20px; height:20px; padding:0; background:transparent;
+    border:none; backdrop-filter:none; overflow:visible; max-height:none;
+  }
+  #panel.collapsed h1{display:none;}
+  #panel.collapsed #panelHeader{margin-bottom:0;}
   #panelHeader{
     display:flex; align-items:center; justify-content:space-between;
     margin-bottom:2px;
   }
   #collapseBtn{
     background:transparent; border:1px solid var(--panel-border); color:var(--text-dim);
-    border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;
-    flex-shrink:0; line-height:1;
+    border-radius:6px; width:20px; height:20px; cursor:pointer; font-size:11px;
+    flex-shrink:0; line-height:1; padding:0;
   }
   #collapseBtn:hover{border-color:var(--gold); color:var(--gold-bright);}
   #panelBody.collapsed{display:none;}
@@ -3136,8 +3147,10 @@
   // --- Collapsible settings panel ---
   const collapseBtn = document.getElementById('collapseBtn');
   const panelBody = document.getElementById('panelBody');
+  const panelEl = document.getElementById('panel');
   collapseBtn.addEventListener('click', ()=>{
     const collapsed = panelBody.classList.toggle('collapsed');
+    panelEl.classList.toggle('collapsed', collapsed);
     collapseBtn.textContent = collapsed ? '▸' : '▾';
   });
 
