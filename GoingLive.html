@@ -145,79 +145,11 @@
     padding: 7px 10px;
     text-shadow: 0 1px 3px rgba(0,0,0,0.9);
   }
-
-  /* CEF-safe modal: replaces the native file Save/Open dialog, which is
-     frequently unavailable inside OBS/StreamElements Browser Source. */
-  #cefModalOverlay{
-    position:fixed; inset:0; background:rgba(0,0,0,0.6);
-    display:none; align-items:center; justify-content:center; z-index:10000;
-  }
-  #cefModalOverlay.show{ display:flex; }
-  #cefModalBox{
-    background:var(--panel); border:1px solid var(--panel-border); border-radius:10px;
-    padding:18px; width:360px; max-width:90vw;
-  }
-  #cefModalBox h3{margin:0 0 10px; color:var(--gold-bright); font-size:14px;}
-  #cefModalBox textarea{
-    width:100%; height:200px; background:var(--bg); color:var(--text);
-    border:1px solid var(--panel-border); border-radius:6px; padding:8px;
-    font-family:'Consolas',monospace; font-size:11px; resize:vertical; box-sizing:border-box;
-  }
-  #cefModalBox .row{display:flex; gap:8px; margin-top:10px;}
-  #cefModalBox button{
-    flex:1; background:transparent; border:1px solid var(--panel-border); color:var(--text-dim);
-    padding:8px; border-radius:6px; cursor:pointer; font-size:11.5px;
-  }
-  #cefModalBox button.primary{border-color:var(--gold); color:var(--gold-bright);}
-
-  /* CEF-safe color swatch popup: replaces the native OS color picker,
-     which is frequently invisible/unresponsive inside CEF Browser Source. */
-  .cef-color-pop{
-    position:absolute; z-index:9999; top:36px; left:0;
-    background:var(--panel); border:1px solid var(--panel-border); border-radius:8px;
-    padding:12px; width:180px; box-shadow:0 8px 24px rgba(0,0,0,0.5);
-    font-family:'Consolas',monospace; font-size:11px; color:var(--text);
-  }
-  .cef-color-pop input[type=text]{
-    width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright);
-    padding:5px; border-radius:4px; margin-bottom:10px; text-align:center; box-sizing:border-box;
-  }
-  .cef-color-pop .srow{margin-bottom:8px;}
-  .cef-color-pop .srow .hd{display:flex; justify-content:space-between; margin-bottom:3px;}
-  .cef-color-pop input[type=range]{width:100%;}
-
-  /* CEF-safe dropdown: replaces native <select> popup list, which frequently
-     renders invisible or off-screen inside CEF Browser Source. */
-  .cef-select-btn{
-    display:block; width:100%; text-align:left; cursor:pointer;
-  }
-  .cef-select-list{
-    position:absolute; z-index:9999; top:100%; left:0; right:0;
-    background:var(--panel); border:1px solid var(--panel-border); border-radius:6px;
-    margin-top:4px; max-height:200px; overflow-y:auto;
-    font-family:'Consolas',monospace; font-size:12px;
-  }
-  .cef-select-list div{ padding:7px 8px; cursor:pointer; color:var(--text); }
-  .cef-select-list div:hover{ background:rgba(212,169,90,0.12); }
 </style>
 </head>
 <body>
 
 <div id="scene"></div>
-
-<!-- CEF-safe modal markup: must exist in the DOM before the scripts below run,
-     since those scripts call document.getElementById('cefModalOverlay') as soon
-     as they execute. Only ever shown when window.CEF_FALLBACK is true. -->
-<div id="cefModalOverlay">
-  <div id="cefModalBox">
-    <h3 id="cefModalTitle">Settings</h3>
-    <textarea id="cefModalTextarea"></textarea>
-    <div class="row">
-      <button id="cefModalPrimaryBtn" class="primary" type="button">Copy</button>
-      <button id="cefModalCloseBtn" type="button">Close</button>
-    </div>
-  </div>
-</div>
 
 <div id="panel">
   <div id="panelHeader">
@@ -3704,8 +3636,7 @@
     scheduleLocalSave();
   }
 
-  // ---- Native-dialog Save/Load (used only when NOT running inside CEF) ----
-  function saveViaNativeDownload(){
+  document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
     const data = JSON.stringify(collectSettings(), null, 2);
     const blob = new Blob([data], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -3716,13 +3647,11 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    scheduleLocalSave();
-  }
+    scheduleLocalSave(); // manual export is also a good moment to refresh the auto-save snapshot
+  });
 
   const loadSettingsFile = document.getElementById('loadSettingsFile');
-  function loadViaNativeFilePicker(){
-    loadSettingsFile.click();
-  }
+  document.getElementById('loadSettingsBtn').addEventListener('click', ()=> loadSettingsFile.click());
   loadSettingsFile.addEventListener('change', (e)=>{
     const file = e.target.files[0];
     if(!file) return;
@@ -3736,63 +3665,6 @@
       loadSettingsFile.value = '';
     };
     reader.readAsText(file);
-  });
-
-  // ---- CEF-safe Save/Load (used only when window.CEF_FALLBACK is true) ----
-  const cefModalOverlay = document.getElementById('cefModalOverlay');
-  const cefModalTitle = document.getElementById('cefModalTitle');
-  const cefModalTextarea = document.getElementById('cefModalTextarea');
-  const cefModalPrimaryBtn = document.getElementById('cefModalPrimaryBtn');
-  const cefModalCloseBtn = document.getElementById('cefModalCloseBtn');
-
-  function openCefModal(title, text, readOnly, primaryLabel, onPrimary){
-    cefModalTitle.textContent = title;
-    cefModalTextarea.value = text;
-    cefModalTextarea.readOnly = readOnly;
-    cefModalPrimaryBtn.textContent = primaryLabel;
-    cefModalPrimaryBtn.onclick = onPrimary;
-    cefModalOverlay.classList.add('show');
-    cefModalTextarea.focus();
-    cefModalTextarea.select();
-  }
-  cefModalCloseBtn.addEventListener('click', ()=> cefModalOverlay.classList.remove('show'));
-
-  function saveViaCefModal(){
-    const data = JSON.stringify(collectSettings(), null, 2);
-    openCefModal('Save Settings — copy this text', data, true, 'Copy to Clipboard', ()=>{
-      cefModalTextarea.select();
-      const done = ()=>{
-        cefModalPrimaryBtn.textContent = 'Copied!';
-        setTimeout(()=> cefModalPrimaryBtn.textContent = 'Copy to Clipboard', 1200);
-      };
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        navigator.clipboard.writeText(cefModalTextarea.value).then(done).catch(()=>{
-          try{ document.execCommand('copy'); done(); }catch(err){}
-        });
-      } else {
-        try{ document.execCommand('copy'); done(); }catch(err){}
-      }
-    });
-    scheduleLocalSave();
-  }
-
-  function loadViaCefModal(){
-    openCefModal('Load Settings — paste JSON below', '', false, 'Apply', ()=>{
-      try{
-        applySettings(JSON.parse(cefModalTextarea.value));
-        cefModalOverlay.classList.remove('show');
-      }catch(err){
-        alert('Could not read settings: ' + err.message);
-      }
-    });
-  }
-
-  // ---- Environment-based failover: pick native or CEF-safe path once ----
-  document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
-    (window.CEF_FALLBACK ? saveViaCefModal : saveViaNativeDownload)();
-  });
-  document.getElementById('loadSettingsBtn').addEventListener('click', ()=>{
-    (window.CEF_FALLBACK ? loadViaCefModal : loadViaNativeFilePicker)();
   });
 
   // Global delegated listener: rather than threading scheduleLocalSave() into
@@ -3909,166 +3781,6 @@
 
   animate();
 })();
-</script>
-
-<script>
-  // ============================================================
-  // Environment detection: real browser vs CEF (OBS/StreamElements
-  // Browser Source). Runs once, sets window.CEF_FALLBACK, and every
-  // other script on the page branches off that single flag.
-  // ============================================================
-  (function detectCEF(){
-    // Primary signal: OBS's obs-browser plugin injects this global into
-    // every page it loads, including StreamElements overlays (which run
-    // inside an OBS Browser Source under the hood). Near-100% reliable
-    // when present.
-    if (window.obsstudio) { window.CEF_FALLBACK = true; return; }
-
-    // Secondary signal, for CEF instances that don't inject obsstudio
-    // (e.g. StreamElements' own standalone preview/interact window):
-    // CEF builds bundled with streaming tools are usually several major
-    // Chromium versions behind, so they lack newer APIs a real, current
-    // end-user browser almost always has by now.
-    const lacksUserAgentData   = !('userAgentData' in navigator);
-    const lacksFileSystemAccess = !('showSaveFilePicker' in window);
-    const lacksClipboardWrite   = !(navigator.clipboard && navigator.clipboard.writeText);
-
-    // Require at least two missing modern APIs before assuming CEF, so an
-    // older-but-real browser doesn't get needlessly flagged off one signal.
-    const score = [lacksUserAgentData, lacksFileSystemAccess, lacksClipboardWrite]
-      .filter(Boolean).length;
-
-    window.CEF_FALLBACK = score >= 2;
-  })();
-
-  // ============================================================
-  // CEF-only fallback: custom color picker + custom dropdown.
-  // Both no-op entirely when window.CEF_FALLBACK is false, so native
-  // <input type="color"> and <select> behave completely normally in
-  // any real browser.
-  // ============================================================
-  (function(){
-    if (!window.CEF_FALLBACK) return; // real browser — native pickers work fine, do nothing
-
-    function hexToRgb(hex){
-      hex = hex.replace('#','');
-      if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
-      const num = parseInt(hex,16) || 0;
-      return {r:(num>>16)&255, g:(num>>8)&255, b:num&255};
-    }
-    function rgbToHex(r,g,b){
-      return '#' + [r,g,b].map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,'0')).join('');
-    }
-
-    // ---- Custom color picker (replaces native input[type=color] popup) ----
-    let activeColorPop = null;
-    function closeColorPop(){ if(activeColorPop){ activeColorPop.remove(); activeColorPop = null; } }
-    document.addEventListener('click', (e)=>{
-      if(activeColorPop && !activeColorPop.contains(e.target) && e.target.type !== 'color') closeColorPop();
-    });
-
-    document.querySelectorAll('input[type=color]').forEach(orig=>{
-      const wrapper = document.createElement('span');
-      wrapper.style.cssText = 'position:relative; display:inline-block;';
-      orig.parentNode.insertBefore(wrapper, orig);
-      wrapper.appendChild(orig);
-      orig.style.cursor = 'pointer';
-
-      orig.addEventListener('click', (e)=>{
-        e.preventDefault(); // block the (likely broken) native picker
-        e.stopPropagation();
-        if(activeColorPop){ closeColorPop(); return; }
-
-        let cur = hexToRgb(orig.value || '#000000');
-        const pop = document.createElement('div');
-        pop.className = 'cef-color-pop';
-
-        const hexField = document.createElement('input');
-        hexField.type = 'text';
-        hexField.value = orig.value;
-        hexField.addEventListener('change', ()=>{
-          try{ cur = hexToRgb(hexField.value); pushChange(); rebuildSliders(); }catch(err){}
-        });
-
-        function pushChange(){
-          const hex = rgbToHex(cur.r, cur.g, cur.b);
-          hexField.value = hex;
-          orig.value = hex;
-          orig.dispatchEvent(new Event('input', {bubbles:true}));
-        }
-
-        const sliderHolder = document.createElement('div');
-        function sliderRow(label, val, onInput){
-          const row = document.createElement('div');
-          row.className = 'srow';
-          row.innerHTML = `<div class="hd"><span>${label}</span><span class="v">${val}</span></div>`;
-          const input = document.createElement('input');
-          input.type = 'range'; input.min = 0; input.max = 255; input.value = val;
-          input.addEventListener('input', ()=>{
-            row.querySelector('.v').textContent = input.value;
-            onInput(parseInt(input.value, 10));
-          });
-          row.appendChild(input);
-          return row;
-        }
-        function rebuildSliders(){
-          sliderHolder.innerHTML = '';
-          sliderHolder.appendChild(sliderRow('R', cur.r, v=>{cur.r=v; pushChange();}));
-          sliderHolder.appendChild(sliderRow('G', cur.g, v=>{cur.g=v; pushChange();}));
-          sliderHolder.appendChild(sliderRow('B', cur.b, v=>{cur.b=v; pushChange();}));
-        }
-        rebuildSliders();
-
-        pop.appendChild(hexField);
-        pop.appendChild(sliderHolder);
-        wrapper.appendChild(pop);
-        activeColorPop = pop;
-      });
-    });
-
-    // ---- Custom dropdown (replaces native <select> popup list) ----
-    let activeSelectList = null;
-    function closeSelectList(){ if(activeSelectList){ activeSelectList.remove(); activeSelectList = null; } }
-    document.addEventListener('click', (e)=>{
-      if(activeSelectList && !activeSelectList.contains(e.target) && !e.target.classList.contains('cef-select-btn')) closeSelectList();
-    });
-
-    document.querySelectorAll('select').forEach(sel=>{
-      const wrapper = document.createElement('span');
-      wrapper.style.cssText = 'position:relative; display:block;';
-      sel.parentNode.insertBefore(wrapper, sel);
-      sel.style.display = 'none';
-      wrapper.appendChild(sel);
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'cef-select-btn';
-      const origStyle = sel.getAttribute('style');
-      if(origStyle) btn.setAttribute('style', origStyle);
-      btn.textContent = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : '';
-      wrapper.appendChild(btn);
-
-      btn.addEventListener('click', (e)=>{
-        e.stopPropagation();
-        if(activeSelectList){ closeSelectList(); return; }
-        const list = document.createElement('div');
-        list.className = 'cef-select-list';
-        Array.from(sel.options).forEach(opt=>{
-          const item = document.createElement('div');
-          item.textContent = opt.textContent;
-          item.addEventListener('click', ()=>{
-            sel.value = opt.value;
-            btn.textContent = opt.textContent;
-            sel.dispatchEvent(new Event('change', {bubbles:true}));
-            closeSelectList();
-          });
-          list.appendChild(item);
-        });
-        wrapper.appendChild(list);
-        activeSelectList = list;
-      });
-    });
-  })();
 </script>
 </body>
 </html>
