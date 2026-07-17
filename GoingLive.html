@@ -783,12 +783,10 @@ function goldMaterial(index){
 
     const hueShift = ((index % 5) - 2) * 0.008;
 
-
     const ringColorHex = themeColor(
         "--outer-ring-color",
         document.getElementById('ringColor').value
     );
-
 
     const ringAlpha = parseFloat(
         themeColor(
@@ -797,13 +795,10 @@ function goldMaterial(index){
         )
     );
 
-
     const base = new THREE.Color(ringColorHex);
-
 
     const hsl = {h:0,s:0,l:0};
     base.getHSL(hsl);
-
 
     const color = new THREE.Color()
         .setHSL(
@@ -813,35 +808,23 @@ function goldMaterial(index){
         );
 
 
-    const shaded = applyShading(
-        0.9,
-        0.24 + (index % 4)*0.02
-    );
-
-
     return new THREE.MeshStandardMaterial({
 
         color: color,
 
-        metalness: shaded.metalness,
+        // reduce white reflections
+        metalness: 0.35,
+        roughness: 0.55,
 
-        roughness: shaded.roughness,
-
-        // IMPORTANT:
-        // use the ring color as emissive also
-        // otherwise lighting can wash it white
+        // keep glow tied to ring color
         emissive: color,
-
-        emissiveIntensity:0.12,
+        emissiveIntensity:0.08,
 
         transparent:ringAlpha < 0.999,
-
         opacity:ringAlpha,
 
         depthWrite:ringAlpha >= 0.999
-
     });
-
 }
 function sphereMaterial(){
 
