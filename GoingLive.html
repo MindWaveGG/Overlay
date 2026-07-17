@@ -2818,7 +2818,7 @@ function LD_GOLD_ALPHA(){
       const box = document.createElement('div');
       box.className = 'liveLabelBox';
       box.id = 'labelBox_' + i;
-      box.style.left = boxLeft + 'px';
+      box.style.left = (boxLeft - 20) + 'px';
       box.style.setProperty('--box-border', lt.color || 'var(--gold)');
       box.textContent = lt.text;
       el.appendChild(box);
