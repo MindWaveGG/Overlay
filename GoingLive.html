@@ -5,24 +5,52 @@
 <title>3D Rings — Precession Prototype</title>
 <style>
   :root{
-    --bg: #0b0c10;
-    --panel: #15171c;
-    --panel-border: #262a33;
-    --gold: #d4a95a;
-    --gold-bright: #f0cd8a;
-    --text: #e8e6e1;
-    --text-dim: #8b8f99;
-    --accent: #c96a3e;
-    --ring-color: #00ffff;
-    --pulse-color: #ffffff;
-    --pulse-white: #ffffff;
-    --pulse-charcoal: #333333;
-    --pulse-gold: #ffd700;
 
-    --pulse-white-alpha: 1;
-    --pulse-charcoal-alpha: 1;
-    --pulse-gold-alpha: 1;
-  }
+    --bg:#0b0c10;
+    --panel:#15171c;
+    --panel-border:#262a33;
+
+    --gold:#d4a95a;
+    --gold-bright:#f0cd8a;
+
+    --text:#e8e6e1;
+    --text-dim:#8b8f99;
+
+    --accent:#c96a3e;
+
+
+    /* OBS / Theme bridge */
+
+    --ring-color:#00ffff;
+
+    --pulse-color:#ffffff;
+
+    --pulse-white:#ffffff;
+    --pulse-charcoal:#333333;
+    --pulse-gold:#ffd700;
+    --pulse-black:#111111;
+
+
+    --pulse-white-alpha:1;
+    --pulse-charcoal-alpha:1;
+    --pulse-gold-alpha:1;
+
+    /* Sphere Material */
+    /* External rings */
+    --outer-ring-color:#00ffff;
+    --outer-ring-alpha:1;
+
+
+    /* Internal rings */
+    --inner-ring-color:#0088ff;
+    --inner-ring-alpha:0.85;
+
+
+    /* Flat disc */
+    --disc-color:#000000;
+    --disc-alpha:0;
+
+}
   *{box-sizing:border-box;}
   html,body{
     margin:0; padding:0; height:100%; width:100%;
@@ -753,40 +781,75 @@
   }
 
   // --- Materials ---
-  function goldMaterial(index){
-    // subtle per-ring tonal variation so overlapping rings don't visually merge into one mass
+ function goldMaterial(index){
+
     const hueShift = ((index % 5) - 2) * 0.008;
-    const ringColorHex = document.getElementById('ringColor').value;
-    const ringAlpha = parseFloat(document.getElementById('ringAlpha').value);
+
+    const ringColorHex = themeColor(
+        "--ring-color",
+        document.getElementById('ringColor').value
+    );
+
+    const ringAlpha = parseFloat(
+        themeColor(
+            "--ring-alpha",
+            document.getElementById('ringAlpha').value
+        )
+    );
+
     const base = new THREE.Color(ringColorHex);
+
     const hsl = {h:0,s:0,l:0};
     base.getHSL(hsl);
-    const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
-    const shaded = applyShading(0.9, 0.24 + (index % 4)*0.02);
+
+    const color = new THREE.Color()
+        .setHSL(
+            hsl.h + hueShift,
+            hsl.s,
+            hsl.l + (index%3)*0.015
+        );
+
+    const shaded = applyShading(
+        0.9,
+        0.24 + (index % 4)*0.02
+    );
+
     return new THREE.MeshStandardMaterial({
-      color: color,
-      metalness: shaded.metalness,
-      roughness: shaded.roughness,
-      emissive: 0x2a1a05,
-      emissiveIntensity: 0.12,
-      transparent: ringAlpha < 0.999,
-      opacity: ringAlpha,
-      depthWrite: ringAlpha >= 0.999
+        color,
+        metalness: shaded.metalness,
+        roughness: shaded.roughness,
+        emissive: color,
+        emissiveIntensity:0.12,
+        transparent:ringAlpha < 0.999,
+        opacity:ringAlpha,
+        depthWrite:ringAlpha >= 0.999
     });
-  }
-  function sphereMaterial(){
-    const sphereColorHex = document.getElementById('sphereColor').value;
-    const sphereAlpha = parseFloat(document.getElementById('sphereAlpha').value);
+}
+function sphereMaterial(){
+
+    const sphereColorHex = themeColor(
+        "--sphere-color",
+        document.getElementById('sphereColor').value
+    );
+
+    const sphereAlpha = parseFloat(
+        themeColor(
+            "--sphere-alpha",
+            document.getElementById('sphereAlpha').value
+        )
+    );
+
     const shaded = applyShading(0.85, 0.35);
+
     return new THREE.MeshStandardMaterial({
-      color: sphereColorHex,
-      metalness: shaded.metalness,
-      roughness: shaded.roughness,
-      transparent: sphereAlpha < 0.999,
-      opacity: sphereAlpha,
-      depthWrite: sphereAlpha >= 0.999
+        color: sphereColorHex,
+        metalness: shaded.metalness,
+        roughness: shaded.roughness,
+        transparent: sphereAlpha < 0.999,
+        opacity: sphereAlpha,
+        depthWrite: sphereAlpha >= 0.999
     });
-  }
+}
   function innerMaterial(index){
     // same per-ring tonal variation trick as goldMaterial, but keyed off the
     // internal ring's own color/alpha controls so it's fully independent
@@ -1966,7 +2029,26 @@
 }
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
   function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
-  function hexToRgb(hex){const v=parseInt(hex.slice(1),16); return {r:(v>>16)&255, g:(v>>8)&255, b:v&255};}
+
+  function hexToRgb(hex){
+
+    if(!hex || hex[0] !== "#"){
+        return {
+            r:255,
+            g:255,
+            b:255
+        };
+    }
+
+    const v=parseInt(hex.slice(1),16);
+
+    return {
+        r:(v>>16)&255,
+        g:(v>>8)&255,
+        b:v&255
+    };
+
+}
   // Pulse endpoints are user-adjustable (see #pulseWhite/#pulseCharcoal/#pulseGold);
   // read live each frame so dragging a picker updates the pulse immediately.
   // Originally LD_BLUE and LD_BLACK were both hardcoded to the same charcoal
