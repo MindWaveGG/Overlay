@@ -873,21 +873,29 @@ function sphereMaterial(){
     });
   }
   function discMaterial(){
-    // color disc only — no webcam logic here at all anymore. Keeping this
-    // mesh's behavior completely unaffected by the webcam feature was the
-    // whole point of splitting them into two separate meshes.
-    const colorHex = document.getElementById('discColor').value;
-    const alpha = parseFloat(document.getElementById('discAlpha').value);
+
+    const colorHex = themeColor(
+        "--disc-color",
+        document.getElementById('discColor').value
+    );
+
+    const alpha = parseFloat(
+        themeColor(
+            "--disc-alpha",
+            document.getElementById('discAlpha').value
+        )
+    );
+
     return new THREE.MeshStandardMaterial({
-      color: colorHex,
-      metalness: 0.1,
-      roughness: 0.6,
-      transparent: alpha < 0.999,
-      opacity: alpha,
-      depthWrite: alpha >= 0.999,
-      side: THREE.DoubleSide // camera can orbit fully around it, so both faces must render
+        color: colorHex,
+        metalness: 0.1,
+        roughness: 0.6,
+        transparent: alpha < 0.999,
+        opacity: alpha,
+        depthWrite: alpha >= 0.999,
+        side: THREE.DoubleSide
     });
-  }
+}
 
   function webcamMaterial(){
     // Unlit on purpose: MeshBasicMaterial isn't affected by scene lights, so the
