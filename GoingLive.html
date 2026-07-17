@@ -13,6 +13,15 @@
     --text: #e8e6e1;
     --text-dim: #8b8f99;
     --accent: #c96a3e;
+    --ring-color: #00ffff;
+    --pulse-color: #ffffff;
+    --pulse-white: #ffffff;
+    --pulse-charcoal: #333333;
+    --pulse-gold: #ffd700;
+
+    --pulse-white-alpha: 1;
+    --pulse-charcoal-alpha: 1;
+    --pulse-gold-alpha: 1;
   }
   *{box-sizing:border-box;}
   html,body{
@@ -1944,6 +1953,17 @@
   }
 
   // --- Color pulsing, ported verbatim from GoingLive ---
+ function themeColor(name, fallback){
+
+    const value = getComputedStyle(
+        document.documentElement
+    )
+    .getPropertyValue(name)
+    .trim();
+
+    return value || fallback;
+
+}
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
   function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
   function hexToRgb(hex){const v=parseInt(hex.slice(1),16); return {r:(v>>16)&255, g:(v>>8)&255, b:v&255};}
@@ -1951,13 +1971,100 @@
   // read live each frame so dragging a picker updates the pulse immediately.
   // Originally LD_BLUE and LD_BLACK were both hardcoded to the same charcoal
   // value, so they now share a single "charcoal" picker.
-  function LD_RED(){ return hexToRgb(document.getElementById('pulseWhite').value); }
-  function LD_BLUE(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
-  function LD_GOLD(){ return hexToRgb(document.getElementById('pulseGold').value); }
-  function LD_BLACK(){ return hexToRgb(document.getElementById('pulseCharcoal').value); }
-  function LD_WHITE_ALPHA(){ return parseFloat(document.getElementById('pulseWhiteAlpha').value); }
-  function LD_CHARCOAL_ALPHA(){ return parseFloat(document.getElementById('pulseCharcoalAlpha').value); }
-  function LD_GOLD_ALPHA(){ return parseFloat(document.getElementById('pulseGoldAlpha').value); }
+  function cssVar(name, fallback){
+
+    const value =
+        getComputedStyle(document.documentElement)
+        .getPropertyValue(name)
+        .trim();
+
+    return value || fallback;
+
+}
+
+
+function LD_RED(){
+
+    return hexToRgb(
+        themeColor(
+            "--pulse-white",
+            document.getElementById('pulseWhite').value
+        )
+    );
+
+}
+
+
+function LD_BLUE(){
+
+    return hexToRgb(
+        themeColor(
+            "--pulse-charcoal",
+            document.getElementById('pulseCharcoal').value
+        )
+    );
+
+}
+
+
+function LD_GOLD(){
+
+    return hexToRgb(
+        themeColor(
+            "--pulse-gold",
+            document.getElementById('pulseGold').value
+        )
+    );
+
+}
+
+
+function LD_BLACK(){
+
+    return hexToRgb(
+        themeColor(
+            "--pulse-black",
+            document.getElementById('pulseCharcoal').value
+        )
+    );
+
+}
+
+
+function LD_WHITE_ALPHA(){
+
+    return parseFloat(
+        cssVar(
+            '--pulse-white-alpha',
+            document.getElementById('pulseWhiteAlpha').value
+        )
+    );
+
+}
+
+
+function LD_CHARCOAL_ALPHA(){
+
+    return parseFloat(
+        cssVar(
+            '--pulse-charcoal-alpha',
+            document.getElementById('pulseCharcoalAlpha').value
+        )
+    );
+
+}
+
+
+function LD_GOLD_ALPHA(){
+
+    return parseFloat(
+        cssVar(
+            '--pulse-gold-alpha',
+            document.getElementById('pulseGoldAlpha').value
+        )
+    );
+
+}
 
   // --- Layout: ports GoingLive's Steps 1–4 (outward → spillover → GoingLive
   // fill-to-center → cascading spiral angles) almost line-for-line, operating in
