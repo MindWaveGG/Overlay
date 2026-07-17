@@ -21,8 +21,6 @@
 
     /* OBS / Theme bridge */
 
-    --ring-color:#00ffff;
-
     --pulse-color:#ffffff;
 
     --pulse-white:#ffffff;
@@ -780,27 +778,32 @@
     camera.lookAt(0,0,0);
   }
 
-  // --- Materials ---
- function goldMaterial(index){
+ // --- Materials ---
+function goldMaterial(index){
 
     const hueShift = ((index % 5) - 2) * 0.008;
 
+
     const ringColorHex = themeColor(
-        "--ring-color",
+        "--outer-ring-color",
         document.getElementById('ringColor').value
     );
 
+
     const ringAlpha = parseFloat(
         themeColor(
-            "--ring-alpha",
+            "--outer-ring-alpha",
             document.getElementById('ringAlpha').value
         )
     );
 
+
     const base = new THREE.Color(ringColorHex);
+
 
     const hsl = {h:0,s:0,l:0};
     base.getHSL(hsl);
+
 
     const color = new THREE.Color()
         .setHSL(
@@ -809,21 +812,36 @@
             hsl.l + (index%3)*0.015
         );
 
+
     const shaded = applyShading(
         0.9,
         0.24 + (index % 4)*0.02
     );
 
+
     return new THREE.MeshStandardMaterial({
-        color,
+
+        color: color,
+
         metalness: shaded.metalness,
+
         roughness: shaded.roughness,
+
+        // IMPORTANT:
+        // use the ring color as emissive also
+        // otherwise lighting can wash it white
         emissive: color,
+
         emissiveIntensity:0.12,
+
         transparent:ringAlpha < 0.999,
+
         opacity:ringAlpha,
+
         depthWrite:ringAlpha >= 0.999
+
     });
+
 }
 function sphereMaterial(){
 
@@ -832,6 +850,7 @@ function sphereMaterial(){
         document.getElementById('sphereColor').value
     );
 
+
     const sphereAlpha = parseFloat(
         themeColor(
             "--sphere-alpha",
@@ -839,62 +858,117 @@ function sphereMaterial(){
         )
     );
 
-    const shaded = applyShading(0.85, 0.35);
+
+    const shaded = applyShading(0.85,0.35);
+
 
     return new THREE.MeshStandardMaterial({
-        color: sphereColorHex,
-        metalness: shaded.metalness,
-        roughness: shaded.roughness,
-        transparent: sphereAlpha < 0.999,
-        opacity: sphereAlpha,
-        depthWrite: sphereAlpha >= 0.999
+
+        color:sphereColorHex,
+
+        metalness:shaded.metalness,
+
+        roughness:shaded.roughness,
+
+        transparent:sphereAlpha < 0.999,
+
+        opacity:sphereAlpha,
+
+        depthWrite:sphereAlpha >= 0.999
+
     });
+
 }
-  function innerMaterial(index){
-    // same per-ring tonal variation trick as goldMaterial, but keyed off the
-    // internal ring's own color/alpha controls so it's fully independent
+ function innerMaterial(index){
+
     const hueShift = ((index % 5) - 2) * 0.008;
-    const colorHex = document.getElementById('ringColorI').value;
-    const alpha = parseFloat(document.getElementById('ringAlphaI').value);
+
+
+    const colorHex = themeColor(
+        "--inner-ring-color",
+        document.getElementById('ringColorI').value
+    );
+
+
+    const alpha = parseFloat(
+        themeColor(
+            "--inner-ring-alpha",
+            document.getElementById('ringAlphaI').value
+        )
+    );
+
+
     const base = new THREE.Color(colorHex);
+
     const hsl = {h:0,s:0,l:0};
+
     base.getHSL(hsl);
-    const color = new THREE.Color().setHSL(hsl.h + hueShift, hsl.s, hsl.l + (index%3)*0.015);
-    const shaded = applyShading(0.7, 0.3 + (index % 4)*0.02);
+
+
+    const color = new THREE.Color()
+        .setHSL(
+            hsl.h + hueShift,
+            hsl.s,
+            hsl.l + (index%3)*0.015
+        );
+
+
+    const shaded = applyShading(
+        0.7,
+        0.3 + (index % 4)*0.02
+    );
+
+
     return new THREE.MeshStandardMaterial({
-      color: color,
-      metalness: shaded.metalness,
-      roughness: shaded.roughness,
-      emissive: 0x0a2a28,
-      emissiveIntensity: 0.15,
-      transparent: alpha < 0.999,
-      opacity: alpha,
-      depthWrite: alpha >= 0.999
+
+        color:color,
+
+        metalness:shaded.metalness,
+
+        roughness:shaded.roughness,
+
+        emissive:color,
+
+        emissiveIntensity:0.15,
+
+        transparent:alpha < 0.999,
+
+        opacity:alpha,
+
+        depthWrite:alpha >= 0.999
+
     });
-  }
+
+}
   function discMaterial(){
 
     const colorHex = themeColor(
         "--disc-color",
-        document.getElementById('discColor').value
+        "#000000"
     );
 
     const alpha = parseFloat(
         themeColor(
             "--disc-alpha",
-            document.getElementById('discAlpha').value
+            "0"
         )
     );
 
-    return new THREE.MeshStandardMaterial({
-        color: colorHex,
-        metalness: 0.1,
-        roughness: 0.6,
-        transparent: alpha < 0.999,
-        opacity: alpha,
-        depthWrite: alpha >= 0.999,
-        side: THREE.DoubleSide
+
+    return new THREE.MeshBasicMaterial({
+
+        color:colorHex,
+
+        transparent:true,
+
+        opacity:alpha,
+
+        depthWrite:false,
+
+        side:THREE.DoubleSide
+
     });
+
 }
 
   function webcamMaterial(){
