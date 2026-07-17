@@ -706,8 +706,8 @@
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.NoToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
   // Page background: 'color' keeps the original opaque look; 'transparent'
@@ -731,25 +731,33 @@
   }
 
   // Lighting — warm key + cool rim + soft ambient, for a gold-metal look
-  scene.add(new THREE.AmbientLight(0x404050, 0.7));
-  const key = new THREE.DirectionalLight(0xfff1d0, 2.4);
-  key.position.set(5, 8, 6);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.near = 1;
-  key.shadow.camera.far = 20;
-  key.shadow.camera.left = -4;
-  key.shadow.camera.right = 4;
-  key.shadow.camera.top = 4;
-  key.shadow.camera.bottom = -4;
-  key.shadow.bias = -0.001;
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0x6699ff, 0.9);
-  rim.position.set(-6, -3, -5);
-  scene.add(rim);
-  const fill = new THREE.PointLight(0xffd8a0, 0.9, 20);
-  fill.position.set(-3, 2, 4);
-  scene.add(fill);
+  // Lighting — neutralized for dynamic class colors
+
+scene.add(new THREE.AmbientLight(0x404050, 0.35));
+
+const key = new THREE.DirectionalLight(0xfff1d0, 1.0);
+
+key.position.set(5,8,6);
+key.castShadow = true;
+key.shadow.mapSize.set(1024,1024);
+key.shadow.bias = -0.001;
+
+scene.add(key);
+
+
+const rim = new THREE.DirectionalLight(
+    0x6699ff,
+    0.35
+);
+
+rim.position.set(-6,-3,-5);
+scene.add(rim);
+
+
+const fill = new THREE.PointLight(0xffd8a0,0.3,20);
+
+fill.position.set(-3,2,4);
+scene.add(fill);
 
   // --- Simple orbit-style controls (no external OrbitControls needed) ---
   let camTheta = 0.6, camPhi = 1.15, camDist = 6.5;
@@ -808,23 +816,21 @@ function goldMaterial(index){
         );
 
 
-    return new THREE.MeshStandardMaterial({
+return new THREE.MeshStandardMaterial({
 
-        color: color,
+    color: color,
 
-        // reduce white reflections
-        metalness: 0.35,
-        roughness: 0.55,
+    metalness:0.15,
+    roughness:0.65,
 
-        // keep glow tied to ring color
-        emissive: color,
-        emissiveIntensity:0.08,
+    emissive:new THREE.Color(color).multiplyScalar(0.15),
+    emissiveIntensity:0.15,
 
-        transparent:ringAlpha < 0.999,
-        opacity:ringAlpha,
+    transparent:ringAlpha < 0.999,
+    opacity:ringAlpha,
 
-        depthWrite:ringAlpha >= 0.999
-    });
+    depthWrite:ringAlpha >= 0.999
+});
 }
 function sphereMaterial(){
 
@@ -902,25 +908,21 @@ function sphereMaterial(){
     );
 
 
-    return new THREE.MeshStandardMaterial({
+return new THREE.MeshStandardMaterial({
 
-        color:color,
+    color: color,
 
-        metalness:shaded.metalness,
+    metalness:0.35,
+    roughness:0.55,
 
-        roughness:shaded.roughness,
+    emissive:0x000000,
+    emissiveIntensity:0,
 
-        emissive:color,
+    transparent:ringAlpha < 0.999,
+    opacity:ringAlpha,
 
-        emissiveIntensity:0.15,
-
-        transparent:alpha < 0.999,
-
-        opacity:alpha,
-
-        depthWrite:alpha >= 0.999
-
-    });
+    depthWrite:ringAlpha >= 0.999
+});
 
 }
   function discMaterial(){
