@@ -1971,16 +1971,7 @@
   // read live each frame so dragging a picker updates the pulse immediately.
   // Originally LD_BLUE and LD_BLACK were both hardcoded to the same charcoal
   // value, so they now share a single "charcoal" picker.
-  function cssVar(name, fallback){
 
-    const value =
-        getComputedStyle(document.documentElement)
-        .getPropertyValue(name)
-        .trim();
-
-    return value || fallback;
-
-}
 
 
 function LD_RED(){
@@ -2034,7 +2025,7 @@ function LD_BLACK(){
 function LD_WHITE_ALPHA(){
 
     return parseFloat(
-        cssVar(
+        themeColor(
             '--pulse-white-alpha',
             document.getElementById('pulseWhiteAlpha').value
         )
@@ -2046,7 +2037,7 @@ function LD_WHITE_ALPHA(){
 function LD_CHARCOAL_ALPHA(){
 
     return parseFloat(
-        cssVar(
+        themeColor(
             '--pulse-charcoal-alpha',
             document.getElementById('pulseCharcoalAlpha').value
         )
@@ -2058,7 +2049,7 @@ function LD_CHARCOAL_ALPHA(){
 function LD_GOLD_ALPHA(){
 
     return parseFloat(
-        cssVar(
+        themeColor(
             '--pulse-gold-alpha',
             document.getElementById('pulseGoldAlpha').value
         )
