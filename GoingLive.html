@@ -437,6 +437,19 @@
   </div>
 
   <div class="row">
+    <label>On page load, when Capture source = OBS</label>
+    <div class="toggles">
+      <button data-startupmode="instant" class="active">Switch to OBS immediately</button>
+      <button data-startupmode="delayed">Start on Webcam, then switch</button>
+    </div>
+  </div>
+  <div class="row" id="startupDelayRow" style="display:none;">
+    <label>Delay before switching to OBS source <span class="val" id="vStartupDelay">6s</span></label>
+    <input type="range" id="startupDelaySec" min="1" max="30" step="1" value="6">
+  </div>
+  <p class="sub" style="margin:2px 0 12px; font-size:11px;">Right after OBS itself launches, its WebSocket server and individual sources (game/display/camera captures especially) can take a few seconds to actually start rendering. Requesting a screenshot before that happens is what causes the very first frame to fail and lock in a wrong, stretched aspect ratio. "Start on Webcam, then switch" shows your raw webcam immediately and only swaps to the OBS source feed once the delay has passed, giving OBS time to be fully ready first.</p>
+
+  <div class="row">
     <label>OBS WebSocket URL</label>
     <input type="text" id="obsUrl" value="ws://localhost:4455" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:12px;">
   </div>
@@ -1182,6 +1195,55 @@ return new THREE.MeshStandardMaterial({
   // realistically ~8-10fps before it costs noticeable CPU on both ends — a
   // "video" made of a slideshow of screenshots, redrawn into a canvas texture.
   let captureMode = 'webcam'; // 'webcam' | 'obs'
+  // Startup-switch: lets a saved "Capture source = OBS" setting show Webcam
+  // first and only flip over to the OBS source feed after a delay, instead of
+  // switching the instant the page loads. See the panel toggle just below the
+  // Capture source buttons. startupMode/startupDelaySec are restored from
+  // settings (default: instant, matching the old only-existing behavior for
+  // settings blobs saved before this toggle existed).
+  let startupMode = 'instant'; // 'instant' | 'delayed'
+  let startupDelaySec = 6;
+  let deferObsStartupSwitch = false; // set mid-applySettings(), consumed at its end
+  let startupSwitchTimer = null;
+  function cancelDelayedStartupSwitch(){
+    if(startupSwitchTimer){ clearTimeout(startupSwitchTimer); startupSwitchTimer = null; }
+  }
+  // Centralizes what the manual Capture-source click handler used to do inline,
+  // so the delayed-startup timer below can trigger the exact same switch
+  // (buttons + polling + disc rebuild) instead of duplicating that logic.
+  function switchCaptureMode(mode){
+    cancelDelayedStartupSwitch(); // any explicit switch (manual or delayed-timer-driven) supersedes it
+    captureMode = mode;
+    document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.capturemode === mode);
+    });
+    if(mode === 'obs'){
+      const sel = document.getElementById('obsSourceSelect');
+      if(sel.value) startOBSPolling(sel.value);
+    } else {
+      stopOBSPolling();
+    }
+    buildWebcamDisc();
+  }
+  // Waits out startupDelaySec, then switches to the OBS source — but only once
+  // OBS is actually connected AND that source is populated in the dropdown.
+  // Keeps re-checking every second past the initial delay rather than giving
+  // up on one miss, since OBS's own connect retry (connectToOBSWithRetry, see
+  // bottom of file) can legitimately still be working on it for several more
+  // seconds after this delay elapses.
+  function attemptDelayedStartupSwitch(){
+    startupSwitchTimer = null;
+    const sel = document.getElementById('obsSourceSelect');
+    if(obsConnected && sel.value){
+      switchCaptureMode('obs');
+      return;
+    }
+    startupSwitchTimer = setTimeout(attemptDelayedStartupSwitch, 1000);
+  }
+  function scheduleDelayedStartupSwitch(){
+    if(startupSwitchTimer) return; // already armed
+    startupSwitchTimer = setTimeout(attemptDelayedStartupSwitch, startupDelaySec * 1000);
+  }
   let pendingCamDeviceId = null; // set by applySettings() when a saved settings file
                                   // names a camera device that enumerateDevices() hasn't
                                   // populated into the <select> yet — populateCameraList()
@@ -1313,45 +1375,88 @@ return new THREE.MeshStandardMaterial({
 
   function stopOBSPolling(){
     if(obsPollTimer){ clearInterval(obsPollTimer); obsPollTimer = null; }
+    if(obsProbeRetryTimer){ clearTimeout(obsProbeRetryTimer); obsProbeRetryTimer = null; }
+    obsProbeToken++; // invalidate any in-flight probe/retry chain from a previous source
   }
 
   let obsRequestW = 640;
   let obsRequestH = 360;
+  let obsProbeRetryTimer = null;
+  let obsProbeToken = 0; // bumped on every stopOBSPolling()/startOBSPolling() so a stale
+                          // retry chain from a previously-selected source can recognize
+                          // it's obsolete and quietly stop instead of stomping on the
+                          // current source's state.
+  const OBS_PROBE_MAX_ATTEMPTS = 6; // ~1s,1.5s,2s,2.5s,3s,3.5s backoff below ≈ 12s total —
+                                     // comfortably covers OBS's own post-launch startup
+                                     // window (game/display/dshow captures aren't guaranteed
+                                     // to have produced a first frame within the first
+                                     // couple seconds — see device_stagesurface_create
+                                     // failures in the logs when a screenshot is requested
+                                     // of a source that hasn't rendered anything yet).
 
-  async function startOBSPolling(sourceName){
-    stopOBSPolling();
-    obsSourceName = sourceName || null;
-    if(!obsSourceName || !obsConnected) return;
-
-    // Detect the source's real aspect ratio once, up front: requesting a
-    // screenshot with NO width/height returns it at native resolution. If we
-    // instead always requested a hardcoded 640x360 (16:9) box, OBS would
-    // force-stretch any non-16:9 source into that box before it ever reached
-    // us — our own aspect-crop logic downstream never had a chance, because
-    // by the time we saw the image it already claimed to BE 640x360. This is
-    // almost certainly what was causing the distortion.
-    obsRequestW = 640;
-    obsRequestH = 360;
+  // Root cause of the "webcam looks stretched" bug: GetSourceScreenshot with no
+  // width/height (the aspect-ratio probe below) can transiently fail — most often
+  // because the target source hasn't produced its first rendered frame yet, which
+  // OBS surfaces as a D3D11 "Failed to create staging surface" error internally —
+  // and the OLD code treated any probe failure as permanent, silently locking in
+  // a hardcoded 640x360 (16:9) request for every future poll. If the real source
+  // isn't 16:9 (a 4:3/1:1 webcam, a cropped capture, etc.), OBS then force-stretches
+  // it into that box on every single frame from then on — a persistent, silent
+  // distortion that never recovers on its own. Fixed by retrying the probe a few
+  // times with backoff before falling back, and by making that final fallback
+  // request NATIVE resolution (no imageWidth/imageHeight at all) instead of a
+  // fixed aspect guess — native can never be stretched, it just costs a slightly
+  // larger payload per poll.
+  async function probeOBSAspect(sourceName, attempt, token){
     try{
       const probe = await obs.call('GetSourceScreenshot', {
-        sourceName: obsSourceName,
+        sourceName: sourceName,
         imageFormat: 'png'
       });
+      if(token !== obsProbeToken) return null; // source changed / polling stopped while awaiting
       const dims = await getImageDimensions(probe.imageData);
       if(dims.width && dims.height){
         const aspect = dims.width / dims.height;
         // Cap the long edge at 640px to keep the repeated poll payload small —
         // just preserve the source's real proportions while doing it.
         if(aspect >= 1){
-          obsRequestW = 640;
-          obsRequestH = Math.max(1, Math.round(640 / aspect));
-        } else {
-          obsRequestH = 640;
-          obsRequestW = Math.max(1, Math.round(640 * aspect));
+          return { w: 640, h: Math.max(1, Math.round(640 / aspect)) };
         }
+        return { w: Math.max(1, Math.round(640 * aspect)), h: 640 };
       }
+      return null;
     }catch(err){
-      console.error('OBS aspect-ratio probe failed, falling back to 640x360', err);
+      if(token !== obsProbeToken) return null;
+      if(attempt < OBS_PROBE_MAX_ATTEMPTS){
+        console.warn(`OBS aspect-ratio probe failed (attempt ${attempt}/${OBS_PROBE_MAX_ATTEMPTS}), retrying…`, err);
+        await new Promise(resolve=>{
+          obsProbeRetryTimer = setTimeout(resolve, 500 * attempt);
+        });
+        if(token !== obsProbeToken) return null; // stopped/changed while waiting to retry
+        return probeOBSAspect(sourceName, attempt + 1, token);
+      }
+      console.error(`OBS aspect-ratio probe failed after ${OBS_PROBE_MAX_ATTEMPTS} attempts — polling at native resolution instead of guessing an aspect (guessing is what caused stretching).`, err);
+      return null; // null == "use native resolution", never a stretch-prone guess
+    }
+  }
+
+  async function startOBSPolling(sourceName){
+    stopOBSPolling(); // also bumps obsProbeToken, invalidating any prior probe chain
+    const token = obsProbeToken;
+    obsSourceName = sourceName || null;
+    if(!obsSourceName || !obsConnected) return;
+
+    const detected = await probeOBSAspect(obsSourceName, 1, token);
+    if(token !== obsProbeToken) return; // superseded by a newer call while probing
+    if(detected){
+      obsRequestW = detected.w;
+      obsRequestH = detected.h;
+    } else {
+      // Genuine repeated failure: poll at native resolution (0/undefined width &
+      // height tells obs-websocket to return the source's real dimensions) rather
+      // than ever silently forcing a guessed 640x360 box onto whatever this is.
+      obsRequestW = 0;
+      obsRequestH = 0;
     }
 
     // 100ms ≈ 10fps — the practical ceiling for screenshot polling before the
@@ -1364,12 +1469,9 @@ return new THREE.MeshStandardMaterial({
         // key, etc.) on the OBS source gets silently flattened to solid black
         // the moment OBS exports the screenshot. PNG carries alpha straight
         // through, so cut-out areas actually stay transparent in the texture.
-        const res = await obs.call('GetSourceScreenshot', {
-          sourceName: obsSourceName,
-          imageFormat: 'png',
-          imageWidth: obsRequestW,
-          imageHeight: obsRequestH
-        });
+        const req = { sourceName: obsSourceName, imageFormat: 'png' };
+        if(obsRequestW && obsRequestH){ req.imageWidth = obsRequestW; req.imageHeight = obsRequestH; }
+        const res = await obs.call('GetSourceScreenshot', req);
         drawOBSFrame(res.imageData);
       }catch(err){
         console.error('GetSourceScreenshot failed', err);
@@ -3500,17 +3602,23 @@ function LD_GOLD_ALPHA(){
 
   document.querySelectorAll('.toggles button[data-capturemode]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      captureMode = btn.dataset.capturemode;
-      if(captureMode === 'obs'){
-        const sel = document.getElementById('obsSourceSelect');
-        if(sel.value) startOBSPolling(sel.value);
-      } else {
-        stopOBSPolling();
-      }
-      buildWebcamDisc(); // rebuild disc so its material picks up the newly-active texture
+      switchCaptureMode(btn.dataset.capturemode); // also cancels any pending delayed-startup switch
     });
+  });
+
+  // "On page load, when Capture source = OBS" toggle.
+  document.querySelectorAll('.toggles button[data-startupmode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-startupmode]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      startupMode = btn.dataset.startupmode;
+      document.getElementById('startupDelayRow').style.display = (startupMode === 'delayed') ? '' : 'none';
+    });
+  });
+  const startupDelaySec_in = document.getElementById('startupDelaySec');
+  startupDelaySec_in.addEventListener('input', ()=>{
+    startupDelaySec = parseFloat(startupDelaySec_in.value) || 6;
+    document.getElementById('vStartupDelay').textContent = startupDelaySec + 's';
   });
 
   document.getElementById('obsConnectBtn').addEventListener('click', connectToOBS);
@@ -3531,6 +3639,7 @@ function LD_GOLD_ALPHA(){
       alert('Pick an OBS source from the dropdown first.');
       return;
     }
+    cancelDelayedStartupSwitch(); // explicit manual action wins over any pending startup switch
     // 1. Force "Capture source" to OBS.
     captureMode = 'obs';
     document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
@@ -3710,6 +3819,8 @@ function LD_GOLD_ALPHA(){
       obsUrl: document.getElementById('obsUrl').value,
       obsSourceSelect: document.getElementById('obsSourceSelect').value,
       captureMode: captureMode,
+      startupMode: startupMode,
+      startupDelaySec: startupDelaySec,
       camDeviceId: document.getElementById('camDevice').value,
       liveDataOn: liveDataOn,
       seRelayOn: seRelayOn,
@@ -3883,14 +3994,37 @@ function LD_GOLD_ALPHA(){
       obsBgColor = s.obsBgColor;
     }
     if(s.obsUrl != null) document.getElementById('obsUrl').value = s.obsUrl;
+    // Startup mode: restored here, before the OBS source restore just below,
+    // so that logic already knows whether THIS load should switch to OBS
+    // instantly or defer to scheduleDelayedStartupSwitch() further down.
+    // Older saved settings blobs won't have this key at all — default those
+    // to 'instant', matching the only-existing behavior before this toggle
+    // existed (same pattern as seRelayMode elsewhere in this function).
+    startupMode = (s.startupMode === 'instant' || s.startupMode === 'delayed') ? s.startupMode : 'instant';
+    document.querySelectorAll('.toggles button[data-startupmode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.startupmode === startupMode);
+    });
+    document.getElementById('startupDelayRow').style.display = (startupMode === 'delayed') ? '' : 'none';
+    if(s.startupDelaySec != null){
+      startupDelaySec = parseFloat(s.startupDelaySec) || 6;
+      document.getElementById('startupDelaySec').value = startupDelaySec;
+      document.getElementById('vStartupDelay').textContent = startupDelaySec + 's';
+    }
     if(s.obsSourceSelect){
       const obsSel = document.getElementById('obsSourceSelect');
       const hasOption = Array.from(obsSel.options).some(o=>o.value === s.obsSourceSelect);
+      const wantsOBS = (captureMode === 'obs' || s.captureMode === 'obs');
       if(hasOption){
         obsSel.value = s.obsSourceSelect;
-        if(captureMode === 'obs' || s.captureMode === 'obs') startOBSPolling(s.obsSourceSelect);
+        if(wantsOBS && startupMode === 'delayed'){
+          deferObsStartupSwitch = true; // scheduleDelayedStartupSwitch() (armed at the end of this
+                                         // function) does the actual switch once the delay elapses
+        } else if(wantsOBS){
+          startOBSPolling(s.obsSourceSelect);
+        }
       } else {
         pendingObsSourceName = s.obsSourceSelect;
+        if(wantsOBS && startupMode === 'delayed') deferObsStartupSwitch = true;
       }
     }
     // obsPassword and seJwt are NOT restored from the settings file — they're
@@ -3900,10 +4034,19 @@ function LD_GOLD_ALPHA(){
     // blank value.
 
     if(s.captureMode){
-      captureMode = s.captureMode;
-      document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
-        b.classList.toggle('active', b.dataset.capturemode === s.captureMode);
-      });
+      if(s.captureMode === 'obs' && startupMode === 'delayed'){
+        // Show Webcam for now — deferObsStartupSwitch (set above) gets picked
+        // up at the end of this function to arm the delayed switch instead.
+        captureMode = 'webcam';
+        document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+          b.classList.toggle('active', b.dataset.capturemode === 'webcam');
+        });
+      } else {
+        captureMode = s.captureMode;
+        document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+          b.classList.toggle('active', b.dataset.capturemode === s.captureMode);
+        });
+      }
     }
     if(s.camDeviceId){
       // The <select> is populated asynchronously by device enumeration
@@ -3988,6 +4131,12 @@ function LD_GOLD_ALPHA(){
     if(s.camPhi != null) camPhi = parseFloat(s.camPhi);
 
     if(needsBuildRings) buildRings();
+
+    if(deferObsStartupSwitch){
+      deferObsStartupSwitch = false; // one-shot per applySettings() call — the timer itself owns firing from here
+      scheduleDelayedStartupSwitch();
+    }
+
     scheduleLocalSave();
   }
 
