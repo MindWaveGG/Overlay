@@ -611,6 +611,18 @@
       <button data-serelay="off" class="active">Off</button>
     </div>
   </div>
+  <div class="row">
+    <label style="text-transform:none; letter-spacing:0;">SE relay status: <span class="val" id="seRelayStatus">Off</span></label>
+  </div>
+
+  <div class="row">
+    <label>SE relay connect mode</label>
+    <div class="toggles">
+      <button data-serelaymode="auto" class="active">Auto-Connect</button>
+      <button data-serelaymode="manual">Manual-Connect</button>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:-4px; margin-bottom:12px;">Auto-Connect restores the relay's last on/off state and reconnects automatically on page load — use this in OBS. Manual-Connect ignores the saved on/off state on load and always starts Off, so you have to click "On" yourself each time — use this in a Chrome tab so testing here can't fight with the OBS instance.</p>
 
   <div class="row">
     <label>SE JWT token</label>
@@ -1931,6 +1943,11 @@ return new THREE.MeshStandardMaterial({
   let endCapsOn = false;   // seals the two open ends of a partial arc (round/cubic/diamond, external + internal)
   let shadingMode = 'metallic'; // 'metallic' | 'flat' — matte kills reflectivity/shine, metallic keeps the original tuned look
   let seRelayOn = false;
+  let seRelayMode = 'auto'; // 'auto' = restore last on/off and reconnect on load (OBS); 'manual' = always start Off, user must click On (Chrome testing)
+  function setSEStatus(text){
+    const el = document.getElementById('seRelayStatus');
+    if(el) el.textContent = text;
+  }
   let timers = [];
   let followerCurrent=0, followerGoal=0;
   let subCurrent=0, subGoal=0;
@@ -2919,30 +2936,64 @@ function LD_GOLD_ALPHA(){
   let seReconnectToken = null;
   let seReconnectAttempts = 0;
   function connectSEWebSocket() {
+    const jwtCheck = document.getElementById('seJwt').value.trim();
+    const roomCheck = document.getElementById('seChannelId').value.trim();
+    if(!jwtCheck || !roomCheck){
+      console.warn('[SE-WS] not connecting — missing', !jwtCheck ? 'JWT' : '', !jwtCheck && !roomCheck ? 'and' : '', !roomCheck ? 'channel ID' : '', '. Paste the value(s) in, then toggle the relay Off then On to retry.');
+      setSEStatus('Waiting for JWT/Channel ID');
+      return;
+    }
     const wsUrl = seReconnectToken
       ? `wss://astro.streamelements.com/?reconnect_token=${seReconnectToken}`
       : 'wss://astro.streamelements.com/';
+    console.log('[SE-WS] connecting to', wsUrl.replace(/reconnect_token=[^&]+/, 'reconnect_token=***'));
+    setSEStatus('Connecting…');
     seSocket = new WebSocket(wsUrl);
-    seSocket.addEventListener('open', () => { seReconnectAttempts = 0; });
+    seSocket.addEventListener('open', () => {
+      seReconnectAttempts = 0;
+      console.log('[SE-WS] socket OPEN — waiting for welcome message from StreamElements');
+      setSEStatus('Socket open, awaiting welcome…');
+    });
     seSocket.addEventListener('message', (event) => {
       const msg = JSON.parse(event.data);
+      console.log('[SE-WS] frame received, type:', msg.type, msg);
       switch (msg.type) {
         case 'welcome':
           seReconnectToken = null;
+          const room = document.getElementById('seChannelId').value.trim();
+          const jwt = document.getElementById('seJwt').value.trim();
+          console.log('[SE-WS] welcome received — subscribing to channel.tips for room:', room || '(EMPTY!)', '| JWT present:', !!jwt);
+          setSEStatus('Subscribing…');
           seSocket.send(JSON.stringify({
             type: 'subscribe',
             nonce: crypto.randomUUID(),
             data: {
               topic: 'channel.tips',
-              room: document.getElementById('seChannelId').value.trim(),
-              token: document.getElementById('seJwt').value.trim(),
+              room: room,
+              token: jwt,
               token_type: 'jwt'
             }
           }));
           break;
+        case 'response':
+          console.log('[SE-WS] subscribe ack from server:', msg);
+          if(msg.error){
+            console.error('[SE-WS] subscribe rejected:', msg.error);
+            setSEStatus('Rejected: ' + msg.error);
+          } else {
+            setSEStatus('Subscribed — listening for tips');
+          }
+          break;
         case 'message':
-          if (msg.topic !== 'channel.tips') return;
-          if (msg.data?.status !== 'success' || msg.data?.approved !== 'allowed') return;
+          if (msg.topic !== 'channel.tips') {
+            console.log('[SE-WS] ignoring message on unrelated topic:', msg.topic);
+            return;
+          }
+          console.log('[SE-WS] channel.tips message — status:', msg.data?.status, 'approved:', msg.data?.approved);
+          if (msg.data?.status !== 'success' || msg.data?.approved !== 'allowed') {
+            console.warn('[SE-WS] tip event filtered out (not success/allowed):', msg.data);
+            return;
+          }
           const donation = msg.data.donation;
           const tipPayload = {
             type: 'tip',
@@ -2954,27 +3005,46 @@ function LD_GOLD_ALPHA(){
               message: donation?.message || ''
             }
           };
+          console.log('[SE-WS] forwarding tip to Apps Script:', tipPayload);
+          setSEStatus('Tip received — forwarding…');
           fetch(gasUrl(), {
             method: 'POST', mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(tipPayload)
-          }).catch(err => console.error('Forward failed:', err));
+          }).then(()=> {
+            console.log('[SE-WS] fetch sent (no-cors, so no response body to confirm receipt)');
+            setSEStatus('Subscribed — last tip forwarded ' + new Date().toLocaleTimeString());
+          }).catch(err => {
+            console.error('[SE-WS] Forward failed:', err);
+            setSEStatus('Tip forward failed — see console');
+          });
           break;
         case 'reconnect':
           seReconnectToken = msg.data?.reconnect_token || null;
+          console.log('[SE-WS] server requested reconnect, closing socket to reconnect with token');
           seSocket.close();
           break;
+        default:
+          console.log('[SE-WS] unhandled frame type:', msg.type);
       }
     });
-    seSocket.addEventListener('close', () => {
-      if(!seRelayOn) return; // don't auto-reconnect once the user has turned the relay off
+    seSocket.addEventListener('error', (err) => {
+      console.error('[SE-WS] socket ERROR:', err);
+      setSEStatus('Socket error — see console');
+    });
+    seSocket.addEventListener('close', (ev) => {
+      console.log('[SE-WS] socket CLOSED — code:', ev.code, 'reason:', ev.reason || '(none given)', 'wasClean:', ev.wasClean);
+      if(!seRelayOn) { console.log('[SE-WS] relay is off, not reconnecting'); setSEStatus('Off'); return; } // don't auto-reconnect once the user has turned the relay off
       const delay = Math.min(1000 * Math.pow(2, seReconnectAttempts), 30000);
       seReconnectAttempts++;
+      console.log(`[SE-WS] reconnecting in ${delay}ms (attempt ${seReconnectAttempts})`);
+      setSEStatus(`Disconnected — retrying in ${Math.round(delay/1000)}s`);
       setTimeout(()=>{ if(seRelayOn) connectSEWebSocket(); }, delay);
     });
   }
   function disconnectSEWebSocket(){
     if(seSocket){ seSocket.close(); seSocket = null; }
+    setSEStatus('Off');
   }
 
   // --- Animation ---
@@ -3386,6 +3456,21 @@ function LD_GOLD_ALPHA(){
     });
   });
 
+  // SE relay connect mode (Auto-Connect / Manual-Connect) — this was previously
+  // just UI markup with no listener, so clicking it did nothing and seRelayMode
+  // was a dead variable. Wired here: clicking updates seRelayMode and persists
+  // it, so the load-time restore logic in applySettings() can tell whether this
+  // instance is allowed to auto-connect (OBS) or must always start Off (Chrome
+  // testing tab).
+  document.querySelectorAll('.toggles button[data-serelaymode]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-serelaymode]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      seRelayMode = btn.dataset.serelaymode;
+      scheduleLocalSave();
+    });
+  });
+
   document.getElementById('enableCamBtn').addEventListener('click', requestCameraAccess);
 
   const camAspectMode_in = document.getElementById('camAspectMode');
@@ -3628,6 +3713,7 @@ function LD_GOLD_ALPHA(){
       camDeviceId: document.getElementById('camDevice').value,
       liveDataOn: liveDataOn,
       seRelayOn: seRelayOn,
+      seRelayMode: seRelayMode,
       camDist: camDist,
       camTheta: camTheta,
       camPhi: camPhi
@@ -3865,12 +3951,34 @@ function LD_GOLD_ALPHA(){
         lastLiveLayout = null;
       }
     }
+    // Restore connect mode first — older saved settings blobs from before this
+    // toggle existed won't have seRelayMode at all, so default those to 'auto'
+    // (matches the previous, only-existing behavior) rather than silently
+    // treating them as manual.
+    seRelayMode = (s.seRelayMode === 'auto' || s.seRelayMode === 'manual') ? s.seRelayMode : 'auto';
+    document.querySelectorAll('.toggles button[data-serelaymode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.serelaymode === seRelayMode);
+    });
+
     if(typeof s.seRelayOn === 'boolean'){
-      document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>{
-        b.classList.toggle('active', (b.dataset.serelay === 'on') === s.seRelayOn);
-      });
-      seRelayOn = s.seRelayOn;
-      if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
+      if(seRelayMode === 'manual'){
+        // Manual-Connect: never auto-reconnect on load, regardless of what was
+        // saved last session. This is what makes it safe to open this file in
+        // a Chrome tab for testing without it silently racing/double-forwarding
+        // tips alongside an OBS instance running in Auto-Connect mode.
+        seRelayOn = false;
+        document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>{
+          b.classList.toggle('active', b.dataset.serelay === 'off');
+        });
+        disconnectSEWebSocket();
+        setSEStatus('Off (Manual-Connect — click On to start)');
+      } else {
+        document.querySelectorAll('.toggles button[data-serelay]').forEach(b=>{
+          b.classList.toggle('active', (b.dataset.serelay === 'on') === s.seRelayOn);
+        });
+        seRelayOn = s.seRelayOn;
+        if(seRelayOn) connectSEWebSocket(); else disconnectSEWebSocket();
+      }
     }
     // Camera zoom/orbit: updateCamera() runs every animate() frame regardless,
     // so just restoring these three numbers is enough — no rebuild needed,
