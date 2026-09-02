@@ -2210,7 +2210,17 @@ return new THREE.MeshStandardMaterial({
     .getPropertyValue(name)
     .trim();
 
-    return value || fallback;
+    // Only trust the computed value if it's actually a hex color (#fff / #ffffff).
+    // Nothing in this page ever defines --sphere-color/--ring-color etc. itself, so
+    // a non-empty, non-hex value here (e.g. "color-mix(in srgb, ... )") means some
+    // outside source — a browser dark-mode/theme extension, or a forced-dark-mode
+    // flag in the browser/OBS rendering this page — is injecting a CSS Color 4
+    // function that THREE.Color can't parse. Falling back keeps the sphere/ring
+    // colors on the values you actually picked instead of spamming
+    // "THREE.Color: Unknown color" and silently leaving the material un-updated.
+    const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value);
+
+    return isHex ? value : fallback;
 
 }
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
