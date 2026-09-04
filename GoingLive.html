@@ -2202,6 +2202,30 @@ return new THREE.MeshStandardMaterial({
   }
 
   // --- Color pulsing, ported verbatim from GoingLive ---
+  //
+  // Custom properties are never evaluated by getComputedStyle() beyond var()
+  // substitution — a function like color-mix() comes back as raw, unparsed
+  // text, even after every var() in it has been resolved down to a literal
+  // hex. theme.css's own --active-secondary (and everything derived from it:
+  // --pulse-gold/-charcoal/-black, --outer-ring-color, --inner-ring-color,
+  // --sphere-color, --disc-color) is defined as color-mix(...), so it always
+  // came back as unparseable text here — this function used to treat that as
+  // "something injected this, don't trust it" and silently fall back to the
+  // manual picker every time, for every one of those variables, regardless
+  // of what class/theme was active.
+  //
+  // The fix: assign the value to a real, typed CSS property (color) on a
+  // hidden probe element. Browsers DO evaluate color-mix()/rgb()/hsl()/named
+  // colors when they land on an actual typed property — just not when they're
+  // sitting in an arbitrary custom property. Reading the probe's computed
+  // color back afterward gives THREE.Color a plain rgb()/rgba() string it can
+  // parse. If the browser couldn't parse the value at all (genuinely bogus
+  // input — a dark-mode extension injecting garbage, a typo, etc.), the probe
+  // stays empty and we still fall back to the manual value, same as before.
+  const _themeColorProbe = document.createElement('span');
+  _themeColorProbe.style.display = 'none';
+  document.documentElement.appendChild(_themeColorProbe);
+
  function themeColor(name, fallback){
 
     const value = getComputedStyle(
@@ -2210,17 +2234,26 @@ return new THREE.MeshStandardMaterial({
     .getPropertyValue(name)
     .trim();
 
-    // Only trust the computed value if it's actually a hex color (#fff / #ffffff).
-    // Nothing in this page ever defines --sphere-color/--ring-color etc. itself, so
-    // a non-empty, non-hex value here (e.g. "color-mix(in srgb, ... )") means some
-    // outside source — a browser dark-mode/theme extension, or a forced-dark-mode
-    // flag in the browser/OBS rendering this page — is injecting a CSS Color 4
-    // function that THREE.Color can't parse. Falling back keeps the sphere/ring
-    // colors on the values you actually picked instead of spamming
-    // "THREE.Color: Unknown color" and silently leaving the material un-updated.
-    const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value);
+    if(!value) return fallback;
 
-    return isHex ? value : fallback;
+    // Alpha/numeric custom properties (e.g. --outer-ring-alpha:0.85) are
+    // plain numbers, not colors — these used to get rejected by the old
+    // hex-only check too, silently overridden by the picker every time.
+    // Pass them straight through.
+    if(/^-?[\d.]+$/.test(value)) return value;
+
+    // Already a plain hex color — no need to round-trip through the probe.
+    if(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) return value;
+
+    _themeColorProbe.style.color = '';    // reset so a failed parse below is detectable
+    _themeColorProbe.style.color = value; // let the real CSS color engine try to parse it
+
+    if(!_themeColorProbe.style.color){
+        // Couldn't be parsed as a color at all — keep the manual fallback.
+        return fallback;
+    }
+
+    return getComputedStyle(_themeColorProbe).color; // now a real rgb()/rgba() string
 
 }
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
