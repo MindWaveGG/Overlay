@@ -2064,7 +2064,16 @@ return new THREE.MeshStandardMaterial({
   async function fetchLiveData(url) {
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error("Network error");
+      if (!response.ok) throw new Error(`GAS returned ${response.status}`);
+      // FIX: Apps Script occasionally bounces a request with its own generic
+      // HTML error page (e.g. concurrent-execution limit hit) instead of the
+      // expected JSON. That page has no error status, so response.ok alone
+      // doesn't catch it — check content-type before parsing, or .json()
+      // throws a confusing "Unexpected token '<'" instead of a clean retry.
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("json")) {
+        throw new Error("GAS returned non-JSON response (likely a transient quota bounce)");
+      }
       return await response.json();
     } catch (error) {
       console.error("GoingLive fetch error:", error);
@@ -2150,7 +2159,18 @@ return new THREE.MeshStandardMaterial({
       const timer = timers[i];
       if (timer.endTime <= now) {
         const url = `${gasUrl()}?action=deltimer&timerName=${encodeURIComponent(timer.name)}`;
-        fetch(url).then(r => r.json()).then(res => {
+        // FIX: was fetch(url).then(r => r.json()) with no status/content-type
+        // check — an Apps Script quota bounce returns an HTML error page here,
+        // which crashed with a raw "Unexpected token '<'" SyntaxError instead
+        // of a readable, retryable error.
+        fetch(url).then(r => {
+          if (!r.ok) throw new Error(`GAS returned ${r.status}`);
+          const contentType = r.headers.get("content-type") || "";
+          if (!contentType.includes("json")) {
+            throw new Error("GAS returned non-JSON response (likely a transient quota bounce)");
+          }
+          return r.json();
+        }).then(res => {
           console.log('Deleted timer response:', res);
         }).catch(err => console.error('Error deleting timer:', err));
         timers.splice(i, 1);
