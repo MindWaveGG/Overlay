@@ -1234,6 +1234,15 @@ return new THREE.MeshStandardMaterial({
   function attemptDelayedStartupSwitch(){
     startupSwitchTimer = null;
     const sel = document.getElementById('obsSourceSelect');
+    // Defensively re-assert the intended source before switching: if OBS
+    // reconnected between when this timer was armed and now, the dropdown
+    // may have been silently reset to whatever GetInputList lists first
+    // (previously this could lock the switch onto the wrong source, e.g.
+    // an audio device, making the toggle look broken).
+    if(desiredObsSourceName && sel.value !== desiredObsSourceName){
+      const match = Array.from(sel.options).find(o=>o.value === desiredObsSourceName);
+      if(match) sel.value = desiredObsSourceName;
+    }
     if(obsConnected && sel.value){
       switchCaptureMode('obs');
       return;
@@ -1253,6 +1262,12 @@ return new THREE.MeshStandardMaterial({
   let pendingObsSourceName = null; // set by applySettings() when a saved settings file
                                     // names an OBS source that connectToOBS() hasn't
                                     // fetched into the <select> yet
+  let desiredObsSourceName = null; // persists across reconnects — unlike pendingObsSourceName
+                                    // (which is consumed once), this is re-applied on every
+                                    // single successful connect, since obs-websocket drops
+                                    // and reconnects fairly often (startup races, sleep/wake,
+                                    // OBS restarts) and each reconnect used to silently reset
+                                    // the dropdown to whatever GetInputList lists first.
   const obsCanvas = document.createElement('canvas');
   const obsCtx = obsCanvas.getContext('2d');
   const obsTexture = new THREE.CanvasTexture(obsCanvas);
@@ -1353,12 +1368,20 @@ return new THREE.MeshStandardMaterial({
       // this fetch — and if "Capture source" was also saved as OBS, start
       // polling it immediately rather than waiting for a manual pick.
       if(pendingObsSourceName){
-        const match = Array.from(sel.options).find(o=>o.value === pendingObsSourceName);
-        if(match){
-          sel.value = pendingObsSourceName;
-          if(captureMode === 'obs') startOBSPolling(pendingObsSourceName);
-        }
+        desiredObsSourceName = pendingObsSourceName; // promote to the persistent slot
         pendingObsSourceName = null;
+      }
+      if(desiredObsSourceName){
+        const match = Array.from(sel.options).find(o=>o.value === desiredObsSourceName);
+        if(match){
+          sel.value = desiredObsSourceName;
+          if(captureMode === 'obs') startOBSPolling(desiredObsSourceName);
+        } else {
+          console.warn('[OBS] previously selected source not found in this fetch:', desiredObsSourceName);
+        }
+        // NOT nulling desiredObsSourceName here — it needs to survive future
+        // reconnects too, since obs-websocket can drop and retry many times
+        // in a single session (see ConnectionClosed below).
       }
 
       obs.on('ConnectionClosed', ()=>{
@@ -3687,6 +3710,7 @@ function LD_GOLD_ALPHA(){
   document.getElementById('obsConnectBtn').addEventListener('click', connectToOBS);
 
   document.getElementById('obsSourceSelect').addEventListener('change', (e)=>{
+    desiredObsSourceName = e.target.value || null;
     if(captureMode === 'obs') startOBSPolling(e.target.value);
   });
 
@@ -4074,6 +4098,7 @@ function LD_GOLD_ALPHA(){
       document.getElementById('vStartupDelay').textContent = startupDelaySec + 's';
     }
     if(s.obsSourceSelect){
+      desiredObsSourceName = s.obsSourceSelect;
       const obsSel = document.getElementById('obsSourceSelect');
       const hasOption = Array.from(obsSel.options).some(o=>o.value === s.obsSourceSelect);
       const wantsOBS = (captureMode === 'obs' || s.captureMode === 'obs');
