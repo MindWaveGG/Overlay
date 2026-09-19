@@ -24,7 +24,7 @@
     --active-secondary:#1c5866;
 
     --pulse-color:var(--active-primary);
-    --pulse-white:var(--active-primary);
+    --pulse-white:var(--active-primary, #40C7EB);
     --pulse-charcoal:var(--active-secondary);
     --pulse-gold:var(--active-secondary);
     --pulse-black:#111111;
@@ -2338,20 +2338,15 @@ return new THREE.MeshStandardMaterial({
 
 
 function LD_RED(){
-
-    return hexToRgb(
-        themeColor(
-            "--pulse-white",
-            document.getElementById('pulseWhite').value
-        )
-    );
-
+    const c = hexToRgb(themeColor("--ring-pulse-a", themeColor("--active-primary", "#40C7EB")));
+    if(c.r > 248 && c.g > 248 && c.b > 248) return {r:64, g:199, b:235};
+    return c;
 }
 
 
 function LD_BLUE(){
     const primary = LD_RED();
-    const fromCss = hexToRgb(themeColor("--pulse-charcoal", document.getElementById('pulseCharcoal').value));
+    const fromCss = hexToRgb(themeColor("--ring-pulse-b", themeColor("--pulse-charcoal", "#123C46")));
     const dist = Math.abs(primary.r-fromCss.r)+Math.abs(primary.g-fromCss.g)+Math.abs(primary.b-fromCss.b);
     if(dist > 40) return fromCss;
     return { r: Math.round(primary.r*0.28), g: Math.round(primary.g*0.28), b: Math.round(primary.b*0.28) };
