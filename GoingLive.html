@@ -431,19 +431,19 @@
   <div class="row">
     <label>Capture source</label>
     <div class="toggles">
-      <button data-capturemode="webcam" class="active">Webcam device</button>
-      <button data-capturemode="obs">OBS source</button>
+      <button data-capturemode="webcam">Webcam device</button>
+      <button data-capturemode="obs" class="active">OBS source</button>
     </div>
   </div>
 
   <div class="row">
     <label>On page load, when Capture source = OBS</label>
     <div class="toggles">
-      <button data-startupmode="instant" class="active">Switch to OBS immediately</button>
-      <button data-startupmode="delayed">Start on Webcam, then switch</button>
+      <button data-startupmode="instant">Switch to OBS immediately</button>
+      <button data-startupmode="delayed" class="active">Start on Webcam, then switch</button>
     </div>
   </div>
-  <div class="row" id="startupDelayRow" style="display:none;">
+  <div class="row" id="startupDelayRow">
     <label>Delay before switching to OBS source <span class="val" id="vStartupDelay">6s</span></label>
     <input type="range" id="startupDelaySec" min="1" max="30" step="1" value="6">
   </div>
@@ -1230,14 +1230,15 @@ return new THREE.MeshStandardMaterial({
   // camera. The catch: GetSourceScreenshot is a poll, not a stream, so this is
   // realistically ~8-10fps before it costs noticeable CPU on both ends — a
   // "video" made of a slideshow of screenshots, redrawn into a canvas texture.
-  let captureMode = 'webcam'; // 'webcam' | 'obs'
+  const DEFAULT_OBS_SOURCE = 'RazerCam';
+  let captureMode = 'obs'; // OBS websocket source only in this setup
   // Startup-switch: lets a saved "Capture source = OBS" setting show Webcam
   // first and only flip over to the OBS source feed after a delay, instead of
   // switching the instant the page loads. See the panel toggle just below the
   // Capture source buttons. startupMode/startupDelaySec are restored from
   // settings (default: instant, matching the old only-existing behavior for
   // settings blobs saved before this toggle existed).
-  let startupMode = 'instant'; // 'instant' | 'delayed'
+  let startupMode = 'delayed'; // 'instant' | 'delayed'
   let startupDelaySec = 6;
   let deferObsStartupSwitch = false; // set mid-applySettings(), consumed at its end
   let startupSwitchTimer = null;
@@ -1289,14 +1290,12 @@ return new THREE.MeshStandardMaterial({
     if(startupSwitchTimer) return; // already armed
     startupSwitchTimer = setTimeout(attemptDelayedStartupSwitch, startupDelaySec * 1000);
   }
-  let pendingCamDeviceId = null; // restored deviceId; CEF often rotates this
-  let pendingCamLabel = null;    // restored / URL label — stable across OBS restarts
+  let pendingCamDeviceId = null;
+  let pendingCamLabel = camQueryParam('cam') || 'RazerCam';
   let obs = null;
   let obsConnected = false;
-  let pendingObsSourceName = null; // set by applySettings() when a saved settings file
-                                    // names an OBS source that connectToOBS() hasn't
-                                    // fetched into the <select> yet
-  let desiredObsSourceName = null; // persists across reconnects — unlike pendingObsSourceName
+  let pendingObsSourceName = camQueryParam('obsSource') || DEFAULT_OBS_SOURCE;
+  let desiredObsSourceName = camQueryParam('obsSource') || DEFAULT_OBS_SOURCE;
                                     // (which is consumed once), this is re-applied on every
                                     // single successful connect, since obs-websocket drops
                                     // and reconnects fairly often (startup races, sleep/wake,
@@ -2336,24 +2335,19 @@ return new THREE.MeshStandardMaterial({
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
   function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
 
-  function hexToRgb(hex){
-
-    if(!hex || hex[0] !== "#"){
-        return {
-            r:255,
-            g:255,
-            b:255
-        };
+  function hexToRgb(color){
+    if(!color) return {r:255,g:255,b:255};
+    const s = String(color).trim();
+    if(s[0] === "#"){
+      let h = s.slice(1);
+      if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      const v = parseInt(h, 16);
+      if(isNaN(v)) return {r:255,g:255,b:255};
+      return {r:(v>>16)&255, g:(v>>8)&255, b:v&255};
     }
-
-    const v=parseInt(hex.slice(1),16);
-
-    return {
-        r:(v>>16)&255,
-        g:(v>>8)&255,
-        b:v&255
-    };
-
+    const m = s.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+    if(m) return {r:+m[1], g:+m[2], b:+m[3]};
+    return {r:255,g:255,b:255};
 }
   // Pulse endpoints are user-adjustable (see #pulseWhite/#pulseCharcoal/#pulseGold);
   // read live each frame so dragging a picker updates the pulse immediately.
@@ -3631,8 +3625,8 @@ function LD_GOLD_ALPHA(){
     if(liveTickTimer){ clearInterval(liveTickTimer); liveTickTimer = null; }
   }
   function liveTick(){
-    removeExpiredTimers(); // cleanly removes any timer that just hit 0 and rebuilds immediately
-    rebuildDataRings();    // otherwise, periodic re-layout for smooth-ish countdown/cascade/color pulse
+    removeExpiredTimers();
+    // Color pulse + label lines run in animate(). Do not rebuild Three.js every second.
   }
   function startLiveDataTimers(){
     stopLiveDataTimers();
@@ -4122,7 +4116,7 @@ function LD_GOLD_ALPHA(){
     // Older saved settings blobs won't have this key at all — default those
     // to 'instant', matching the only-existing behavior before this toggle
     // existed (same pattern as seRelayMode elsewhere in this function).
-    startupMode = (s.startupMode === 'instant' || s.startupMode === 'delayed') ? s.startupMode : 'instant';
+    startupMode = (s.startupMode === 'instant' || s.startupMode === 'delayed') ? s.startupMode : 'delayed';
     document.querySelectorAll('.toggles button[data-startupmode]').forEach(b=>{
       b.classList.toggle('active', b.dataset.startupmode === startupMode);
     });
