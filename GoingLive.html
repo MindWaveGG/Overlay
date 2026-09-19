@@ -1028,6 +1028,8 @@ return new THREE.MeshStandardMaterial({
   let videoTexture = null;
   let camMirrorOn = true;
 
+  function inOBSBrowser(){ return typeof window.obsstudio !== "undefined"; }
+
   function camQueryParam(name){
     try {
       let q = location.search || '';
@@ -1077,7 +1079,7 @@ return new THREE.MeshStandardMaterial({
       // OBS CEF often enumerates once with empty labels / rotating deviceIds.
       // Do not lock onto cams[0] until labels exist or we have a matching id.
       if(!labelsReady && !pendingCamDeviceId){
-        requestCameraAccess();
+        if(!inOBSBrowser()) requestCameraAccess();
         return;
       }
       const chosen = pickCamera(cams, pendingCamDeviceId, pendingCamLabel);
@@ -1090,7 +1092,7 @@ return new THREE.MeshStandardMaterial({
         pendingCamLabel = chosen.label || pendingCamLabel;
       }
       sel.value = chosen.deviceId;
-      startCamera(chosen.deviceId);
+      if(!inOBSBrowser() && captureMode !== 'obs') startCamera(chosen.deviceId);
     }).catch(err=>{
       console.error('enumerateDevices failed', err);
     });
@@ -4406,7 +4408,8 @@ function LD_GOLD_ALPHA(){
   }
   const qObs = camQueryParam('obsSource');
   if(qObs && !pendingObsSourceName) pendingObsSourceName = qObs;
-  requestCameraAccess();
+  const inOBS = typeof window.obsstudio !== "undefined";
+  if(!inOBS) requestCameraAccess();
 
   animate();
 })();
