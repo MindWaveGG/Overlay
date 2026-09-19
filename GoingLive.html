@@ -19,28 +19,24 @@
     --accent:#c96a3e;
 
 
-    /* OBS / Theme bridge */
+    /* OBS / Theme bridge — overridden by theme.css / OBS Custom CSS */
+    --active-primary:#40C7EB;
+    --active-secondary:#1c5866;
 
-    --pulse-color:#ffffff;
-
-    --pulse-white:#ffffff;
-    --pulse-charcoal:#333333;
-    --pulse-gold:#ffd700;
+    --pulse-color:var(--active-primary);
+    --pulse-white:var(--active-primary);
+    --pulse-charcoal:var(--active-secondary);
+    --pulse-gold:var(--active-secondary);
     --pulse-black:#111111;
-
 
     --pulse-white-alpha:1;
     --pulse-charcoal-alpha:1;
     --pulse-gold-alpha:1;
 
-    /* Sphere Material */
-    /* External rings */
-    --outer-ring-color:#00ffff;
-    --outer-ring-alpha:1;
+    --outer-ring-color:var(--pulse-white);
+    --outer-ring-alpha:0.85;
 
-
-    /* Internal rings */
-    --inner-ring-color:#0088ff;
+    --inner-ring-color:var(--pulse-charcoal);
     --inner-ring-alpha:0.85;
 
 
@@ -181,6 +177,7 @@
     text-shadow: 0 1px 3px rgba(0,0,0,0.9);
   }
 </style>
+<link rel="stylesheet" href="theme.css">
 </head>
 <body>
 
@@ -3278,6 +3275,7 @@ function LD_GOLD_ALPHA(){
   function animate(){
     requestAnimationFrame(animate);
     const dt = clock.getDelta();
+    applyLivePulseColors();
 
     // Cartwheel build freezes everything it applies to — read live so toggling
     // it takes effect immediately without needing a rebuild.
@@ -3624,9 +3622,35 @@ function LD_GOLD_ALPHA(){
     if(liveRefreshTimer){ clearInterval(liveRefreshTimer); liveRefreshTimer = null; }
     if(liveTickTimer){ clearInterval(liveTickTimer); liveTickTimer = null; }
   }
+  function livePulseHex(kind){
+    const t = (Math.sin(Date.now()/1000)+1)/2;
+    if(kind === 'hype') return rgbToHex(lerpColor(LD_RED(), LD_GOLD(), t));
+    if(kind === 'golive') return rgbToHex(lerpColor(LD_BLACK(), LD_RED(), t));
+    return rgbToHex(lerpColor(LD_RED(), LD_BLUE(), t));
+  }
+  function applyLivePulseColors(){
+    if(!liveDataOn) return;
+    const paint = (rr)=>{
+      if(!rr || !rr.mesh || !rr.mesh.material) return;
+      const label = (rr.item && (rr.item.label || rr.item.statLabel)) || '';
+      const kind = /hype/i.test(label) ? 'hype' : /goinglive/i.test(label) ? 'golive' : 'main';
+      const hex = livePulseHex(kind);
+      const c = new THREE.Color(hex);
+      rr.mesh.material.color.copy(c);
+      if(rr.mesh.material.emissive) rr.mesh.material.emissive.copy(c);
+    };
+    dataRingsExternal.forEach(paint);
+    dataRingsInternal.forEach(paint);
+    const lineColor = themeColor('--active-primary', themeColor('--pulse-white', '#40C7EB'));
+    document.querySelectorAll('#labelLinesGroup line').forEach(line=>{
+      line.setAttribute('stroke', lineColor);
+    });
+    document.querySelectorAll('.liveLabelBox').forEach(box=>{
+      box.style.setProperty('--box-border', lineColor);
+    });
+  }
   function liveTick(){
     removeExpiredTimers();
-    // Color pulse + label lines run in animate(). Do not rebuild Three.js every second.
   }
   function startLiveDataTimers(){
     stopLiveDataTimers();
