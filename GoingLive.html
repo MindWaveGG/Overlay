@@ -377,7 +377,7 @@
   </div>
 
   <hr>
-  <p class="sub" style="margin-bottom:12px;">Webcam fill — pipes a real camera device into the flat circle. Lists physical devices on this PC (e.g. RazerCam), not OBS's internal source list — Browser Sources can't see that. Right-click this source in OBS → <b>Interact</b> to grant camera permission if the list stays empty.</p>
+  <p class="sub" style="margin-bottom:12px;">Webcam fill — pipes a real camera device into the flat circle. Lists physical devices on this PC (e.g. RazerCam), not OBS's internal source list. Device IDs change in OBS Chromium; the page remembers the camera <b>name</b> and also honors <code>?cam=RazerCam</code> on the source URL. Right-click this source in OBS → <b>Interact</b> to grant camera permission once. Uncheck “Shutdown source when not visible” and “Refresh browser when scene becomes active” or the pick will reset.</p>
 
   <div class="row">
     <label>Webcam fill</label>
@@ -1038,6 +1038,33 @@ return new THREE.MeshStandardMaterial({
   let videoTexture = null;
   let camMirrorOn = true;
 
+  function camQueryParam(name){
+    try { return new URLSearchParams(location.search).get(name) || ''; }
+    catch(err){ return ''; }
+  }
+
+  function pickCamera(cams, pendingId, pendingLabel){
+    const urlCam = camQueryParam('cam');
+    const labeled = cams.filter(d=>d.label);
+    if(pendingId){
+      const byId = cams.find(d=>d.deviceId === pendingId);
+      if(byId) return byId;
+    }
+    const want = (pendingLabel || urlCam || '').trim();
+    if(want){
+      const exact = labeled.find(d=>d.label === want);
+      if(exact) return exact;
+      let rx;
+      try { rx = new RegExp(want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'); }
+      catch(err){ rx = /razer/i; }
+      const fuzzy = labeled.find(d=>rx.test(d.label));
+      if(fuzzy) return fuzzy;
+    }
+    const razer = labeled.find(d=>/razer/i.test(d.label));
+    if(razer) return razer;
+    return labeled[0] || cams[0] || null;
+  }
+
   function populateCameraList(){
     navigator.mediaDevices.enumerateDevices().then(devices=>{
       const cams = devices.filter(d=>d.kind === 'videoinput');
@@ -1047,19 +1074,28 @@ return new THREE.MeshStandardMaterial({
         sel.innerHTML = '<option value="">No cameras found</option>';
         return;
       }
+      const labelsReady = cams.some(d=>d.label);
       cams.forEach((d,i)=>{
         const opt = document.createElement('option');
         opt.value = d.deviceId;
         opt.textContent = d.label || ('Camera ' + (i+1));
         sel.appendChild(opt);
       });
-      // Prefer a device restored from a loaded settings file, then a device
-      // labeled "RazerCam" (this rig's camera is always that one), then just
-      // whatever enumerateDevices() happens to list first.
-      const pending = pendingCamDeviceId && cams.find(d=>d.deviceId === pendingCamDeviceId);
-      const razer = cams.find(d=>/razer/i.test(d.label));
-      const chosen = pending || razer || cams[0];
-      pendingCamDeviceId = null;
+      // OBS CEF often enumerates once with empty labels / rotating deviceIds.
+      // Do not lock onto cams[0] until labels exist or we have a matching id.
+      if(!labelsReady && !pendingCamDeviceId){
+        requestCameraAccess();
+        return;
+      }
+      const chosen = pickCamera(cams, pendingCamDeviceId, pendingCamLabel);
+      if(!chosen){
+        sel.value = cams[0].deviceId;
+        return;
+      }
+      if(chosen.deviceId === pendingCamDeviceId || (chosen.label && pendingCamLabel && chosen.label === pendingCamLabel) || labelsReady){
+        pendingCamDeviceId = null;
+        pendingCamLabel = chosen.label || pendingCamLabel;
+      }
       sel.value = chosen.deviceId;
       startCamera(chosen.deviceId);
     }).catch(err=>{
@@ -1253,10 +1289,8 @@ return new THREE.MeshStandardMaterial({
     if(startupSwitchTimer) return; // already armed
     startupSwitchTimer = setTimeout(attemptDelayedStartupSwitch, startupDelaySec * 1000);
   }
-  let pendingCamDeviceId = null; // set by applySettings() when a saved settings file
-                                  // names a camera device that enumerateDevices() hasn't
-                                  // populated into the <select> yet — populateCameraList()
-                                  // checks this before falling back to RazerCam/first-cam
+  let pendingCamDeviceId = null; // restored deviceId; CEF often rotates this
+  let pendingCamLabel = null;    // restored / URL label — stable across OBS restarts
   let obs = null;
   let obsConnected = false;
   let pendingObsSourceName = null; // set by applySettings() when a saved settings file
@@ -3909,6 +3943,7 @@ function LD_GOLD_ALPHA(){
       startupMode: startupMode,
       startupDelaySec: startupDelaySec,
       camDeviceId: document.getElementById('camDevice').value,
+      camDeviceLabel: (document.getElementById('camDevice').selectedOptions[0] && document.getElementById('camDevice').selectedOptions[0].textContent) || pendingCamLabel || '',
       liveDataOn: liveDataOn,
       seRelayOn: seRelayOn,
       seRelayMode: seRelayMode,
@@ -4136,19 +4171,20 @@ function LD_GOLD_ALPHA(){
         });
       }
     }
-    if(s.camDeviceId){
-      // The <select> is populated asynchronously by device enumeration
-      // (requestCameraAccess(), fired once on page load) — if it hasn't
-      // finished yet, stash the id and let populateCameraList() pick it up;
-      // if the options are already there, apply it immediately.
+    if(s.camDeviceLabel) pendingCamLabel = s.camDeviceLabel;
+    if(s.camDeviceId) pendingCamDeviceId = s.camDeviceId;
+    if(!pendingCamLabel){
+      const q = (typeof camQueryParam === 'function') ? camQueryParam('cam') : '';
+      if(q) pendingCamLabel = q;
+    }
+    if(s.camDeviceId || s.camDeviceLabel){
       const camSel = document.getElementById('camDevice');
       const hasOption = Array.from(camSel.options).some(o=>o.value === s.camDeviceId);
       if(hasOption){
         camSel.value = s.camDeviceId;
         startCamera(s.camDeviceId);
-      } else {
-        pendingCamDeviceId = s.camDeviceId;
       }
+      // else populateCameraList() matches by id then label when devices arrive
     }
 
     spinSpeed = parseFloat(speed_in.value);
@@ -4365,10 +4401,14 @@ function LD_GOLD_ALPHA(){
     document.getElementById('seJwt').value = SE_JWT_TOKEN;
   }
 
-  // Camera: this rig's device is always RazerCam, so skip the manual "Enable
-  // Camera Access" click and go straight for permission + enumeration. Per the
-  // existing error text in requestCameraAccess(), a Browser Source in OBS may
-  // still need one manual Interact → grant the first time regardless.
+  // Ask for camera permission, then enumerate. First OBS run still needs
+  // Interact → Allow camera. After that, pick by saved label / ?cam= / Razer.
+  if(!pendingCamLabel){
+    const q = camQueryParam('cam');
+    if(q) pendingCamLabel = q;
+  }
+  const qObs = camQueryParam('obsSource');
+  if(qObs && !pendingObsSourceName) pendingObsSourceName = qObs;
   requestCameraAccess();
 
   animate();
