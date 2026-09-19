@@ -2300,34 +2300,18 @@ return new THREE.MeshStandardMaterial({
   document.documentElement.appendChild(_themeColorProbe);
 
  function themeColor(name, fallback){
-
-    const value = getComputedStyle(
-        document.documentElement
-    )
-    .getPropertyValue(name)
-    .trim();
-
-    if(!value) return fallback;
-
-    // Alpha/numeric custom properties (e.g. --outer-ring-alpha:0.85) are
-    // plain numbers, not colors — these used to get rejected by the old
-    // hex-only check too, silently overridden by the picker every time.
-    // Pass them straight through.
-    if(/^-?[\d.]+$/.test(value)) return value;
-
-    // Already a plain hex color — no need to round-trip through the probe.
-    if(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) return value;
-
-    _themeColorProbe.style.color = '';    // reset so a failed parse below is detectable
-    _themeColorProbe.style.color = value; // let the real CSS color engine try to parse it
-
-    if(!_themeColorProbe.style.color){
-        // Couldn't be parsed as a color at all — keep the manual fallback.
-        return fallback;
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if(raw && /^-?[\d.]+$/.test(raw)) return raw;
+    _themeColorProbe.style.backgroundColor = '';
+    _themeColorProbe.style.backgroundColor = raw ? raw : ('var(' + name + ', ' + (fallback || '#ffffff') + ')');
+    if(!_themeColorProbe.style.backgroundColor){
+      _themeColorProbe.style.backgroundColor = 'var(' + name + ', ' + (fallback || '#ffffff') + ')';
     }
-
-    return getComputedStyle(_themeColorProbe).color; // now a real rgb()/rgba() string
-
+    const computed = getComputedStyle(_themeColorProbe).backgroundColor;
+    if(!computed || computed === 'rgba(0, 0, 0, 0)' || computed === 'transparent'){
+      return fallback;
+    }
+    return computed;
 }
   function lerpColor(c1,c2,t){return {r:Math.round(c1.r+(c2.r-c1.r)*t),g:Math.round(c1.g+(c2.g-c1.g)*t),b:Math.round(c1.b+(c2.b-c1.b)*t)};}
   function rgbToHex(c){return "#"+((1<<24)+(c.r<<16)+(c.g<<8)+c.b).toString(16).slice(1);}
@@ -2366,14 +2350,11 @@ function LD_RED(){
 
 
 function LD_BLUE(){
-
-    return hexToRgb(
-        themeColor(
-            "--pulse-charcoal",
-            document.getElementById('pulseCharcoal').value
-        )
-    );
-
+    const primary = LD_RED();
+    const fromCss = hexToRgb(themeColor("--pulse-charcoal", document.getElementById('pulseCharcoal').value));
+    const dist = Math.abs(primary.r-fromCss.r)+Math.abs(primary.g-fromCss.g)+Math.abs(primary.b-fromCss.b);
+    if(dist > 40) return fromCss;
+    return { r: Math.round(primary.r*0.28), g: Math.round(primary.g*0.28), b: Math.round(primary.b*0.28) };
 }
 
 
@@ -3629,18 +3610,26 @@ function LD_GOLD_ALPHA(){
     return rgbToHex(lerpColor(LD_RED(), LD_BLUE(), t));
   }
   function applyLivePulseColors(){
-    if(!liveDataOn) return;
-    const paint = (rr)=>{
+    const paint = (rr, kind)=>{
       if(!rr || !rr.mesh || !rr.mesh.material) return;
-      const label = (rr.item && (rr.item.label || rr.item.statLabel)) || '';
-      const kind = /hype/i.test(label) ? 'hype' : /goinglive/i.test(label) ? 'golive' : 'main';
-      const hex = livePulseHex(kind);
+      const hex = livePulseHex(kind || 'main');
       const c = new THREE.Color(hex);
       rr.mesh.material.color.copy(c);
       if(rr.mesh.material.emissive) rr.mesh.material.emissive.copy(c);
     };
-    dataRingsExternal.forEach(paint);
-    dataRingsInternal.forEach(paint);
+    if(liveDataOn && (dataRingsExternal.length || dataRingsInternal.length)){
+      const kindFor = (rr)=>{
+        const label = (rr.item && (rr.item.label || rr.item.statLabel)) || '';
+        if(/hype/i.test(label)) return 'hype';
+        if(/goinglive/i.test(label)) return 'golive';
+        return 'main';
+      };
+      dataRingsExternal.forEach(rr=>paint(rr, kindFor(rr)));
+      dataRingsInternal.forEach(rr=>paint(rr, kindFor(rr)));
+    } else {
+      ringData.forEach(rr=>paint(rr, 'main'));
+      innerRingData.forEach(rr=>paint(rr, 'main'));
+    }
     const lineColor = themeColor('--active-primary', themeColor('--pulse-white', '#40C7EB'));
     document.querySelectorAll('#labelLinesGroup line').forEach(line=>{
       line.setAttribute('stroke', lineColor);
