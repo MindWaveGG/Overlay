@@ -1028,7 +1028,11 @@ return new THREE.MeshStandardMaterial({
   let videoTexture = null;
   let camMirrorOn = true;
 
-  function inOBSBrowser(){ return typeof window.obsstudio !== "undefined"; }
+  function inOBSBrowser(){
+    if (typeof window.obsstudio !== "undefined") return true;
+    if (typeof camQueryParam === "function" && camQueryParam("obsSource")) return true;
+    return false;
+  }
 
   function camQueryParam(name){
     try {
@@ -4408,8 +4412,7 @@ function LD_GOLD_ALPHA(){
   }
   const qObs = camQueryParam('obsSource');
   if(qObs && !pendingObsSourceName) pendingObsSourceName = qObs;
-  const inOBS = typeof window.obsstudio !== "undefined";
-  if(!inOBS) requestCameraAccess();
+  if(!inOBSBrowser()) requestCameraAccess();
 
   animate();
 })();
