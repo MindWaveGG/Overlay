@@ -1029,8 +1029,11 @@ return new THREE.MeshStandardMaterial({
   let camMirrorOn = true;
 
   function camQueryParam(name){
-    try { return new URLSearchParams(location.search).get(name) || ''; }
-    catch(err){ return ''; }
+    try {
+      let q = location.search || '';
+      if(q.indexOf('??') === 0) q = '?' + q.slice(2);
+      return new URLSearchParams(q).get(name) || '';
+    } catch(err){ return ''; }
   }
 
   function pickCamera(cams, pendingId, pendingLabel){
@@ -4151,20 +4154,15 @@ function LD_GOLD_ALPHA(){
     // loading a settings file shouldn't ever overwrite that with a stale or
     // blank value.
 
-    if(s.captureMode){
-      if(s.captureMode === 'obs' && startupMode === 'delayed'){
-        // Show Webcam for now — deferObsStartupSwitch (set above) gets picked
-        // up at the end of this function to arm the delayed switch instead.
-        captureMode = 'webcam';
-        document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
-          b.classList.toggle('active', b.dataset.capturemode === 'webcam');
-        });
-      } else {
-        captureMode = s.captureMode;
-        document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
-          b.classList.toggle('active', b.dataset.capturemode === s.captureMode);
-        });
-      }
+    captureMode = 'obs';
+    document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.capturemode === 'obs');
+    });
+    if(s.captureMode === 'webcam' && !camQueryParam('obsSource')){
+      captureMode = 'webcam';
+      document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+        b.classList.toggle('active', b.dataset.capturemode === 'webcam');
+      });
     }
     if(s.camDeviceLabel) pendingCamLabel = s.camDeviceLabel;
     if(s.camDeviceId) pendingCamDeviceId = s.camDeviceId;
@@ -4311,6 +4309,10 @@ function LD_GOLD_ALPHA(){
     syncLabels();
     buildRings();
   }
+  captureMode = 'obs';
+  document.querySelectorAll('.toggles button[data-capturemode]').forEach(b=>{
+    b.classList.toggle('active', b.dataset.capturemode === 'obs');
+  });
 
   // --- Auto-connect on load ---
   // Local override for OBS URL/password: same principle as WEB_SOCKET_P/SE_JWT_TOKEN
