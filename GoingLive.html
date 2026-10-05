@@ -1434,6 +1434,27 @@ return new THREE.MeshStandardMaterial({
     obsProbeToken++; // invalidate any in-flight probe/retry chain from a previous source
   }
 
+  // Hidden or not-yet-rendered sources fail GetSourceScreenshot and OBS logs
+  // device_stagesurface_create on every attempt. Ask first, and do not screenshot
+  // while the eye icon is off.
+  async function obsSourceIsShowing(sourceName){
+    try{
+      const active = await obs.call('GetSourceActive', { sourceName: sourceName });
+      return !!(active && active.videoShowing);
+    }catch(err){
+      return true; // older websocket: fall through and let the screenshot path decide
+    }
+  }
+
+  function clearOBSFrame(){
+    if(!obsCanvas.width || !obsCanvas.height){
+      obsCanvas.width = 2;
+      obsCanvas.height = 2;
+    }
+    obsCtx.clearRect(0, 0, obsCanvas.width, obsCanvas.height);
+    obsTexture.needsUpdate = true;
+  }
+
   let obsRequestW = 640;
   let obsRequestH = 360;
   let obsProbeRetryTimer = null;
@@ -1516,8 +1537,20 @@ return new THREE.MeshStandardMaterial({
 
     // 100ms ≈ 10fps — the practical ceiling for screenshot polling before the
     // encode-on-OBS's-side / decode-on-this-side round trip gets ugly.
+    let hiddenTicks = 0;
     obsPollTimer = setInterval(async ()=>{
       if(!obsConnected || !obsSourceName) return;
+      const showing = await obsSourceIsShowing(obsSourceName);
+      if(!showing){
+        hiddenTicks++;
+        clearOBSFrame();
+        if(hiddenTicks === 1) setOBSStatus('Source hidden — disc clear');
+        return;
+      }
+      if(hiddenTicks){
+        hiddenTicks = 0;
+        setOBSStatus('Connected');
+      }
       try{
         // PNG, not JPG: JPEG has no alpha channel at all, so any transparency
         // produced by a background-removal filter (NVIDIA Broadcast, chroma
@@ -1529,7 +1562,8 @@ return new THREE.MeshStandardMaterial({
         const res = await obs.call('GetSourceScreenshot', req);
         drawOBSFrame(res.imageData);
       }catch(err){
-        console.error('GetSourceScreenshot failed', err);
+        clearOBSFrame();
+        console.warn('GetSourceScreenshot skipped', err && err.message ? err.message : err);
       }
     }, 100);
   }
