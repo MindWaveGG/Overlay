@@ -572,7 +572,7 @@
 
   <div class="row">
     <label>Google Apps Script URL</label>
-    <input type="text" id="gasUrl" value="__GAS_EXEC_URL__" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
+    <input type="text" id="gasUrl" value="https://calm-star-cc65.mind0owave.workers.dev" style="width:100%; background:var(--bg); border:1px solid var(--panel-border); color:var(--gold-bright); padding:7px 8px; border-radius:6px; font-family:'Consolas',monospace; font-size:11px;">
   </div>
 
   <div class="row">
@@ -3199,11 +3199,12 @@ function LD_GOLD_ALPHA(){
           console.log('[SE-WS] forwarding tip to Apps Script:', tipPayload);
           setSEStatus('Tip received — forwarding…');
           fetch(gasUrl(), {
-            method: 'POST', mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(tipPayload)
-          }).then(()=> {
-            console.log('[SE-WS] fetch sent (no-cors, so no response body to confirm receipt)');
+          }).then(r => {
+            if (!r.ok) throw new Error('worker returned ' + r.status);
+            console.log('[SE-WS] tip forwarded to worker');
             setSEStatus('Subscribed — last tip forwarded ' + new Date().toLocaleTimeString());
           }).catch(err => {
             console.error('[SE-WS] Forward failed:', err);
@@ -4311,6 +4312,16 @@ function LD_GOLD_ALPHA(){
   // the normal syncLabels()/buildRings() defaults below if there's nothing saved
   // yet (first run) or the read fails for any reason.
   const restoredFromLocalStorage = tryAutoLoadFromLocalStorage();
+  // Saved settings still contain the old script.google.com exec URL.
+  // Reads must go to the worker or the browser hits CORS again.
+  (function forceWorkerGasUrl(){
+    const el = document.getElementById('gasUrl');
+    if(!el) return;
+    const v = (el.value || '').trim();
+    if(!v || v.indexOf('script.google.com') !== -1 || v.indexOf('__GAS_EXEC_URL__') !== -1){
+      el.value = 'https://calm-star-cc65.mind0owave.workers.dev';
+    }
+  })();
   if(!restoredFromLocalStorage){
     syncLabels();
     buildRings();
