@@ -722,7 +722,7 @@
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.NoToneMapping;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
+/* renderer.outputColorSpace = THREE.SRGBColorSpace; */ // removed: not supported in Three.js r128
   container.appendChild(renderer.domElement);
 
   // Page background: 'color' keeps the original opaque look; 'transparent'
@@ -933,10 +933,10 @@ return new THREE.MeshStandardMaterial({
     emissive:0x000000,
     emissiveIntensity:0,
 
-    transparent:ringAlpha < 0.999,
-    opacity:ringAlpha,
+    transparent:alpha < 0.999,
+    opacity:alpha,
 
-    depthWrite:ringAlpha >= 0.999
+    depthWrite:alpha >= 0.999
 });
 
 }
