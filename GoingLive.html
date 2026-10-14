@@ -658,6 +658,16 @@
   </div>
 
   <hr>
+  <div class="row">
+    <label>Debug logging (OBS log)</label>
+    <div class="toggles">
+      <button data-debug="on">On</button>
+      <button data-debug="off" class="active">Off</button>
+    </div>
+    <p class="sub" style="margin:6px 0 0; font-size:11px;">When On, logs scene rebuilds, OBS frame clears, and screenshot failures to the OBS log (prefix <b>[RingsDebug]</b>). Open OBS → Help → Log Files → View Current Log, or right-click the Browser Source → Interact → Inspect → Console.</p>
+  </div>
+
+  <hr>
   <div id="readout"></div>
   </div>
 </div>
@@ -705,6 +715,16 @@
   // at deploy time rather than ever living in a user-saved settings file.
   const UNBUILT_SENTINEL_SE_JWT = '__' + 'SE_JWT_TOKEN' + '__';
   const SE_JWT_TOKEN = '__SE_JWT_TOKEN__';
+
+  // Debug mode — when enabled, logs flash-related events so they appear in
+  // the OBS log (Browser Source console output is written there).
+  let debugMode = false;
+  function debugLog(msg, extra){
+    if(!debugMode) return;
+    const ts = new Date().toISOString().slice(11,23);
+    if(extra !== undefined) console.log('[RingsDebug]', ts, msg, extra);
+    else console.log('[RingsDebug]', ts, msg);
+  }
 
   const container = document.getElementById('scene');
   const scene = new THREE.Scene();
@@ -1447,6 +1467,7 @@ return new THREE.MeshStandardMaterial({
   }
 
   function clearOBSFrame(){
+    debugLog('clearOBSFrame() — disc blanked');
     if(!obsCanvas.width || !obsCanvas.height){
       obsCanvas.width = 2;
       obsCanvas.height = 2;
@@ -1543,8 +1564,12 @@ return new THREE.MeshStandardMaterial({
       const showing = await obsSourceIsShowing(obsSourceName);
       if(!showing){
         hiddenTicks++;
-        clearOBSFrame();
-        if(hiddenTicks === 1) setOBSStatus('Source hidden — disc clear');
+        // Keep the last good frame for a few ticks so a brief visibility
+        // blip doesn't blank the disc (main source of OBS flashing).
+        if(hiddenTicks > 8){
+          clearOBSFrame();
+          if(hiddenTicks === 9) setOBSStatus('Source hidden — disc clear');
+        }
         return;
       }
       if(hiddenTicks){
@@ -1552,18 +1577,15 @@ return new THREE.MeshStandardMaterial({
         setOBSStatus('Connected');
       }
       try{
-        // PNG, not JPG: JPEG has no alpha channel at all, so any transparency
-        // produced by a background-removal filter (NVIDIA Broadcast, chroma
-        // key, etc.) on the OBS source gets silently flattened to solid black
-        // the moment OBS exports the screenshot. PNG carries alpha straight
-        // through, so cut-out areas actually stay transparent in the texture.
         const req = { sourceName: obsSourceName, imageFormat: 'png' };
         if(obsRequestW && obsRequestH){ req.imageWidth = obsRequestW; req.imageHeight = obsRequestH; }
         const res = await obs.call('GetSourceScreenshot', req);
         drawOBSFrame(res.imageData);
       }catch(err){
-        clearOBSFrame();
-        console.warn('GetSourceScreenshot skipped', err && err.message ? err.message : err);
+        // Do not clear on transient screenshot failures — keep the last
+        // good frame. Clearing every error was causing visible flashing.
+        debugLog('GetSourceScreenshot failed (keeping last frame)', err && err.message ? err.message : err);
+        console.warn('GetSourceScreenshot skipped (keeping last frame)', err && err.message ? err.message : err);
       }
     }, 100);
   }
@@ -1671,6 +1693,7 @@ return new THREE.MeshStandardMaterial({
   }
 
   function clearAssembly(){
+    debugLog('clearAssembly() — full scene teardown (flash risk)');
     // Preserve the slow overall turntable spin across rebuilds. Live-data mode
     // calls buildRings() -> clearAssembly() every 1-5s (see liveTick/refreshLiveData),
     // and a fresh THREE.Group() always starts at rotation 0 — without carrying this
@@ -1703,6 +1726,7 @@ return new THREE.MeshStandardMaterial({
   }
 
   function buildRings(){
+    debugLog('buildRings() called', new Error().stack.split('\n').slice(1,4).join(' | '));
     // Snapshot the outgoing MANUAL ring set's spin/pitch state before
     // clearAssembly() wipes ringData/innerRingData, keyed by ring index (a
     // stable identity here since manual N/Ni rings never reorder between
@@ -2234,7 +2258,7 @@ return new THREE.MeshStandardMaterial({
   let simCascadeInterval = null;
   function startSimCascadeTicker(){
     stopSimCascadeTicker();
-    simCascadeInterval = setInterval(()=>{ if(!liveDataOn) buildRings(); }, 1000); // slowed from 200ms to reduce OBS flashing
+    simCascadeInterval = setInterval(()=>{ if(!liveDataOn){ debugLog('sim cascade ticker firing'); buildRings(); } }, 2000); // slowed to reduce OBS flashing
   }
   function stopSimCascadeTicker(){
     if(simCascadeInterval){ clearInterval(simCascadeInterval); simCascadeInterval = null; }
@@ -3019,10 +3043,52 @@ function LD_GOLD_ALPHA(){
   // Full layout+geometry rebuild — cheap enough to run on a 1s tick (see below)
   // without going all the way through buildRings()'s sphere/lighting/etc. setup.
   let lastLiveLayout = null;
+  let lastLayoutSig = '';
+  function layoutSignature(layout){
+    if(!layout) return '';
+    const parts = [];
+    (layout.outward||[]).forEach(it=>parts.push('o:'+ringKey(it)+':'+(it.finalRadiusPx|0)+':'+(it.widthPx|0)));
+    (layout.inward||[]).forEach(it=>parts.push('i:'+ringKey(it)+':'+(it.finalRadiusPx|0)+':'+(it.widthPx|0)));
+    (layout.goingLiveTimers||[]).forEach(it=>parts.push('g:'+ringKey(it)+':'+(it.finalRadiusPx|0)+':'+(it.widthPx|0)+':'+(it.ccw?1:0)));
+    return parts.join('|');
+  }
   function rebuildDataRings(){
     if(!liveDataOn) return;
-    buildRings(); // simplest correct path — re-runs the whole scene build, which
-                   // branches into the live-data ring builders below
+    // Full clearAssembly()/rebuild only when the set of rings or their radii
+    // actually change. Pure percentage/color updates already happen every
+    // frame via applyLivePulseColors + the existing tip markers, so skipping
+    // the teardown removes the periodic flash.
+    const cameraRadiusPx = parseFloat(document.getElementById('pxRadius').value) || 670;
+    const outerSpacePx = parseFloat(document.getElementById('outwardSpacePx').value) || 400;
+    const layout = computeGoingLiveLayout(cameraRadiusPx, outerSpacePx);
+    const sig = layoutSignature(layout);
+    if(sig === lastLayoutSig && dataRingsExternal.length + dataRingsInternal.length > 0){
+      debugLog('rebuildDataRings skipped full teardown (layout unchanged)');
+      // Update percentages on existing rings without destroying the scene.
+      const all = [...dataRingsExternal, ...dataRingsInternal];
+      const items = [...(layout.outward||[]), ...(layout.inward||[]), ...(layout.goingLiveTimers||[])];
+      items.forEach(item=>{
+        const key = ringKey(item);
+        const rr = all.find(r=>r.item && ringKey(r.item)===key);
+        if(rr && rr.item){
+          rr.item.percentage = item.percentage;
+          rr.item.color = item.color;
+          rr.item.alpha = item.alpha;
+          rr.lastPct = item.percentage;
+          // Move the progress tip so labels stay accurate
+          if(rr.tip && rr.geo){
+            const pct = Math.max(0.004, Math.min(1, item.percentage));
+            const sweepRad = THREE.MathUtils.degToRad(pct*360);
+            const radiusWorld = rr.tip.position.length() > 0.001 ? rr.tip.position.length() : 1;
+            rr.tip.position.set(radiusWorld * Math.cos(sweepRad), radiusWorld * Math.sin(sweepRad), 0);
+          }
+        }
+      });
+      updateDataLabels();
+      return;
+    }
+    lastLayoutSig = sig;
+    buildRings();
   }
 
   // Ported from the 2D overlay's drawLabelWithLine: a fixed stack of label boxes
@@ -3873,6 +3939,17 @@ function LD_GOLD_ALPHA(){
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     updateDataLabels(); // re-center the label stack for the new viewport height
+  });
+
+  // --- Debug mode toggle ---
+  document.querySelectorAll('.toggles button[data-debug]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.toggles button[data-debug]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      debugMode = btn.dataset.debug === 'on';
+      debugLog('debug mode ' + (debugMode ? 'ENABLED' : 'disabled'));
+      if(debugMode) console.log('[RingsDebug] logging enabled — look for [RingsDebug] lines in the OBS log or browser console');
+    });
   });
 
   // --- Collapsible settings panel ---
