@@ -2234,7 +2234,7 @@ return new THREE.MeshStandardMaterial({
   let simCascadeInterval = null;
   function startSimCascadeTicker(){
     stopSimCascadeTicker();
-    simCascadeInterval = setInterval(()=>{ if(!liveDataOn) buildRings(); }, 200);
+    simCascadeInterval = setInterval(()=>{ if(!liveDataOn) buildRings(); }, 1000); // slowed from 200ms to reduce OBS flashing
   }
   function stopSimCascadeTicker(){
     if(simCascadeInterval){ clearInterval(simCascadeInterval); simCascadeInterval = null; }
